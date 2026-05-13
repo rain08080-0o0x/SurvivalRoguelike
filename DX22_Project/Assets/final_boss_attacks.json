@@ -1,0 +1,86 @@
+{
+  "format": "DX22FinalBossAttackScript",
+  "display_name": "Final Barrage Default",
+  "global": {
+    "hp_scale": 1.75,
+    "guard_scale": 1.45,
+    "size_scale": 1.08,
+    "cooldown_scale": 0.55,
+    "telegraph_scale": 0.65,
+    "damage_scale": 1.15,
+    "starts_special": true,
+    "loops": true
+  },
+  "entries": [
+    {
+      "enabled": true,
+      "kind": 4,
+      "pattern": 0,
+      "telegraph_sec": 0.55,
+      "execute_sec": 0.28,
+      "jump_out_sec": -1.0,
+      "damage_scale": 1.0,
+      "lane_scale": 1.0,
+      "radius_scale": 1.0,
+      "safe_scale": 1.0,
+      "count_a": 4,
+      "count_b": 1
+    },
+    {
+      "enabled": true,
+      "kind": 2,
+      "pattern": 0,
+      "telegraph_sec": 0.65,
+      "execute_sec": 0.28,
+      "jump_out_sec": -1.0,
+      "damage_scale": 1.0,
+      "lane_scale": 1.0,
+      "radius_scale": 1.0,
+      "safe_scale": 1.0,
+      "count_a": 8,
+      "count_b": 8
+    },
+    {
+      "enabled": true,
+      "kind": 5,
+      "pattern": 0,
+      "telegraph_sec": 0.80,
+      "execute_sec": 0.30,
+      "jump_out_sec": 0.20,
+      "damage_scale": 1.1,
+      "lane_scale": 1.0,
+      "radius_scale": 1.0,
+      "safe_scale": 1.0,
+      "count_a": 1,
+      "count_b": 1
+    },
+    {
+      "enabled": true,
+      "kind": 6,
+      "pattern": 0,
+      "telegraph_sec": 0.95,
+      "execute_sec": 0.34,
+      "jump_out_sec": 0.30,
+      "damage_scale": 1.2,
+      "lane_scale": 1.0,
+      "radius_scale": 1.0,
+      "safe_scale": 1.0,
+      "count_a": 3,
+      "count_b": 1
+    },
+    {
+      "enabled": true,
+      "kind": 7,
+      "pattern": 0,
+      "telegraph_sec": 1.05,
+      "execute_sec": 0.36,
+      "jump_out_sec": -1.0,
+      "damage_scale": 1.25,
+      "lane_scale": 1.0,
+      "radius_scale": 1.0,
+      "safe_scale": 1.0,
+      "count_a": 1,
+      "count_b": 1
+    }
+  ]
+}
