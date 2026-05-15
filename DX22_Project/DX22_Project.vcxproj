@@ -177,6 +177,7 @@
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="ParticleEmitter2D.cpp" />
     <ClCompile Include="PolylineEffect.cpp" />
+    <ClCompile Include="NarakuMapData.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="SceneCastleEditor.cpp" />
     <ClCompile Include="Scene3DEditor.cpp" />
@@ -184,6 +185,7 @@
     <ClCompile Include="SceneFinalBossEditor.cpp" />
     <ClCompile Include="SceneEffectDebug.cpp" />
     <ClCompile Include="SceneGame.cpp" />
+    <ClCompile Include="SceneNarakuEditor.cpp" />
     <ClCompile Include="SceneManager.cpp" />
     <ClCompile Include="SceneNarakuProto.cpp" />
     <ClCompile Include="SceneResult.cpp" />
@@ -239,6 +241,7 @@
     <ClInclude Include="MainImGui.h" />
     <ClInclude Include="MeshBuffer.h" />
     <ClInclude Include="Model.h" />
+    <ClInclude Include="NarakuMapData.h" />
     <ClInclude Include="NewLastBossEditor.h" />
     <ClInclude Include="ParticleEffectPreset.h" />
     <ClInclude Include="Player.h" />
@@ -251,6 +254,7 @@
     <ClInclude Include="SceneFinalBossEditor.h" />
     <ClInclude Include="SceneEffectDebug.h" />
     <ClInclude Include="SceneGame.h" />
+    <ClInclude Include="SceneNarakuEditor.h" />
     <ClInclude Include="SceneManager.h" />
     <ClInclude Include="SceneNarakuProto.h" />
     <ClInclude Include="SceneResult.h" />

@@ -45,7 +45,7 @@ private:
 	static void MakeSphere();
 
 private:
-	static const int MAX_LINE_NUM = 1000;
+	static const int MAX_LINE_NUM = 50000;
 	static const int CIRCLE_DETAIL = 16;
 private:
 	static MeshBuffer* m_pBox;

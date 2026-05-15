@@ -8,18 +8,19 @@
 #include "SceneBossEditor.h"
 #include "SceneFinalBossEditor.h"
 #include "NewLastBossEditor.h"
+#include "SceneNarakuEditor.h"
 #include "SceneNarakuProto.h"
 
 Scene* SceneManager::m_pScene = nullptr;
-SceneManager::SceneType SceneManager::m_current = SceneManager::SCENE_NARAKU_PROTO;
-SceneManager::SceneType SceneManager::m_next = SceneManager::SCENE_NARAKU_PROTO;
+SceneManager::SceneType SceneManager::m_current = SceneManager::SCENE_NARAKU_EDITOR;
+SceneManager::SceneType SceneManager::m_next = SceneManager::SCENE_NARAKU_EDITOR;
 SceneManager::ResultType SceneManager::m_result = SceneManager::None;
 bool SceneManager::m_isChanging = false;
 
 void SceneManager::Init()
 {
-    m_current = SCENE_NARAKU_PROTO;
-    m_next = SCENE_NARAKU_PROTO;
+    m_current = SCENE_NARAKU_EDITOR;
+    m_next = SCENE_NARAKU_EDITOR;
     m_isChanging = false;
     m_result = None;
     CreateScene(m_current);
@@ -67,6 +68,9 @@ void SceneManager::CreateScene(SceneType type)
         break;
     case SCENE_NEW_BOSS_EDITOR:
         m_pScene = new NewLastBoss();
+        break;
+    case SCENE_NARAKU_EDITOR:
+        m_pScene = new SceneNarakuEditor();
         break;
     case SCENE_NARAKU_PROTO:
         m_pScene = new SceneNarakuProto();

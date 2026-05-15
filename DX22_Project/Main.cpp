@@ -90,6 +90,10 @@ namespace
 			return "FinalBossEditor";
 		case SceneManager::SceneType::SCENE_NEW_BOSS_EDITOR:
 			return "NewLastBoss";
+		case SceneManager::SceneType::SCENE_NARAKU_EDITOR:
+			return "NarakuEditor";
+		case SceneManager::SceneType::SCENE_NARAKU_PROTO:
+			return "NarakuProto";
 		default:
 			return "Unknown";
 		}
@@ -758,6 +762,12 @@ void Draw()
 		case SceneManager::SceneType::SCENE_NEW_BOSS_EDITOR:
 			sceneTxt = u8"NewLastBoss";
 			break;
+		case SceneManager::SceneType::SCENE_NARAKU_EDITOR:
+			sceneTxt = u8"奈落塔地形エディタ";
+			break;
+		case SceneManager::SceneType::SCENE_NARAKU_PROTO:
+			sceneTxt = u8"奈落塔プロト";
+			break;
 		default:
 			sceneTxt = u8"不明";
 			break;
@@ -788,6 +798,8 @@ void Draw()
 			u8"通常ボス攻撃エディタ",
 			u8"ラスボス攻撃エディタ",
 			u8"NewLastBoss",
+			u8"奈落塔地形エディタ",
+			u8"奈落塔プロト",
 		};
 		const char* debugResultItems[] =
 		{
@@ -1641,6 +1653,14 @@ void Draw()
 					sceneTxt = u8"NewLastBoss";
 					changeScene = SceneManager::SceneType::SCENE_NEW_BOSS_EDITOR;
 					break;
+				case 8:
+					sceneTxt = u8"奈落塔地形エディタ";
+					changeScene = SceneManager::SceneType::SCENE_NARAKU_EDITOR;
+					break;
+				case 9:
+					sceneTxt = u8"奈落塔プロト";
+					changeScene = SceneManager::SceneType::SCENE_NARAKU_PROTO;
+					break;
 				default:
 					sceneTxt = u8"不明";
 					break;
@@ -2075,7 +2095,8 @@ void Draw()
 		dl->AddText(ImVec2(boxMin.x + pad.x, boxMin.y + pad.y), IM_COL32(255, 255, 255, 255), titleGuide);
 	}
 	if (!IsEngineEditorScene(SceneManager::GetCurrent()) &&
-		SceneManager::GetCurrent() != SceneManager::SceneType::SCENE_NARAKU_PROTO)
+		SceneManager::GetCurrent() != SceneManager::SceneType::SCENE_NARAKU_PROTO &&
+		SceneManager::GetCurrent() != SceneManager::SceneType::SCENE_NARAKU_EDITOR)
 	{
 		// 軸線の表示
 		// グリッド

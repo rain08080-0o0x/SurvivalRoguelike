@@ -82,6 +82,7 @@ namespace
     constexpr float kReturnRange = 1.4f;
     // 未発見採掘ポイントを発見する距離です。
     constexpr float kDiscoverRange = 3.0f;
+    constexpr float kNearbyMiningVisibleRange = 8.0f;
     // つるはし攻撃の射程です。
     constexpr float kAttackRange = 1.15f;
     // ImGuiデバッグフィールドの半径です。
@@ -1130,8 +1131,9 @@ void SceneNarakuProto::Draw3DField()
     // 採掘ポイントを黄色系の箱と縦マーカーで描画します。
     for (const MiningPoint& point : m_miningPoints)
     {
-        // 未発見ポイントは3D上にも出さず、探索で見つける余地を残します。
-        if (!point.discovered)
+        // 未記録でも、近くまで来た採掘ポイントは現地で見えるようにします。
+        const bool visibleInField = point.discovered || IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
+        if (!visibleInField)
         {
             continue;
         }
@@ -1222,10 +1224,10 @@ void SceneNarakuProto::Draw3DField()
 void SceneNarakuProto::DrawField()
 {
     // フィールドウィンドウの初期位置を指定します。
-    ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_FirstUseEver);
 
     // フィールドウィンドウの初期サイズを指定します。
-    ImGui::SetNextWindowSize(ImVec2(760.0f, 620.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(760.0f, 620.0f), ImGuiCond_FirstUseEver);
 
     // フィールド描画用ウィンドウを開始します。
     ImGui::Begin(u8"奈落塔プロト フィールド");
@@ -1261,11 +1263,12 @@ void SceneNarakuProto::DrawField()
         draw->AddRectFilled(ImVec2(p.x - 4.0f, p.y - 12.0f), ImVec2(p.x + 4.0f, p.y + 12.0f), IM_COL32(170, 120, 70, 255));
     }
 
-    // 発見済み採掘ポイントを描画します。
+    // 発見済み、または近くまで来た採掘ポイントを描画します。
     for (const MiningPoint& point : m_miningPoints)
     {
-        // 未発見ポイントは地図にもフィールドにも表示しません。
-        if (!point.discovered) continue;
+        // 未記録でも近くまで来たポイントは、初期記録済みと同じ色で見せます。
+        const bool visibleInField = point.discovered || IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
+        if (!visibleInField) continue;
 
         // 採掘ポイント座標を斜め見下ろし座標へ変換します。
         Vec2 p = WorldToObliqueCanvas(canvasPos, canvasSize, point.pos);
@@ -1344,10 +1347,10 @@ void SceneNarakuProto::DrawField()
 void SceneNarakuProto::DrawHud()
 {
     // HUDウィンドウの初期位置を指定します。
-    ImGui::SetNextWindowPos(ImVec2(800.0f, 20.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(800.0f, 20.0f), ImGuiCond_FirstUseEver);
 
     // HUDウィンドウの初期サイズを指定します。
-    ImGui::SetNextWindowSize(ImVec2(430.0f, 620.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(430.0f, 620.0f), ImGuiCond_FirstUseEver);
 
     // HUDウィンドウを開始します。
     ImGui::Begin(u8"奈落塔プロト HUD");
@@ -1411,10 +1414,10 @@ void SceneNarakuProto::DrawHud()
 void SceneNarakuProto::DrawInventory()
 {
     // 所持品ウィンドウの初期位置を指定します。
-    ImGui::SetNextWindowPos(ImVec2(160.0f, 80.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(160.0f, 80.0f), ImGuiCond_FirstUseEver);
 
     // 所持品ウィンドウの初期サイズを指定します。
-    ImGui::SetNextWindowSize(ImVec2(500.0f, 460.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(500.0f, 460.0f), ImGuiCond_FirstUseEver);
 
     // 所持品ウィンドウを開始します。
     ImGui::Begin(u8"所持品", nullptr, ImGuiWindowFlags_NoCollapse);
@@ -1570,10 +1573,10 @@ void SceneNarakuProto::DrawResult()
 void SceneNarakuProto::DrawMapControls()
 {
     // マップピンウィンドウの初期位置を指定します。
-    ImGui::SetNextWindowPos(ImVec2(690.0f, 80.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowPos(ImVec2(690.0f, 80.0f), ImGuiCond_FirstUseEver);
 
     // マップピンウィンドウの初期サイズを指定します。
-    ImGui::SetNextWindowSize(ImVec2(360.0f, 360.0f), ImGuiCond_Once);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 360.0f), ImGuiCond_FirstUseEver);
 
     // マップピンウィンドウを開始します。
     ImGui::Begin(u8"地図ピン", nullptr, ImGuiWindowFlags_NoCollapse);
