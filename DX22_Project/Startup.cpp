@@ -6,6 +6,7 @@
 
 #include"imgui_impl_win32.h"
 #include "DirectX.h"
+#include "Input.h"
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 	HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -200,6 +201,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		SetWindowFullscreen(hWnd, !g_isFullscreen);
 		return 0;
+	}
+
+	if (message == WM_MOUSEWHEEL)
+	{
+		PushMouseWheelDelta(static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) /
+			static_cast<float>(WHEEL_DELTA));
 	}
 
 	if (ImGui_ImplWin32_WndProcHandler(hWnd, message, wParam, lParam))

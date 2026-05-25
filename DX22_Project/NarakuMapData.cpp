@@ -1,4 +1,4 @@
-#include "NarakuMapData.h"
+﻿#include "NarakuMapData.h"
 
 #include <Windows.h>
 #undef max
@@ -10,12 +10,16 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <queue>
+#include <set>
 #include <sstream>
+#include <string>
 
 namespace
 {
-    constexpr int kCurrentMapVersion = 1;
-    const wchar_t* kDefaultMapPath = L"C:\\HAL\\個人制作\\NarakuProto\\Assets\\Maps\\FirstLayer.json";
+        constexpr int kCurrentMapVersion = 2;
+    const wchar_t* kDefaultMapPath = L"C:\\HAL\\\u500b\\\u4eba\\\u5236\\\u4f5c\\NarakuProto\\Assets\\Maps\\FirstLayer.json";
+    std::wstring gCurrentMapPath = kDefaultMapPath;
 
     struct JsonValue
     {
@@ -319,10 +323,10 @@ namespace
         return true;
     }
 
-    void EnsureMapDirectories()
+        void EnsureMapDirectories()
     {
-        ::CreateDirectoryW(L"C:\\HAL\\個人制作\\NarakuProto\\Assets", nullptr);
-        ::CreateDirectoryW(L"C:\\HAL\\個人制作\\NarakuProto\\Assets\\Maps", nullptr);
+        ::CreateDirectoryW(L"C:\\HAL\\\u500b\\\u4eba\\\u5236\\\u4f5c\\NarakuProto\\Assets", nullptr);
+        ::CreateDirectoryW(L"C:\\HAL\\\u500b\\\u4eba\\\u5236\\\u4f5c\\NarakuProto\\Assets\\Maps", nullptr);
     }
 
     void AppendIndent(std::ostringstream& out, int indent)
@@ -364,6 +368,15 @@ namespace
         return true;
     }
 
+    bool GetString(const JsonValue& objectValue, const char* key, std::string& outText)
+    {
+        const JsonValue* value = nullptr;
+        if (!GetObjectValue<JsonValue>(objectValue, key, value)) return false;
+        if (value->type != JsonValue::TypeString) return false;
+        outText = value->stringValue;
+        return true;
+    }
+
     std::string EscapeJsonString(const std::string& text)
     {
         std::string outText;
@@ -382,33 +395,92 @@ namespace
         }
         return outText;
     }
-
-    int FindLayerIndexById(const NarakuMap::MapData& mapData, int layerId)
-    {
-        for (int i = 0; i < static_cast<int>(mapData.terrainLayers.size()); ++i)
-        {
-            if (mapData.terrainLayers[i].id == layerId)
-            {
-                return i;
-            }
-        }
-        return -1;
-    }
 }
 
 namespace NarakuMap
 {
+    namespace
+    {
+        int GetLayerVertexCount(const TerrainLayer& layer)
+        {
+            return std::max(0, layer.gridWidth) * std::max(0, layer.gridHeight);
+        }
+
+        int GetLayerCellCount(const TerrainLayer& layer)
+        {
+            const int cellWidth = std::max(0, layer.gridWidth - 1);
+            const int cellHeight = std::max(0, layer.gridHeight - 1);
+            return cellWidth * cellHeight;
+        }
+
+        bool IsCellIndexValid(const TerrainLayer& layer, int cellX, int cellZ)
+        {
+            return cellX >= 0 && cellZ >= 0 && cellX < layer.gridWidth - 1 && cellZ < layer.gridHeight - 1;
+        }
+
+        void NormalizeLayerPoint(LayerPoint& point, const MapData& mapData, int fallbackLayerId)
+        {
+            if (FindLayerIndexById(mapData, point.layerId) < 0)
+            {
+                point.layerId = fallbackLayerId;
+            }
+        }
+
+        void AppendLayerPoint(std::ostringstream& out, const char* name, const LayerPoint& point, int indent)
+        {
+            AppendIndent(out, indent);
+            out << '"' << name << "\": { "
+                << "\"x\": " << point.xz.x
+                << ", \"z\": " << point.xz.z
+                << ", \"layerId\": " << point.layerId << " }";
+        }
+    }
+
     const wchar_t* GetDefaultMapPath()
     {
         return kDefaultMapPath;
     }
+    const wchar_t* GetCurrentMapPath()
+    {
+        return gCurrentMapPath.c_str();
+    }
+
+    void SetCurrentMapPath(const wchar_t* path)
+    {
+        if (path == nullptr || path[0] == L'\0')
+        {
+            gCurrentMapPath = kDefaultMapPath;
+            return;
+        }
+
+        gCurrentMapPath = path;
+    }
+
 
     void EnsureLayerHeights(TerrainLayer& layer)
     {
-        const int count = std::max(0, layer.gridWidth) * std::max(0, layer.gridHeight);
+        const int count = GetLayerVertexCount(layer);
         if (static_cast<int>(layer.heights.size()) != count)
         {
             layer.heights.resize(count, 0.0f);
+        }
+    }
+
+    void EnsureLayerVertexEnabled(TerrainLayer& layer)
+    {
+        const int count = GetLayerVertexCount(layer);
+        if (static_cast<int>(layer.vertexEnabled.size()) != count)
+        {
+            layer.vertexEnabled.resize(count, 1u);
+        }
+    }
+
+    void EnsureLayerCellAttributes(TerrainLayer& layer)
+    {
+        const int count = GetLayerCellCount(layer);
+        if (static_cast<int>(layer.cellAttributeFlags.size()) != count)
+        {
+            layer.cellAttributeFlags.resize(count, CellAttributeNone);
         }
     }
 
@@ -437,6 +509,457 @@ namespace NarakuMap
         layer.heights[gridZ * layer.gridWidth + gridX] = height;
     }
 
+    bool IsVertexEnabled(const TerrainLayer& layer, int gridX, int gridZ)
+    {
+        if (gridX < 0 || gridZ < 0 || gridX >= layer.gridWidth || gridZ >= layer.gridHeight)
+        {
+            return false;
+        }
+
+        if (layer.vertexEnabled.empty())
+        {
+            return true;
+        }
+
+        const int index = gridZ * layer.gridWidth + gridX;
+        if (index < 0 || index >= static_cast<int>(layer.vertexEnabled.size()))
+        {
+            return false;
+        }
+
+        return layer.vertexEnabled[index] != 0u;
+    }
+
+    void SetVertexEnabled(TerrainLayer& layer, int gridX, int gridZ, bool enabled)
+    {
+        EnsureLayerVertexEnabled(layer);
+        if (gridX < 0 || gridZ < 0 || gridX >= layer.gridWidth || gridZ >= layer.gridHeight)
+        {
+            return;
+        }
+
+        layer.vertexEnabled[gridZ * layer.gridWidth + gridX] = enabled ? 1u : 0u;
+    }
+
+    std::uint32_t GetCellAttributeFlags(const TerrainLayer& layer, int cellX, int cellZ)
+    {
+        if (!IsCellIndexValid(layer, cellX, cellZ))
+        {
+            return CellAttributeNone;
+        }
+
+        const int index = cellZ * (layer.gridWidth - 1) + cellX;
+        if (index < 0 || index >= static_cast<int>(layer.cellAttributeFlags.size()))
+        {
+            return CellAttributeNone;
+        }
+        return layer.cellAttributeFlags[index];
+    }
+
+    void SetCellAttributeFlags(TerrainLayer& layer, int cellX, int cellZ, std::uint32_t flags)
+    {
+        EnsureLayerCellAttributes(layer);
+        if (!IsCellIndexValid(layer, cellX, cellZ))
+        {
+            return;
+        }
+
+        const int index = cellZ * (layer.gridWidth - 1) + cellX;
+        layer.cellAttributeFlags[index] = flags;
+    }
+
+    bool HasCellAttributeFlag(const TerrainLayer& layer, int cellX, int cellZ, std::uint32_t flag)
+    {
+        return (GetCellAttributeFlags(layer, cellX, cellZ) & flag) != 0u;
+    }
+
+    int FindLayerIndexById(const MapData& mapData, int layerId)
+    {
+        for (int i = 0; i < static_cast<int>(mapData.terrainLayers.size()); ++i)
+        {
+            if (mapData.terrainLayers[i].id == layerId)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    bool TryGetCellFromPosition(const TerrainLayer& layer, const Vec2& position, int& outCellX, int& outCellZ)
+    {
+        const int cellWidth = std::max(0, layer.gridWidth - 1);
+        const int cellHeight = std::max(0, layer.gridHeight - 1);
+        if (cellWidth <= 0 || cellHeight <= 0 || layer.cellSize <= 0.0f)
+        {
+            return false;
+        }
+
+        const float minX = layer.center.x - (static_cast<float>(cellWidth) * layer.cellSize * 0.5f);
+        const float minZ = layer.center.z - (static_cast<float>(cellHeight) * layer.cellSize * 0.5f);
+        const float localX = position.x - minX;
+        const float localZ = position.z - minZ;
+        if (localX < 0.0f || localZ < 0.0f)
+        {
+            return false;
+        }
+
+        const int cellX = static_cast<int>(localX / layer.cellSize);
+        const int cellZ = static_cast<int>(localZ / layer.cellSize);
+        if (!IsCellIndexValid(layer, cellX, cellZ))
+        {
+            return false;
+        }
+
+        outCellX = cellX;
+        outCellZ = cellZ;
+        return true;
+    }
+
+    bool TryGetLayerAndCell(const MapData& mapData, const LayerPoint& point, int& outLayerIndex, int& outCellX, int& outCellZ)
+    {
+        outLayerIndex = FindLayerIndexById(mapData, point.layerId);
+        if (outLayerIndex < 0)
+        {
+            return false;
+        }
+        return TryGetCellFromPosition(mapData.terrainLayers[outLayerIndex], point.xz, outCellX, outCellZ);
+    }
+
+    bool TryGetLayerAndCell(const MapData& mapData, int layerId, const Vec2& position, int& outLayerIndex, int& outCellX, int& outCellZ)
+    {
+        outLayerIndex = FindLayerIndexById(mapData, layerId);
+        if (outLayerIndex < 0)
+        {
+            return false;
+        }
+        return TryGetCellFromPosition(mapData.terrainLayers[outLayerIndex], position, outCellX, outCellZ);
+    }
+
+    bool IsBlockedCell(const TerrainLayer& layer, int cellX, int cellZ)
+    {
+        const std::uint32_t flags = GetCellAttributeFlags(layer, cellX, cellZ);
+        return (flags & (CellAttributeBlocked | CellAttributeRemoved)) != 0u;
+    }
+
+    bool IsHazardCell(const TerrainLayer& layer, int cellX, int cellZ)
+    {
+        return HasCellAttributeFlag(layer, cellX, cellZ, CellAttributeHazard);
+    }
+
+    bool IsRopeAnchorCell(const TerrainLayer& layer, int cellX, int cellZ)
+    {
+        return HasCellAttributeFlag(layer, cellX, cellZ, CellAttributeRopeAnchor);
+    }
+
+    struct ReachableCellKey
+    {
+        int layerIndex = -1;
+        int cellX = -1;
+        int cellZ = -1;
+
+        bool operator<(const ReachableCellKey& other) const
+        {
+            if (layerIndex != other.layerIndex) return layerIndex < other.layerIndex;
+            if (cellX != other.cellX) return cellX < other.cellX;
+            return cellZ < other.cellZ;
+        }
+    };
+
+    std::set<ReachableCellKey> BuildReachableCellSet(const MapData& mapData)
+    {
+        std::set<ReachableCellKey> visited;
+        int startLayerIndex = -1;
+        int startCellX = -1;
+        int startCellZ = -1;
+        if (!TryGetLayerAndCell(mapData, mapData.playerStartPoint, startLayerIndex, startCellX, startCellZ))
+        {
+            return visited;
+        }
+
+        const TerrainLayer& startLayer = mapData.terrainLayers[startLayerIndex];
+        if (IsBlockedCell(startLayer, startCellX, startCellZ))
+        {
+            return visited;
+        }
+
+        std::map<ReachableCellKey, std::vector<ReachableCellKey>> ropeLinks;
+        for (const RopePoint& rope : mapData.ropes)
+        {
+            int topLayerIndex = -1;
+            int topCellX = -1;
+            int topCellZ = -1;
+            int bottomLayerIndex = -1;
+            int bottomCellX = -1;
+            int bottomCellZ = -1;
+            if (!TryGetLayerAndCell(mapData, rope.topLayerId, rope.xz, topLayerIndex, topCellX, topCellZ))
+            {
+                continue;
+            }
+            if (!TryGetLayerAndCell(mapData, rope.bottomLayerId, rope.xz, bottomLayerIndex, bottomCellX, bottomCellZ))
+            {
+                continue;
+            }
+
+            ReachableCellKey topKey{ topLayerIndex, topCellX, topCellZ };
+            ReachableCellKey bottomKey{ bottomLayerIndex, bottomCellX, bottomCellZ };
+            ropeLinks[topKey].push_back(bottomKey);
+            ropeLinks[bottomKey].push_back(topKey);
+        }
+
+        std::queue<ReachableCellKey> pending;
+        ReachableCellKey startKey{ startLayerIndex, startCellX, startCellZ };
+        visited.insert(startKey);
+        pending.push(startKey);
+
+        const int offsets[4][2] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };
+        while (!pending.empty())
+        {
+            const ReachableCellKey current = pending.front();
+            pending.pop();
+
+            const TerrainLayer& currentLayer = mapData.terrainLayers[current.layerIndex];
+            for (int offsetIndex = 0; offsetIndex < 4; ++offsetIndex)
+            {
+                const int nextCellX = current.cellX + offsets[offsetIndex][0];
+                const int nextCellZ = current.cellZ + offsets[offsetIndex][1];
+                if (!IsCellIndexValid(currentLayer, nextCellX, nextCellZ))
+                {
+                    continue;
+                }
+                if (IsBlockedCell(currentLayer, nextCellX, nextCellZ))
+                {
+                    continue;
+                }
+
+                ReachableCellKey nextKey{ current.layerIndex, nextCellX, nextCellZ };
+                if (visited.insert(nextKey).second)
+                {
+                    pending.push(nextKey);
+                }
+            }
+
+            const auto ropeIt = ropeLinks.find(current);
+            if (ropeIt == ropeLinks.end())
+            {
+                continue;
+            }
+
+            for (const ReachableCellKey& linkedCell : ropeIt->second)
+            {
+                const TerrainLayer& linkedLayer = mapData.terrainLayers[linkedCell.layerIndex];
+                if (IsBlockedCell(linkedLayer, linkedCell.cellX, linkedCell.cellZ))
+                {
+                    continue;
+                }
+
+                if (visited.insert(linkedCell).second)
+                {
+                    pending.push(linkedCell);
+                }
+            }
+        }
+
+        return visited;
+    }
+
+    std::vector<ValidationIssue> ValidateMapData(const MapData& mapData)
+    {
+        std::vector<ValidationIssue> issues;
+        if (mapData.terrainLayers.empty())
+        {
+            issues.push_back({ ValidationIssue::Error, u8"地形レイヤーが 1 枚もありません。" });
+            return issues;
+        }
+
+        bool hasVisibleLayer = false;
+        for (int i = 0; i < static_cast<int>(mapData.terrainLayers.size()); ++i)
+        {
+            const TerrainLayer& layer = mapData.terrainLayers[i];
+            hasVisibleLayer |= layer.visible;
+            if (layer.gridWidth < 2 || layer.gridHeight < 2)
+            {
+                issues.push_back({ ValidationIssue::Error, u8"グリッドサイズが 2 未満のレイヤーがあります。" });
+            }
+            if (layer.cellSize <= 0.0f)
+            {
+                issues.push_back({ ValidationIssue::Error, u8"セルサイズが 0 以下のレイヤーがあります。" });
+            }
+            if (static_cast<int>(layer.heights.size()) != GetLayerVertexCount(layer))
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"頂点高さ配列サイズがグリッドと一致していません。保存時に補正されます。" });
+            }
+            if (!layer.vertexEnabled.empty() && static_cast<int>(layer.vertexEnabled.size()) != GetLayerVertexCount(layer))
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"頂点有効配列サイズがグリッドと一致していません。保存時に補正されます。" });
+            }
+            if (static_cast<int>(layer.cellAttributeFlags.size()) != GetLayerCellCount(layer))
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"セル属性配列サイズがグリッドと一致していません。保存時に補正されます。" });
+            }
+            for (int j = i + 1; j < static_cast<int>(mapData.terrainLayers.size()); ++j)
+            {
+                if (mapData.terrainLayers[j].id == layer.id)
+                {
+                    issues.push_back({ ValidationIssue::Error, u8"重複したレイヤー ID があります。" });
+                }
+            }
+        }
+
+        if (!hasVisibleLayer)
+        {
+            issues.push_back({ ValidationIssue::Warning, u8"可視状態のレイヤーが 1 枚もありません。" });
+        }
+
+        int startLayerIndex = -1;
+        int startCellX = -1;
+        int startCellZ = -1;
+        if (!TryGetLayerAndCell(mapData, mapData.playerStartPoint, startLayerIndex, startCellX, startCellZ))
+        {
+            issues.push_back({ ValidationIssue::Error, u8"プレイヤー開始地点が有効なセル範囲外にあります。" });
+        }
+        else
+        {
+            const TerrainLayer& startLayer = mapData.terrainLayers[startLayerIndex];
+            if (IsBlockedCell(startLayer, startCellX, startCellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"プレイヤー開始地点が歩行不可セル上にあります。" });
+            }
+            if (IsHazardCell(startLayer, startCellX, startCellZ))
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"プレイヤー開始地点が危険地形セル上にあります。" });
+            }
+        }
+
+        int returnLayerIndex = -1;
+        int returnCellX = -1;
+        int returnCellZ = -1;
+        if (!TryGetLayerAndCell(mapData, mapData.returnPoint, returnLayerIndex, returnCellX, returnCellZ))
+        {
+            issues.push_back({ ValidationIssue::Error, u8"帰還地点が有効なセル範囲外にあります。" });
+        }
+        else
+        {
+            const TerrainLayer& returnLayer = mapData.terrainLayers[returnLayerIndex];
+            if (IsBlockedCell(returnLayer, returnCellX, returnCellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"帰還地点が歩行不可セル上にあります。" });
+            }
+            if (IsHazardCell(returnLayer, returnCellX, returnCellZ))
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"帰還地点が危険地形セル上にあります。" });
+            }
+        }
+
+        bool hasEnabledMiningPoint = false;
+        for (const RopePoint& rope : mapData.ropes)
+        {
+            int topLayerIndex = -1;
+            int topCellX = -1;
+            int topCellZ = -1;
+            int bottomLayerIndex = -1;
+            int bottomCellX = -1;
+            int bottomCellZ = -1;
+            if (!TryGetLayerAndCell(mapData, rope.topLayerId, rope.xz, topLayerIndex, topCellX, topCellZ) ||
+                !TryGetLayerAndCell(mapData, rope.bottomLayerId, rope.xz, bottomLayerIndex, bottomCellX, bottomCellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"ロープの接続位置がレイヤー範囲外です。" });
+                continue;
+            }
+
+            const TerrainLayer& topLayer = mapData.terrainLayers[topLayerIndex];
+            const TerrainLayer& bottomLayer = mapData.terrainLayers[bottomLayerIndex];
+            if (rope.topLayerId == rope.bottomLayerId)
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"同じレイヤー同士を接続するロープがあります。" });
+            }
+            if (topLayer.layerDepth >= bottomLayer.layerDepth)
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"ロープの上層 / 下層深度関係が不自然です。" });
+            }
+            if (IsBlockedCell(topLayer, topCellX, topCellZ) || IsBlockedCell(bottomLayer, bottomCellX, bottomCellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"ロープ接続先に歩行不可セルがあります。" });
+            }
+            if (!IsRopeAnchorCell(topLayer, topCellX, topCellZ) || !IsRopeAnchorCell(bottomLayer, bottomCellX, bottomCellZ))
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"ロープ接続先にロープアンカー属性が付いていません。" });
+            }
+        }
+
+        for (const MiningPoint& point : mapData.miningPoints)
+        {
+            int layerIndex = -1;
+            int cellX = -1;
+            int cellZ = -1;
+            if (!TryGetLayerAndCell(mapData, point.layerId, point.xz, layerIndex, cellX, cellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"採掘ポイントが有効なセル範囲外にあります。" });
+                continue;
+            }
+
+            hasEnabledMiningPoint |= point.enabled;
+            const TerrainLayer& layer = mapData.terrainLayers[layerIndex];
+            if (IsBlockedCell(layer, cellX, cellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"採掘ポイントが歩行不可セル上にあります。" });
+            }
+            if (IsHazardCell(layer, cellX, cellZ))
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"採掘ポイントが危険地形セル上にあります。" });
+            }
+        }
+
+        if (!hasEnabledMiningPoint)
+        {
+            issues.push_back({ ValidationIssue::Warning, u8"有効な採掘ポイントが 1 つもありません。" });
+        }
+
+        const std::set<ReachableCellKey> reachableCells = BuildReachableCellSet(mapData);
+        if (reachableCells.empty())
+        {
+            issues.push_back({ ValidationIssue::Error, u8"プレイヤー開始地点から移動可能なセルを構築できません。" });
+            return issues;
+        }
+
+        if (returnLayerIndex >= 0)
+        {
+            const ReachableCellKey returnKey{ returnLayerIndex, returnCellX, returnCellZ };
+            if (reachableCells.find(returnKey) == reachableCells.end())
+            {
+                issues.push_back({ ValidationIssue::Error, u8"プレイヤー開始地点から帰還地点へ到達できません。" });
+            }
+        }
+
+        int reachableMiningPointCount = 0;
+        for (const MiningPoint& point : mapData.miningPoints)
+        {
+            if (!point.enabled)
+            {
+                continue;
+            }
+
+            int layerIndex = -1;
+            int cellX = -1;
+            int cellZ = -1;
+            if (!TryGetLayerAndCell(mapData, point.layerId, point.xz, layerIndex, cellX, cellZ))
+            {
+                continue;
+            }
+
+            const ReachableCellKey miningKey{ layerIndex, cellX, cellZ };
+            if (reachableCells.find(miningKey) != reachableCells.end())
+            {
+                ++reachableMiningPointCount;
+            }
+        }
+
+        if (hasEnabledMiningPoint && reachableMiningPointCount == 0)
+        {
+            issues.push_back({ ValidationIssue::Warning, u8"プレイヤー開始地点から到達可能な有効採掘ポイントがありません。" });
+        }
+
+        return issues;
+    }
     MapData CreateDefaultMap()
     {
         MapData mapData;
@@ -449,7 +972,10 @@ namespace NarakuMap
         upperLayer.gridHeight = 64;
         upperLayer.cellSize = 1.0f;
         upperLayer.groundTextureId = 0;
+        upperLayer.visible = true;
+        upperLayer.locked = false;
         EnsureLayerHeights(upperLayer);
+        EnsureLayerCellAttributes(upperLayer);
 
         TerrainLayer lowerLayer;
         lowerLayer.id = 1;
@@ -459,10 +985,28 @@ namespace NarakuMap
         lowerLayer.gridHeight = 48;
         lowerLayer.cellSize = 1.0f;
         lowerLayer.groundTextureId = 2;
+        lowerLayer.visible = true;
+        lowerLayer.locked = false;
         EnsureLayerHeights(lowerLayer);
+        EnsureLayerCellAttributes(lowerLayer);
+
+        for (int x = 0; x < upperLayer.gridWidth - 1; ++x)
+        {
+            SetCellAttributeFlags(upperLayer, x, 0, CellAttributeCliffEdge);
+            SetCellAttributeFlags(upperLayer, x, upperLayer.gridHeight - 2, CellAttributeCliffEdge);
+        }
+        for (int z = 0; z < upperLayer.gridHeight - 1; ++z)
+        {
+            SetCellAttributeFlags(upperLayer, 0, z, CellAttributeCliffEdge);
+            SetCellAttributeFlags(upperLayer, upperLayer.gridWidth - 2, z, CellAttributeCliffEdge);
+        }
 
         mapData.terrainLayers.push_back(upperLayer);
         mapData.terrainLayers.push_back(lowerLayer);
+
+        mapData.playerStartPoint = { { 0.0f, 0.0f }, 0 };
+        mapData.returnPoint = { { 0.0f, 0.0f }, 0 };
+        mapData.autoFallStartHeight = 0.90f;
 
         mapData.ropes.push_back({ { 7.0f, 9.0f }, 0, 1 });
 
@@ -479,6 +1023,9 @@ namespace NarakuMap
             point.layerId = 0;
             point.visualType = i % 4;
             point.discovered = i < 3;
+            point.enabled = true;
+            point.respawnCandidate = i >= 5;
+            point.relicName = "relic_" + std::to_string(i);
             mapData.miningPoints.push_back(point);
         }
 
@@ -493,12 +1040,22 @@ namespace NarakuMap
         out << "{\n";
         AppendIndent(out, 1);
         out << "\"version\": " << kCurrentMapVersion << ",\n";
+        AppendLayerPoint(out, "playerStartPoint", mapData.playerStartPoint, 1);
+        out << ",\n";
+        AppendLayerPoint(out, "returnPoint", mapData.returnPoint, 1);
+        out << ",\n";
+        AppendIndent(out, 1);
+        out << "\"autoFallStartHeight\": " << mapData.autoFallStartHeight << ",\n";
 
         AppendIndent(out, 1);
         out << "\"layers\": [\n";
         for (int i = 0; i < static_cast<int>(mapData.terrainLayers.size()); ++i)
         {
-            const TerrainLayer& layer = mapData.terrainLayers[i];
+            TerrainLayer layer = mapData.terrainLayers[i];
+            EnsureLayerHeights(layer);
+            EnsureLayerVertexEnabled(layer);
+            EnsureLayerCellAttributes(layer);
+
             AppendIndent(out, 2);
             out << "{\n";
             AppendIndent(out, 3);
@@ -516,11 +1073,31 @@ namespace NarakuMap
             AppendIndent(out, 3);
             out << "\"groundTextureId\": " << layer.groundTextureId << ",\n";
             AppendIndent(out, 3);
+            out << "\"visible\": " << (layer.visible ? "true" : "false") << ",\n";
+            AppendIndent(out, 3);
+            out << "\"locked\": " << (layer.locked ? "true" : "false") << ",\n";
+            AppendIndent(out, 3);
             out << "\"heights\": [";
             for (int h = 0; h < static_cast<int>(layer.heights.size()); ++h)
             {
                 if (h > 0) out << ", ";
                 out << layer.heights[h];
+            }
+            out << "],\n";
+            AppendIndent(out, 3);
+            out << "\"vertexEnabled\": [";
+            for (int v = 0; v < static_cast<int>(layer.vertexEnabled.size()); ++v)
+            {
+                if (v > 0) out << ", ";
+                out << static_cast<int>(layer.vertexEnabled[v]);
+            }
+            out << "],\n";
+            AppendIndent(out, 3);
+            out << "\"cellAttributeFlags\": [";
+            for (int c = 0; c < static_cast<int>(layer.cellAttributeFlags.size()); ++c)
+            {
+                if (c > 0) out << ", ";
+                out << layer.cellAttributeFlags[c];
             }
             out << "]\n";
             AppendIndent(out, 2);
@@ -550,10 +1127,14 @@ namespace NarakuMap
         {
             const MiningPoint& point = mapData.miningPoints[i];
             AppendIndent(out, 2);
-            out << "{ \"x\": " << point.xz.x << ", \"z\": " << point.xz.z
+            out << "{ \"x\": " << point.xz.x
+                << ", \"z\": " << point.xz.z
                 << ", \"layerId\": " << point.layerId
                 << ", \"visualType\": " << point.visualType
-                << ", \"discovered\": " << (point.discovered ? "true" : "false") << " }";
+                << ", \"discovered\": " << (point.discovered ? "true" : "false")
+                << ", \"enabled\": " << (point.enabled ? "true" : "false")
+                << ", \"respawnCandidate\": " << (point.respawnCandidate ? "true" : "false")
+                << ", \"relicName\": \"" << EscapeJsonString(point.relicName) << "\" }";
             out << (i + 1 < static_cast<int>(mapData.miningPoints.size()) ? ",\n" : "\n");
         }
         AppendIndent(out, 1);
@@ -592,7 +1173,6 @@ namespace NarakuMap
         }
 
         MapData loadedMap;
-
         const JsonValue* layersValue = nullptr;
         if (!GetObjectValue<JsonValue>(rootValue, "layers", layersValue) || layersValue->type != JsonValue::TypeArray)
         {
@@ -606,12 +1186,15 @@ namespace NarakuMap
 
             TerrainLayer layer;
             double number = 0.0;
+            bool boolValue = false;
             GetNumber(layerValue, "id", number); layer.id = static_cast<int>(number);
             GetNumber(layerValue, "layerDepth", number); layer.layerDepth = static_cast<float>(number);
             GetNumber(layerValue, "gridWidth", number); layer.gridWidth = static_cast<int>(number);
             GetNumber(layerValue, "gridHeight", number); layer.gridHeight = static_cast<int>(number);
             GetNumber(layerValue, "cellSize", number); layer.cellSize = static_cast<float>(number);
             GetNumber(layerValue, "groundTextureId", number); layer.groundTextureId = static_cast<int>(number);
+            if (GetBool(layerValue, "visible", boolValue)) layer.visible = boolValue;
+            if (GetBool(layerValue, "locked", boolValue)) layer.locked = boolValue;
 
             const JsonValue* centerValue = nullptr;
             if (GetObjectValue<JsonValue>(layerValue, "center", centerValue) && centerValue->type == JsonValue::TypeObject)
@@ -630,8 +1213,70 @@ namespace NarakuMap
                 }
             }
 
+            const JsonValue* cellFlagsValue = nullptr;
+            if (GetObjectValue<JsonValue>(layerValue, "cellAttributeFlags", cellFlagsValue) && cellFlagsValue->type == JsonValue::TypeArray)
+            {
+                layer.cellAttributeFlags.reserve(cellFlagsValue->arrayValue.size());
+                for (const JsonValue& cellFlagValue : cellFlagsValue->arrayValue)
+                {
+                    layer.cellAttributeFlags.push_back(cellFlagValue.type == JsonValue::TypeNumber ? static_cast<std::uint32_t>(cellFlagValue.numberValue) : CellAttributeNone);
+                }
+            }
+
+            const JsonValue* vertexEnabledValue = nullptr;
+            if (GetObjectValue<JsonValue>(layerValue, "vertexEnabled", vertexEnabledValue) && vertexEnabledValue->type == JsonValue::TypeArray)
+            {
+                layer.vertexEnabled.reserve(vertexEnabledValue->arrayValue.size());
+                for (const JsonValue& enabledValue : vertexEnabledValue->arrayValue)
+                {
+                    layer.vertexEnabled.push_back((enabledValue.type == JsonValue::TypeNumber && enabledValue.numberValue == 0.0) ? 0u : 1u);
+                }
+            }
+
             EnsureLayerHeights(layer);
+            EnsureLayerVertexEnabled(layer);
+            EnsureLayerCellAttributes(layer);
             loadedMap.terrainLayers.push_back(layer);
+        }
+
+        if (loadedMap.terrainLayers.empty())
+        {
+            if (errorMessage) *errorMessage = "no terrain layers found";
+            return false;
+        }
+
+        const int fallbackLayerId = loadedMap.terrainLayers.front().id;
+
+        const JsonValue* startPointValue = nullptr;
+        if (GetObjectValue<JsonValue>(rootValue, "playerStartPoint", startPointValue) && startPointValue->type == JsonValue::TypeObject)
+        {
+            double number = 0.0;
+            GetNumber(*startPointValue, "x", number); loadedMap.playerStartPoint.xz.x = static_cast<float>(number);
+            GetNumber(*startPointValue, "z", number); loadedMap.playerStartPoint.xz.z = static_cast<float>(number);
+            GetNumber(*startPointValue, "layerId", number); loadedMap.playerStartPoint.layerId = static_cast<int>(number);
+        }
+        else
+        {
+            loadedMap.playerStartPoint = { { 0.0f, 0.0f }, fallbackLayerId };
+        }
+
+        const JsonValue* returnPointValue = nullptr;
+        if (GetObjectValue<JsonValue>(rootValue, "returnPoint", returnPointValue) && returnPointValue->type == JsonValue::TypeObject)
+        {
+            double number = 0.0;
+            GetNumber(*returnPointValue, "x", number); loadedMap.returnPoint.xz.x = static_cast<float>(number);
+            GetNumber(*returnPointValue, "z", number); loadedMap.returnPoint.xz.z = static_cast<float>(number);
+            GetNumber(*returnPointValue, "layerId", number); loadedMap.returnPoint.layerId = static_cast<int>(number);
+        }
+        else
+        {
+            loadedMap.returnPoint = loadedMap.playerStartPoint;
+        }
+
+        double autoFallStartHeight = 0.0;
+        if (GetNumber(rootValue, "autoFallStartHeight", autoFallStartHeight))
+        {
+            loadedMap.autoFallStartHeight = static_cast<float>(autoFallStartHeight);
         }
 
         const JsonValue* ropesValue = nullptr;
@@ -666,19 +1311,16 @@ namespace NarakuMap
                 GetNumber(pointValue, "layerId", number); point.layerId = static_cast<int>(number);
                 GetNumber(pointValue, "visualType", number); point.visualType = static_cast<int>(number);
                 if (GetBool(pointValue, "discovered", boolValue)) point.discovered = boolValue;
+                if (GetBool(pointValue, "enabled", boolValue)) point.enabled = boolValue;
+                if (GetBool(pointValue, "respawnCandidate", boolValue)) point.respawnCandidate = boolValue;
+                GetString(pointValue, "relicName", point.relicName);
                 loadedMap.miningPoints.push_back(point);
             }
         }
 
-        // ロープや採掘ポイントが存在しない場合でも、最低限成立するマップに補正します。
-        if (loadedMap.terrainLayers.empty())
-        {
-            if (errorMessage) *errorMessage = "no terrain layers found";
-            return false;
-        }
+        NormalizeLayerPoint(loadedMap.playerStartPoint, loadedMap, fallbackLayerId);
+        NormalizeLayerPoint(loadedMap.returnPoint, loadedMap, fallbackLayerId);
 
-        // 不正なレイヤー参照は先頭レイヤーへ丸めます。
-        const int fallbackLayerId = loadedMap.terrainLayers.front().id;
         for (RopePoint& rope : loadedMap.ropes)
         {
             if (FindLayerIndexById(loadedMap, rope.topLayerId) < 0) rope.topLayerId = fallbackLayerId;

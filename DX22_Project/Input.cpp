@@ -31,6 +31,8 @@ bool g_mouseRightDown = false;
 bool g_oldMouseRightDown = false;
 bool g_mouseMiddleDown = false;
 bool g_oldMouseMiddleDown = false;
+float g_mouseWheelDelta = 0.0f;
+float g_mouseWheelAccumulated = 0.0f;
 float g_inputKeyboardMouseMs = 0.0f;
 float g_inputXInputMs = 0.0f;
 float g_inputDirectInputMs = 0.0f;
@@ -627,6 +629,8 @@ void UpdateInput()
 	g_mouseLeftDown = (::GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
 	g_mouseRightDown = (::GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
 	g_mouseMiddleDown = (::GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;
+	g_mouseWheelDelta = g_mouseWheelAccumulated;
+	g_mouseWheelAccumulated = 0.0f;
 	g_inputKeyboardMouseMs = static_cast<float>(QueryPerfMs() - sectionStart);
 
 	sectionStart = QueryPerfMs();
@@ -840,4 +844,14 @@ POINT GetMouseDelta()
 	delta.x = g_mousePos.x - g_oldMousePos.x;
 	delta.y = g_mousePos.y - g_oldMousePos.y;
 	return delta;
+}
+
+float GetMouseWheelDelta()
+{
+	return g_mouseWheelDelta;
+}
+
+void PushMouseWheelDelta(float delta)
+{
+	g_mouseWheelAccumulated += delta;
 }

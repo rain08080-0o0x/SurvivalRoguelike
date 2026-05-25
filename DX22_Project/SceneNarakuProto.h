@@ -1,6 +1,7 @@
-#pragma once
+﻿#pragma once
 
 #include "Scene.h"
+#include "NarakuMapData.h"
 
 #include <DirectXMath.h>
 #include <string>
@@ -90,6 +91,12 @@ private:
         /** @brief 空中にいる時間です。簡易ジャンプと落下ダメージの検証に使います。 */
         float airTime = 0.0f;
 
+        /** @brief プレイヤーの足元の絶対ワールド高さです。ジャンプ中の上下位置に使います。 */
+        float feetWorldY = 0.0f;
+
+        /** @brief 現在のジャンプ/落下中に到達した最高足元高さです。着地時の落下距離計算に使います。 */
+        float peakFeetWorldY = 0.0f;
+
         /** @brief ノックバック中に1秒あたり進む速度です。 */
         Vec2 knockbackVelocity;
 
@@ -98,6 +105,9 @@ private:
 
         /** @brief ロープに掴まっているかどうかです。true の間はW/Sで深度を変えます。 */
         bool onRope = false;
+
+        /** @brief 着地直後の硬直残り時間です。0より大きい間は通常移動や一部行動を止めます。 */
+        float landingRecoveryTimer = 0.0f;
     };
 
     /**
@@ -130,9 +140,12 @@ private:
         /** @brief 旧器が置かれているフィールド座標です。 */
         Vec2 pos;
 
+        /** @brief 旧器が存在する深度です。下層に落ちた旧器を正しい層で拾う判定に使います。 */
+        float depth = 0.0f;
+
         /** @brief 拾える状態かどうかです。false のものは描画や判定から外します。 */
         bool active = true;
-    };
+    }; 
 
     /**
      * @brief 採掘ポイントの状態です。
@@ -143,6 +156,9 @@ private:
     {
         /** @brief 採掘ポイントのフィールド座標です。 */
         Vec2 pos;
+
+        /** @brief 採掘ポイントが存在する深度です。別レイヤーのポイントを誤判定しないために使います。 */
+        float depth = 0.0f;
 
         /** @brief 4種類の見た目を区別する番号です。挙動差はありません。 */
         int visualType = 0;
@@ -170,8 +186,23 @@ private:
         /** @brief 体当たり中に進む方向です。予備動作終了時に決定します。 */
         Vec2 chargeDir;
 
+        /** @brief 敵が存在している深度です。別レイヤーのプレイヤーを追わない判定に使います。 */
+        float depth = 0.0f;
+
         /** @brief 敵の体力です。つるはし3回程度で倒せるため3にしています。 */
         float hp = 3.0f;
+
+        /** @brief 落下中の縦速度です。大きい段差から落ちた時の空中更新に使います。 */
+        float verticalSpeed = 0.0f;
+
+        /** @brief 空中にいる時間です。着地までの落下更新に使います。 */
+        float airTime = 0.0f;
+
+        /** @brief 敵の足元の絶対ワールド高さです。落下中の上下位置に使います。 */
+        float feetWorldY = 0.0f;
+
+        /** @brief 現在の落下中に到達した最高足元高さです。着地時の落下距離計算に使います。 */
+        float peakFeetWorldY = 0.0f;
 
         /** @brief 次に体当たりを開始できるまでの残り時間です。 */
         float attackCooldown = 1.5f;
@@ -185,8 +216,14 @@ private:
         /** @brief 生存しているかどうかです。false なら更新と描画を止めます。 */
         bool alive = true;
 
+        /** @brief 地面にいるかどうかです。false の間は落下中として扱います。 */
+        bool grounded = true;
+
         /** @brief 1回の体当たりで複数回ヒットしないようにするフラグです。 */
         bool hasHitThisCharge = false;
+
+        /** @brief 着地直後の硬直残り時間です。0より大きい間は通常追跡と体当たり開始を止めます。 */
+        float landingRecoveryTimer = 0.0f;
     };
 
     /**
@@ -208,6 +245,9 @@ private:
 
         /** @brief デバッグ表示用の半透明色です。 */
         DirectX::XMFLOAT4 color = { 0.18f, 0.45f, 0.30f, 0.18f };
+
+        /** @brief 元になったマップレイヤー ID です。 */
+        int layerId = 0;
     };
 
     /**
@@ -406,6 +446,27 @@ private:
     /** @brief フィールド座標をゲーム画面用の斜め見下ろしImGui座標へ変換します。 */
     Vec2 WorldToObliqueCanvas(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& worldPos, float depthOffset = 0.0f) const;
 
+    /** @brief 指定した深度に対応するレイヤー配列番号を返します。見つからなければ -1 を返します。 */
+    int FindLayerIndexByDepth(float depth, float tolerance = 0.20f) const;
+
+    /** @brief レイヤー上の任意XZ座標が属するセルとセル内補間率を返します。 */
+    bool TryGetLayerCellAt(const NarakuMap::TerrainLayer& layer, const Vec2& pos, int& outCellX, int& outCellZ, float& outFracX, float& outFracZ) const;
+
+    /** @brief レイヤー上の任意XZ座標から地形の相対高さを補間して返します。 */
+    float SampleTerrainHeightOffsetAt(const Vec2& pos, float depth) const;
+
+    /** @brief 指定した位置と深度における地面の絶対ワールド高さを返します。 */
+    float GetGroundWorldY(const Vec2& pos, float depth) const;
+
+    /** @brief 現在のプレイヤーのジャンプ高さを考慮した追加オフセットを返します。 */
+    float GetPlayerAirborneOffset() const;
+
+    /** @brief ロープ番号と深度から、ロープ上の絶対ワールド高さを線形補間して返します。 */
+    float GetRopeWorldY(int ropeIndex, float depth) const;
+
+    /** @brief レイヤー頂点を地形高さ込みの3D座標へ変換します。 */
+    DirectX::XMFLOAT3 GetTerrainVertexWorld3D(const NarakuMap::TerrainLayer& layer, int gridX, int gridZ, float heightOffset = 0.0f) const;
+
     /** @brief 2Dフィールド座標と深度を3D座標へ変換します。 */
     DirectX::XMFLOAT3 ToWorld3D(const Vec2& pos, float depth = 0.0f, float heightOffset = 0.0f) const;
 
@@ -426,6 +487,12 @@ private:
 
     /** @brief 指定座標と深度に歩ける床があるかを返します。 */
     bool HasFloorAt(const Vec2& pos, float depth) const;
+
+    /** @brief 指定座標と深度に対応するセル属性フラグを返します。範囲外なら CellAttributeNone を返します。 */
+    std::uint32_t GetCellAttributeFlagsAt(const Vec2& pos, float depth) const;
+
+    /** @brief 2点間の地形高低差と属性を見て、その移動を通してよいかを返します。 */
+    bool CanTraverseGround(const Vec2& from, const Vec2& to, float depth) const;
 
     /** @brief 床外へ出る移動を止め、可能ならX方向またはY方向だけの移動に分解して通します。 */
     Vec2 ResolveFloorMove(const Vec2& from, const Vec2& to, float depth) const;
@@ -453,6 +520,21 @@ private:
     std::vector<EnemyState> m_enemies;
 
     /** @brief 実際の移動判定に使う床領域一覧です。 */
+    NarakuMap::MapData m_runtimeMap;
+
+    /** @brief プレイヤー開始地点の平面座標です。 */
+    Vec2 m_startPoint;
+
+    /** @brief プレイヤー開始地点の深度です。 */
+    float m_startDepth = 0.0f;
+
+    /** @brief 帰還地点の平面座標です。 */
+    Vec2 m_returnPoint;
+
+    /** @brief 帰還地点の深度です。 */
+    float m_returnDepth = 0.0f;
+
+    /** @brief プレイヤーが立てる地形一覧です。 */
     std::vector<FloorRegion> m_floorRegions;
 
     /** @brief ロープの位置と接続深度の一覧です。 */
@@ -478,6 +560,15 @@ private:
 
     /** @brief 発見確認中の旧器を置く場合の位置です。 */
     Vec2 m_pendingRelicPos;
+
+    /** @brief 発見確認中の旧器を置く場合の深度です。 */
+    float m_pendingRelicDepth = 0.0f;
+
+    /** @brief 危険地形の継続ダメージを刻むまでの残り時間です。 */
+    float m_hazardTickTimer = 0.0f;
+
+    /** @brief 歩行中にこの下り落差以上を踏み越えたら落下状態へ移る閾値です。 */
+    float m_autoFallStartHeight = 0.90f;
 
     /** @brief Shift長押し判定用の押下時間です。 */
     float m_shiftHold = 0.0f;

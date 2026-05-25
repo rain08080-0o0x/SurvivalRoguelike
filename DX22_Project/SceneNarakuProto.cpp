@@ -1,4 +1,4 @@
-#include "SceneNarakuProto.h"
+﻿#include "SceneNarakuProto.h"
 
 #include "Defines.h"
 #include "DirectX.h"
@@ -89,6 +89,28 @@ namespace
     constexpr float kWorldHalfSize = 30.0f;
     // Shiftをこの秒数以上押し続けたら走り扱いにします。
     constexpr float kShiftRunThreshold = 0.18f;
+    // 通常歩行で乗り越えられる上り段差です。
+    constexpr float kMaxWalkClimbHeight = 0.55f;
+    // 通常歩行でそのまま降りられる下り段差です。これを超える下りは落下可属性が必要です。
+    constexpr float kMaxWalkDropHeight = 0.80f;
+    // 歩行移動後に地面へ即吸着せず、そのまま落下へ移る下り落差です。
+    constexpr float kAutoFallStartHeight = 0.90f;
+    // 崖境界セルで通常歩行を止める下り段差です。
+    constexpr float kCliffEdgeBlockDropHeight = 0.20f;
+    // 危険地形の継続ダメージ間隔です。
+    constexpr float kHazardTickInterval = 0.50f;
+    // 危険地形1回ぶんのダメージです。
+    constexpr float kHazardDamage = 0.5f;
+    // 斜面移動時に経路を分割する1区間の基準長です。
+    constexpr float kSlopeMoveSampleStep = 0.25f;
+    // セル境界の浮動小数誤差で通行不可になりにくくするための許容値です。
+    constexpr float kSlopeHeightTolerance = 0.03f;
+    // 軽い落下で発生する着地硬直時間です。
+    constexpr float kLandingRecoveryLight = 0.14f;
+    // 中程度の落下で発生する着地硬直時間です。
+    constexpr float kLandingRecoveryMedium = 0.24f;
+    // 重い落下で発生する着地硬直時間です。
+    constexpr float kLandingRecoveryHeavy = 0.38f;
 
     // プロトタイプで使う4級旧器名です。コード側では文字化け回避のため英字にしています。
     const char* kRelicNames[] =
@@ -127,114 +149,152 @@ SceneNarakuProto::~SceneNarakuProto()
 
 void SceneNarakuProto::ResetRun()
 {
-    // 所持金は地上側の永続値として扱うため、潜行初期化前に退避します。
     int keepMoney = m_money;
 
-    // プレイヤーの体力、精神力、位置、行動タイマーを初期値に戻します。
     m_player = PlayerState();
-
-    // 帰還地点を原点にして、プレイヤーもそこから開始します。
-    m_player.pos = { 0.0f, 0.0f };
-
-    // 最初の向きは画面上方向にして、攻撃やステップの向きが未定にならないようにします。
-    m_player.facing = { 0.0f, 1.0f };
-
-    // 潜行中の所持旧器を空にします。
     m_inventory.clear();
-
-    // フィールドに置かれている旧器を空にします。
     m_groundRelics.clear();
-
-    // 採掘ポイントはこの後で固定配置を作り直します。
     m_miningPoints.clear();
-
-    // 敵も潜行ごとに初期配置へ戻すため空にします。
     m_enemies.clear();
-
-    // 地形床とロープを固定データから作り直すため、古い一覧を空にします。
     m_floorRegions.clear();
     m_ropePoints.clear();
     m_activeRope = -1;
-
-    // 死亡/帰還後の再潜行では探索中ピンを消します。
     m_pins.clear();
-
-    // 画面ログを初期化します。
     m_messages.clear();
-
-    // Shift長押し/短押し判定を初期化します。
     m_shiftHold = 0.0f;
-
-    // ステップ保留状態を解除します。
     m_shiftPendingStep = false;
-
-    // 前フレームShift状態を初期化します。
     m_shiftWasPressed = false;
-
-    // Shift長押し走り確定状態を初期化します。
     m_shiftRunCommitted = false;
-
-    // 採掘タイマーを止めます。
     m_miningTimer = 0.0f;
-
-    // 採掘中ポイントなしの状態に戻します。
     m_miningIndex = -1;
-
-    // 所持品UIの選択を解除します。
     m_selectedInventory = -1;
-
-    // 通常探索モードから開始します。
     m_mode = Mode::Explore;
-
-    // リザルト集計値をリセットします。
     m_result = RunResult();
-
-    // 退避していた所持金を戻します。
+    m_pendingRelicDepth = 0.0f;
     m_money = keepMoney;
 
-    // 地上に近い大きな床と、一段下の小さな床を生成します。
-    m_floorRegions.push_back({ { 0.0f, 0.0f }, { 23.0f, 20.0f }, 0.0f, { 0.18f, 0.45f, 0.30f, 0.18f } });
-    m_floorRegions.push_back({ { 7.0f, 9.0f }, { 8.0f, 6.0f }, 4.0f, { 0.25f, 0.36f, 0.55f, 0.28f } });
-    m_floorRegions.push_back({ { 13.5f, 11.5f }, { 5.0f, 3.5f }, 4.0f, { 0.20f, 0.32f, 0.50f, 0.24f } });
-
-    // 地上床から一段下の床へ降りられるデバッグ用ロープを配置します。
-    m_ropePoints.push_back({ { 7.0f, 9.0f }, 0.0f, 4.0f });
-
-    // 採掘ポイントは第一層プロトタイプ用の固定配置です。
-    const Vec2 miningPositions[10] =
+    std::string mapError;
+    if (!NarakuMap::LoadMap(NarakuMap::GetCurrentMapPath(), m_runtimeMap, &mapError))
     {
-        { -6.0f, 4.0f }, { 5.5f, 6.0f }, { 9.0f, -3.0f }, { -11.0f, -6.0f }, { 15.0f, 5.0f },
-        { -18.0f, 8.0f }, { 18.0f, -11.0f }, { -4.0f, -15.0f }, { 3.0f, 18.0f }, { -16.0f, -17.0f }
-    };
-
-    // 10個の採掘ポイントを作ります。
-    for (int i = 0; i < 10; ++i)
-    {
-        // 1箇所分の採掘ポイント状態を作ります。
-        MiningPoint point;
-
-        // 固定配置から座標を設定します。
-        point.pos = miningPositions[i];
-
-        // 見た目だけ4種類で回します。
-        point.visualType = i % 4;
-
-        // 最初の3箇所だけ初期地図に載っている扱いで表示します。
-        point.discovered = i < 3;
-
-        // 採掘完了時に出る旧器名を割り当てます。
-        point.relicName = kRelicNames[i % 8];
-
-        // 採掘ポイント一覧に登録します。
-        m_miningPoints.push_back(point);
+        m_runtimeMap = NarakuMap::CreateDefaultMap();
     }
 
-    // 弱い敵を3体だけ固定配置します。
-    m_enemies.push_back({ { -8.0f, 11.0f } });
-    m_enemies.push_back({ { 13.0f, -8.0f } });
-    m_enemies.push_back({ { -18.0f, -13.0f } });
+    m_autoFallStartHeight = m_runtimeMap.autoFallStartHeight;
 
-    // 起動確認用のログを出します。
+    auto getLayerDepthById = [this](int layerId) -> float
+    {
+        const int layerIndex = NarakuMap::FindLayerIndexById(m_runtimeMap, layerId);
+        return (layerIndex >= 0) ? m_runtimeMap.terrainLayers[layerIndex].layerDepth : 0.0f;
+    };
+
+    auto getFloorColor = [](int textureId) -> DirectX::XMFLOAT4
+    {
+        switch (textureId)
+        {
+        case 1: return { 0.42f, 0.33f, 0.20f, 0.20f };
+        case 2: return { 0.25f, 0.36f, 0.55f, 0.28f };
+        case 3: return { 0.25f, 0.45f, 0.36f, 0.24f };
+        default: return { 0.18f, 0.45f, 0.30f, 0.18f };
+        }
+    };
+
+    m_startPoint = { m_runtimeMap.playerStartPoint.xz.x, m_runtimeMap.playerStartPoint.xz.z };
+    m_startDepth = getLayerDepthById(m_runtimeMap.playerStartPoint.layerId);
+    m_returnPoint = { m_runtimeMap.returnPoint.xz.x, m_runtimeMap.returnPoint.xz.z };
+    m_returnDepth = getLayerDepthById(m_runtimeMap.returnPoint.layerId);
+
+    m_player.pos = m_startPoint;
+    m_player.depth = m_startDepth;
+    m_player.previousDepth = m_startDepth;
+    m_player.facing = { 0.0f, 1.0f };
+    m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+    m_player.peakFeetWorldY = m_player.feetWorldY;
+
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+    {
+        if (layer.gridWidth < 2 || layer.gridHeight < 2)
+        {
+            continue;
+        }
+
+        const float width = static_cast<float>(layer.gridWidth - 1) * layer.cellSize;
+        const float height = static_cast<float>(layer.gridHeight - 1) * layer.cellSize;
+        m_floorRegions.push_back({
+            { layer.center.x, layer.center.z },
+            { width * 0.5f, height * 0.5f },
+            layer.layerDepth,
+            getFloorColor(layer.groundTextureId),
+            layer.id });
+    }
+
+    for (const NarakuMap::RopePoint& rope : m_runtimeMap.ropes)
+    {
+        const int topIndex = NarakuMap::FindLayerIndexById(m_runtimeMap, rope.topLayerId);
+        const int bottomIndex = NarakuMap::FindLayerIndexById(m_runtimeMap, rope.bottomLayerId);
+        if (topIndex < 0 || bottomIndex < 0)
+        {
+            continue;
+        }
+
+        m_ropePoints.push_back({
+            { rope.xz.x, rope.xz.z },
+            m_runtimeMap.terrainLayers[topIndex].layerDepth,
+            m_runtimeMap.terrainLayers[bottomIndex].layerDepth });
+    }
+
+    int fallbackRelicIndex = 0;
+    for (const NarakuMap::MiningPoint& point : m_runtimeMap.miningPoints)
+    {
+        if (!point.enabled)
+        {
+            continue;
+        }
+
+        MiningPoint runtimePoint;
+        runtimePoint.pos = { point.xz.x, point.xz.z };
+        runtimePoint.visualType = point.visualType;
+        runtimePoint.discovered = point.discovered;
+        runtimePoint.mined = false;
+        runtimePoint.depth = getLayerDepthById(point.layerId);
+        runtimePoint.relicName = point.relicName.empty() ? kRelicNames[fallbackRelicIndex % 8] : point.relicName;
+        ++fallbackRelicIndex;
+        m_miningPoints.push_back(runtimePoint);
+    }
+
+    auto pickEnemyDepth = [this](const Vec2& pos) -> float
+    {
+        float bestDepth = m_startDepth;
+        bool found = false;
+        for (const FloorRegion& floor : m_floorRegions)
+        {
+            if (!IsInsideFloor(floor, pos))
+            {
+                continue;
+            }
+            if (!found || floor.depth < bestDepth)
+            {
+                bestDepth = floor.depth;
+                found = true;
+            }
+        }
+        return bestDepth;
+    };
+
+    EnemyState enemyA = {};
+    enemyA.pos = { -8.0f, 11.0f };
+    enemyA.depth = pickEnemyDepth(enemyA.pos);
+    m_enemies.push_back(enemyA);
+
+    EnemyState enemyB = {};
+    enemyB.pos = { 13.0f, -8.0f };
+    enemyB.depth = pickEnemyDepth(enemyB.pos);
+    m_enemies.push_back(enemyB);
+
+    EnemyState enemyC = {};
+    enemyC.pos = { -18.0f, -13.0f };
+    enemyC.depth = pickEnemyDepth(enemyC.pos);
+    m_enemies.push_back(enemyC);
+
     AddMessage(u8"奈落塔プロトタイプを開始しました。");
 }
 
@@ -292,6 +352,10 @@ void SceneNarakuProto::UpdateMovement(float dt)
     // WASD入力を集めるための移動ベクトルです。
     Vec2 input;
 
+    // 着地直後の硬直を更新します。
+    m_player.landingRecoveryTimer = std::max(0.0f, m_player.landingRecoveryTimer - dt);
+    const bool inLandingRecovery = m_player.landingRecoveryTimer > 0.0f;
+
     // Wキーでカメラから見た前方向へ進みます。
     if (IsKeyPress('W')) input.y += 1.0f;
 
@@ -320,7 +384,7 @@ void SceneNarakuProto::UpdateMovement(float dt)
     if (move.x != 0.0f || move.y != 0.0f) m_player.facing = move;
 
     // Spaceが押された瞬間にジャンプ開始を試します。
-    if (IsKeyTrigger(VK_SPACE)) TryStartJump();
+    if (!inLandingRecovery && IsKeyTrigger(VK_SPACE)) TryStartJump();
 
     // 左右Shiftの現在入力を物理キーとして取得します。
     const bool shiftPressed = IsShiftPress();
@@ -357,7 +421,7 @@ void SceneNarakuProto::UpdateMovement(float dt)
         if (shiftReleased)
         {
             // 長押し走りに確定していない短押しだけステップを開始します。
-            if (!m_shiftRunCommitted)
+            if (!m_shiftRunCommitted && !inLandingRecovery)
             {
                 // スタミナや重量条件を満たす場合だけステップを開始します。
                 TryStartStep();
@@ -401,6 +465,10 @@ void SceneNarakuProto::UpdateMovement(float dt)
         m_shiftRunCommitted = false;
     }
 
+    // 地面歩行開始時点の位置と高さを覚えて、段差踏み外し時の落下開始判定に使います。
+    const Vec2 groundedMoveStartPos = m_player.pos;
+    const float groundedMoveStartGroundY = GetGroundWorldY(m_player.pos, m_player.depth);
+
     // ノックバック中は敵から押し出される移動を先に適用します。
     if (m_player.knockbackTimer > 0.0f)
     {
@@ -431,7 +499,7 @@ void SceneNarakuProto::UpdateMovement(float dt)
     }
 
     // ロープに掴まっていない時だけ平面移動を行います。
-    else if (!m_player.onRope)
+    else if (!m_player.onRope && !inLandingRecovery)
     {
         // 通常歩行速度に重量70%以上の低下を反映します。
         float speed = GetMoveSpeed();
@@ -507,42 +575,68 @@ void SceneNarakuProto::UpdateMovement(float dt)
         }
     }
 
-    // ジャンプ中なら簡易的な空中時間と着地を更新します。
+    // 地面を歩いてより低い地形へ出た時は、一定以上の落差で落下状態へ移ります。
+    if (m_player.grounded && !m_player.onRope)
+    {
+        const float currentGroundWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+        const float walkedDropHeight = groundedMoveStartGroundY - currentGroundWorldY;
+        const bool movedHorizontally = Distance(groundedMoveStartPos, m_player.pos) > 0.01f;
+
+        if (movedHorizontally && walkedDropHeight >= m_autoFallStartHeight)
+        {
+            m_player.grounded = false;
+            m_player.airTime = 0.0f;
+            m_player.verticalSpeed = 0.0f;
+            m_player.feetWorldY = groundedMoveStartGroundY;
+            m_player.peakFeetWorldY = groundedMoveStartGroundY;
+            m_player.landingRecoveryTimer = 0.0f;
+        }
+    }
+
+    // ジャンプ中なら実地形の高さを使って空中時間と着地を更新します。
     if (!m_player.grounded)
     {
+        const float groundWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+
         // 空中にいる時間を加算します。
         m_player.airTime += dt;
+
+        // 足元の絶対ワールド高さを縦速度ぶん進めます。
+        m_player.feetWorldY += m_player.verticalSpeed * dt;
 
         // 重力で縦速度を減らします。
         m_player.verticalSpeed -= 9.8f * dt;
 
-        // プロト段階では一定時間で着地した扱いにします。
-        if (m_player.airTime >= 0.65f)
+        // 最高到達点を更新して、着地時の落下距離計算に使います。
+        m_player.peakFeetWorldY = std::max(m_player.peakFeetWorldY, m_player.feetWorldY);
+
+        // 降下中に地面へ届いたら着地します。
+        if (m_player.verticalSpeed <= 0.0f && m_player.feetWorldY <= groundWorldY)
         {
-            // 簡易落下距離を計算し、落下ダメージ表へ当てます。
-            float fallDistance = std::max(0.0f, -m_player.verticalSpeed * m_player.airTime * 0.5f);
+            const float fallDistance = std::max(0.0f, m_player.peakFeetWorldY - groundWorldY);
+            float landingRecovery = 0.0f;
+            if (fallDistance >= 6.0f) landingRecovery = kLandingRecoveryHeavy;
+            else if (fallDistance >= 4.0f) landingRecovery = kLandingRecoveryMedium;
+            else if (fallDistance >= 2.0f) landingRecovery = kLandingRecoveryLight;
 
-            // 8m以上は即死扱いです。
             if (fallDistance >= 8.0f) StartDeath(u8"落下死しました。");
-
-            // 6m以上8m未満は6ダメージです。
             else if (fallDistance >= 6.0f) m_player.hp -= 6.0f;
-
-            // 4m以上6m未満は3ダメージです。
             else if (fallDistance >= 4.0f) m_player.hp -= 3.0f;
-
-            // 2m以上4m未満は1ダメージです。
             else if (fallDistance >= 2.0f) m_player.hp -= 1.0f;
 
-            // 着地したのでジャンプ状態を解除します。
             m_player.grounded = true;
-
-            // 空中時間をリセットします。
             m_player.airTime = 0.0f;
-
-            // 縦速度をリセットします。
             m_player.verticalSpeed = 0.0f;
+            m_player.feetWorldY = groundWorldY;
+            m_player.peakFeetWorldY = groundWorldY;
+            m_player.landingRecoveryTimer = landingRecovery;
         }
+    }
+    else if (!m_player.onRope)
+    {
+        const float groundWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+        m_player.feetWorldY = groundWorldY;
+        m_player.peakFeetWorldY = groundWorldY;
     }
 
     // デバッグフィールド外へ出ないようX座標を制限します。
@@ -550,6 +644,22 @@ void SceneNarakuProto::UpdateMovement(float dt)
 
     // デバッグフィールド外へ出ないようY座標を制限します。
     m_player.pos.y = std::max(-kWorldHalfSize, std::min(m_player.pos.y, kWorldHalfSize));
+
+    // 危険地形に乗っている間は一定間隔でダメージを受けます。
+    if (!m_player.onRope && (GetCellAttributeFlagsAt(m_player.pos, m_player.depth) & NarakuMap::CellAttributeHazard) != 0u)
+    {
+        m_hazardTickTimer -= dt;
+        if (m_hazardTickTimer <= 0.0f)
+        {
+            m_hazardTickTimer += kHazardTickInterval;
+            m_player.hp = std::max(0.0f, m_player.hp - kHazardDamage);
+            AddMessage(u8"危険地形でダメージを受けました。");
+        }
+    }
+    else
+    {
+        m_hazardTickTimer = kHazardTickInterval;
+    }
 
     // 次フレームで押下/離上を判定できるよう、現在のShift状態を保存します。
     m_shiftWasPressed = shiftPressed;
@@ -650,6 +760,7 @@ void SceneNarakuProto::UpdateMining(float dt)
 
     // 拾わず置く場合に戻す位置を採掘ポイント位置にします。
     m_pendingRelicPos = point.pos;
+    m_pendingRelicDepth = point.depth;
 
     // 採掘中番号を解除します。
     m_miningIndex = -1;
@@ -672,17 +783,60 @@ void SceneNarakuProto::UpdateEnemies(float dt)
         // 死んでいる敵は移動も攻撃もしません。
         if (!enemy.alive) continue;
 
+        enemy.landingRecoveryTimer = std::max(0.0f, enemy.landingRecoveryTimer - dt);
+
+        // 現在フレームの移動前の地面高さを覚えて、段差踏み外し時の落下開始判定に使います。
+        const Vec2 moveStartPos = enemy.pos;
+        const float moveStartGroundY = GetGroundWorldY(enemy.pos, enemy.depth);
+
+        // 空中にいる敵は落下更新だけ行い、着地するまでは通常AIを止めます。
+        if (!enemy.grounded)
+        {
+            const float groundWorldY = GetGroundWorldY(enemy.pos, enemy.depth);
+            enemy.airTime += dt;
+            enemy.feetWorldY += enemy.verticalSpeed * dt;
+            enemy.verticalSpeed -= 9.8f * dt;
+            enemy.peakFeetWorldY = std::max(enemy.peakFeetWorldY, enemy.feetWorldY);
+
+            if (enemy.verticalSpeed <= 0.0f && enemy.feetWorldY <= groundWorldY)
+            {
+                const float fallDistance = std::max(0.0f, enemy.peakFeetWorldY - groundWorldY);
+                float landingRecovery = 0.0f;
+                if (fallDistance >= 6.0f) landingRecovery = kLandingRecoveryHeavy;
+                else if (fallDistance >= 4.0f) landingRecovery = kLandingRecoveryMedium;
+                else if (fallDistance >= 2.0f) landingRecovery = kLandingRecoveryLight;
+
+                enemy.grounded = true;
+                enemy.airTime = 0.0f;
+                enemy.verticalSpeed = 0.0f;
+                enemy.feetWorldY = groundWorldY;
+                enemy.peakFeetWorldY = groundWorldY;
+                enemy.landingRecoveryTimer = landingRecovery;
+            }
+
+            continue;
+        }
+
+        if (enemy.landingRecoveryTimer > 0.0f)
+        {
+            enemy.feetWorldY = moveStartGroundY;
+            enemy.peakFeetWorldY = moveStartGroundY;
+            continue;
+        }
+
         // 体当たり中なら専用の高速移動と命中判定を行います。
         if (enemy.chargeTimer > 0.0f)
         {
             // 体当たり方向へ通常移動の3倍速度で進みます。
-            enemy.pos = Add(enemy.pos, Mul(enemy.chargeDir, kEnemyChargeSpeed * dt));
+            const Vec2 chargeTarget = Add(enemy.pos, Mul(enemy.chargeDir, kEnemyChargeSpeed * dt));
+            enemy.pos = ResolveFloorMove(enemy.pos, chargeTarget, enemy.depth);
 
             // 体当たりの残り時間を減らします。
             enemy.chargeTimer = std::max(0.0f, enemy.chargeTimer - dt);
 
-            // まだこの体当たりで当たっていない場合だけ命中判定を行います。
-            if (!enemy.hasHitThisCharge && Distance(enemy.pos, m_player.pos) <= kEnemyHitRange)
+            // 同じ深度帯にいる場合だけ命中判定を行います。
+            const bool sameDepthAsPlayer = std::fabs(enemy.depth - m_player.depth) <= 0.35f;
+            if (sameDepthAsPlayer && !enemy.hasHitThisCharge && Distance(enemy.pos, m_player.pos) <= kEnemyHitRange)
             {
                 // ステップ無敵時間中かどうかを判定します。
                 bool invincible = m_player.stepTimer > kStepRecoveryTime;
@@ -737,20 +891,27 @@ void SceneNarakuProto::UpdateEnemies(float dt)
             continue;
         }
 
+        // 同じ深度帯のプレイヤーだけ追跡対象にします。
+        const bool sameDepthAsPlayer = std::fabs(enemy.depth - m_player.depth) <= 0.35f;
+
         // 敵からプレイヤーへの方向を計算します。
         Vec2 toPlayer = Sub(m_player.pos, enemy.pos);
 
         // 敵とプレイヤーの距離を計算します。
         float dist = Distance(enemy.pos, m_player.pos);
 
-        // 近すぎない場合はプレイヤーへゆっくり接近します。
-        if (dist > 0.1f) enemy.pos = Add(enemy.pos, Mul(Normalize(toPlayer), kEnemyWalkSpeed * dt));
+        // 同じ深度帯で近すぎない場合はプレイヤーへゆっくり接近します。
+        if (sameDepthAsPlayer && dist > 0.1f)
+        {
+            const Vec2 moveTarget = Add(enemy.pos, Mul(Normalize(toPlayer), kEnemyWalkSpeed * dt));
+            enemy.pos = ResolveFloorMove(enemy.pos, moveTarget, enemy.depth);
+        }
 
         // 体当たりの再使用待ち時間を減らします。
         enemy.attackCooldown -= dt;
 
-        // クールダウンが終わり、十分近ければ予備動作を開始します。
-        if (enemy.attackCooldown <= 0.0f && dist <= 3.0f)
+        // クールダウンが終わり、同じ深度帯で十分近ければ予備動作を開始します。
+        if (sameDepthAsPlayer && enemy.attackCooldown <= 0.0f && dist <= 3.0f)
         {
             // 予備動作タイマーを設定します。
             enemy.telegraphTimer = kEnemyTelegraphTime;
@@ -758,6 +919,27 @@ void SceneNarakuProto::UpdateEnemies(float dt)
             // 次回攻撃までのクールダウンを5秒に戻します。
             enemy.attackCooldown = kEnemyAttackInterval;
         }
+
+        // 地面歩行でより低い地形へ出た時は、一定以上の落差で敵も落下状態へ移ります。
+        const float currentGroundWorldY = GetGroundWorldY(enemy.pos, enemy.depth);
+        const float walkedDropHeight = moveStartGroundY - currentGroundWorldY;
+        const bool movedHorizontally = Distance(moveStartPos, enemy.pos) > 0.01f;
+        if (movedHorizontally && walkedDropHeight >= m_autoFallStartHeight)
+        {
+            enemy.grounded = false;
+            enemy.airTime = 0.0f;
+            enemy.verticalSpeed = 0.0f;
+            enemy.feetWorldY = moveStartGroundY;
+            enemy.peakFeetWorldY = moveStartGroundY;
+            enemy.landingRecoveryTimer = 0.0f;
+            enemy.telegraphTimer = 0.0f;
+            enemy.chargeTimer = 0.0f;
+            enemy.hasHitThisCharge = false;
+            continue;
+        }
+
+        enemy.feetWorldY = currentGroundWorldY;
+        enemy.peakFeetWorldY = currentGroundWorldY;
     }
 }
 
@@ -799,8 +981,14 @@ void SceneNarakuProto::UpdateUpperLoad(float dt)
 
 void SceneNarakuProto::TryInteract()
 {
+    // 着地直後の硬直中はインタラクトを受け付けません。
+    if (m_player.landingRecoveryTimer > 0.0f)
+    {
+        return;
+    }
+
     // 帰還地点が最優先です。原点付近でFを押すと帰還します。
-    if (IsNear(m_player.pos, { 0.0f, 0.0f }, kReturnRange))
+    if (IsNear(m_player.pos, m_returnPoint, kReturnRange) && std::fabs(m_player.depth - m_returnDepth) <= 0.35f)
     {
         // 帰還リザルトへ移行します。
         FinishReturn();
@@ -823,6 +1011,12 @@ void SceneNarakuProto::TryInteract()
             m_player.pos = rope.pos;
             m_player.onRope = false;
             m_activeRope = -1;
+            m_player.grounded = true;
+            m_player.verticalSpeed = 0.0f;
+            m_player.airTime = 0.0f;
+            m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+            m_player.peakFeetWorldY = m_player.feetWorldY;
+            m_player.landingRecoveryTimer = 0.0f;
             AddMessage(u8"ロープを離しました。");
         }
 
@@ -833,6 +1027,12 @@ void SceneNarakuProto::TryInteract()
             m_activeRope = ropeIndex;
             m_player.pos = rope.pos;
             m_player.depth = std::fabs(m_player.depth - rope.bottomDepth) < std::fabs(m_player.depth - rope.topDepth) ? rope.bottomDepth : rope.topDepth;
+            m_player.grounded = false;
+            m_player.verticalSpeed = 0.0f;
+            m_player.airTime = 0.0f;
+            m_player.feetWorldY = GetRopeWorldY(m_activeRope, m_player.depth);
+            m_player.peakFeetWorldY = m_player.feetWorldY;
+            m_player.landingRecoveryTimer = 0.0f;
             AddMessage(u8"ロープにつかまりました。");
         }
 
@@ -847,13 +1047,14 @@ void SceneNarakuProto::TryInteract()
         if (!relic.active) continue;
 
         // 近くにある旧器だけ反応します。
-        if (IsNear(m_player.pos, relic.pos, kInteractRange))
+        if (IsNear(m_player.pos, relic.pos, kInteractRange) && std::fabs(m_player.depth - relic.depth) <= 0.35f)
         {
             // 拾う確認に表示する旧器を設定します。
             m_pendingRelic = relic.item;
 
             // 拾わず戻す場合の位置を記録します。
             m_pendingRelicPos = relic.pos;
+            m_pendingRelicDepth = relic.depth;
 
             // 一旦地面側を無効化して二重取得を避けます。
             relic.active = false;
@@ -873,7 +1074,7 @@ void SceneNarakuProto::TryInteract()
         MiningPoint& point = m_miningPoints[i];
 
         // 採掘済み、または遠いポイントは無視します。
-        if (point.mined || !IsNear(m_player.pos, point.pos, kInteractRange)) continue;
+        if (point.mined || std::fabs(m_player.depth - point.depth) > 0.35f || !IsNear(m_player.pos, point.pos, kInteractRange)) continue;
 
         // スタミナが足りない場合は採掘を開始しません。
         if (!CanSpendStamina(kMiningCost))
@@ -904,6 +1105,9 @@ void SceneNarakuProto::TryInteract()
 
 void SceneNarakuProto::TryStartStep()
 {
+    // 着地直後の硬直中はステップさせません。
+    if (m_player.landingRecoveryTimer > 0.0f) return;
+
     // 重量100%以上ではステップ不可です。
     if (GetCurrentWeight() >= kMaxWeight) { AddMessage(u8"重量が重すぎてステップできません。"); return; }
 
@@ -919,8 +1123,14 @@ void SceneNarakuProto::TryStartStep()
 
 void SceneNarakuProto::TryStartJump()
 {
+    // 着地直後の硬直中はジャンプさせません。
+    if (m_player.landingRecoveryTimer > 0.0f) return;
+
     // 地上にいない時は二段ジャンプを許可しません。
     if (!m_player.grounded) return;
+
+    // ロープ中はジャンプさせません。
+    if (m_player.onRope) return;
 
     // 重量100%以上ではジャンプ不可です。
     if (GetCurrentWeight() >= kMaxWeight) { AddMessage(u8"重量が重すぎてジャンプできません。"); return; }
@@ -937,12 +1147,19 @@ void SceneNarakuProto::TryStartJump()
     // 高さ1m程度を想定した初速を入れます。
     m_player.verticalSpeed = 4.45f;
 
+    // 現在地面の絶対高さを足元基準として記録します。
+    m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+    m_player.peakFeetWorldY = m_player.feetWorldY;
+
     // 空中時間を0から測ります。
     m_player.airTime = 0.0f;
 }
 
 void SceneNarakuProto::TryStartAttack()
 {
+    // 着地直後の硬直中は攻撃させません。
+    if (m_player.landingRecoveryTimer > 0.0f) return;
+
     // 攻撃中は次の攻撃を開始しません。
     if (m_player.attackTimer > 0.0f) return;
 
@@ -1039,7 +1256,8 @@ void SceneNarakuProto::Draw3DField()
     using namespace DirectX;
 
     // プレイヤー位置を3D描画用の注視点に変換します。
-    const XMFLOAT3 playerCenter = ToWorld3D(m_player.pos, m_player.depth, 0.7f);
+    const float playerHeightOffset = m_player.onRope && m_activeRope >= 0 ? (GetRopeWorldY(m_activeRope, m_player.depth) - GetGroundWorldY(m_player.pos, m_player.depth)) : GetPlayerAirborneOffset();
+    const XMFLOAT3 playerCenter = ToWorld3D(m_player.pos, m_player.depth, 0.7f + playerHeightOffset);
 
     // 斜め見下ろしになるように、プレイヤーの右後ろ上方へカメラを置きます。
     const XMVECTOR eye = XMVectorSet(playerCenter.x + 8.0f, playerCenter.y + 8.0f, playerCenter.z + 8.0f, 0.0f);
@@ -1083,11 +1301,50 @@ void SceneNarakuProto::Draw3DField()
     // Spriteのアルファ値を効かせるため、アルファブレンドを有効にします。
     SetBlendMode(BLEND_ALPHA);
 
-    // 実際の床判定に使っている地形を、そのまま半透明床として描画します。
-    for (const FloorRegion& floor : m_floorRegions)
+    auto getLayerFloorColor = [](int textureId) -> DirectX::XMFLOAT4
     {
-        const XMFLOAT3 floorCenter = ToWorld3D(floor.center, floor.depth, -0.05f);
-        DrawTransparentFloor3D(floorCenter, { floor.halfSize.x * 2.0f, floor.halfSize.y * 2.0f }, floor.color);
+        switch (textureId)
+        {
+        case 1: return { 0.42f, 0.33f, 0.20f, 0.20f };
+        case 2: return { 0.25f, 0.36f, 0.55f, 0.28f };
+        case 3: return { 0.25f, 0.45f, 0.36f, 0.24f };
+        default: return { 0.18f, 0.45f, 0.30f, 0.18f };
+        }
+    };
+
+    // 実際の有効セルだけを半透明床として描画し、削除セルは穴として残します。
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+    {
+        const XMFLOAT4 layerColor = getLayerFloorColor(layer.groundTextureId);
+        for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
+        {
+            for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
+            {
+                const std::uint32_t flags = NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ);
+                if ((flags & NarakuMap::CellAttributeRemoved) != 0u)
+                {
+                    continue;
+                }
+
+                if (!NarakuMap::IsVertexEnabled(layer, cellX, cellZ) ||
+                    !NarakuMap::IsVertexEnabled(layer, cellX + 1, cellZ) ||
+                    !NarakuMap::IsVertexEnabled(layer, cellX, cellZ + 1) ||
+                    !NarakuMap::IsVertexEnabled(layer, cellX + 1, cellZ + 1))
+                {
+                    continue;
+                }
+
+                const XMFLOAT3 a = GetTerrainVertexWorld3D(layer, cellX, cellZ, -0.05f);
+                const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, -0.05f);
+                const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, -0.05f);
+                const XMFLOAT3 d = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ + 1, -0.05f);
+                const XMFLOAT3 center(
+                    (a.x + b.x + c.x + d.x) * 0.25f,
+                    (a.y + b.y + c.y + d.y) * 0.25f,
+                    (a.z + b.z + c.z + d.z) * 0.25f);
+                DrawTransparentFloor3D(center, { layer.cellSize, layer.cellSize }, layerColor);
+            }
+        }
     }
 
     // ロープ穴の目印として、地上側に暗い半透明板を重ねます。
@@ -1096,18 +1353,46 @@ void SceneNarakuProto::Draw3DField()
         DrawTransparentFloor3D(ToWorld3D(rope.pos, rope.topDepth, -0.04f), { 3.0f, 3.0f }, { 0.02f, 0.03f, 0.04f, 0.35f });
     }
 
-    // 地面グリッドを描いて、現在の移動方向と距離感を見やすくします。
-    for (int i = -30; i <= 30; i += 2)
+    // 各レイヤーの実際の起伏に沿って、有効セルだけ地形グリッド線を描画します。
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
     {
-        // X方向に伸びる線を追加します。
-        Geometory::AddLine({ -30.0f, 0.0f, static_cast<float>(i) }, { 30.0f, 0.0f, static_cast<float>(i) }, gridColor);
+        if (layer.gridWidth < 2 || layer.gridHeight < 2)
+        {
+            continue;
+        }
 
-        // Z方向に伸びる線を追加します。
-        Geometory::AddLine({ static_cast<float>(i), 0.0f, -30.0f }, { static_cast<float>(i), 0.0f, 30.0f }, gridColor);
+        for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
+        {
+            for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
+            {
+                const std::uint32_t flags = NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ);
+                if ((flags & NarakuMap::CellAttributeRemoved) != 0u)
+                {
+                    continue;
+                }
+
+                if (!NarakuMap::IsVertexEnabled(layer, cellX, cellZ) ||
+                    !NarakuMap::IsVertexEnabled(layer, cellX + 1, cellZ) ||
+                    !NarakuMap::IsVertexEnabled(layer, cellX, cellZ + 1) ||
+                    !NarakuMap::IsVertexEnabled(layer, cellX + 1, cellZ + 1))
+                {
+                    continue;
+                }
+
+                const XMFLOAT3 a = GetTerrainVertexWorld3D(layer, cellX, cellZ, 0.03f);
+                const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, 0.03f);
+                const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, 0.03f);
+                const XMFLOAT3 d = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ + 1, 0.03f);
+                Geometory::AddLine(a, b, gridColor);
+                Geometory::AddLine(b, d, gridColor);
+                Geometory::AddLine(d, c, gridColor);
+                Geometory::AddLine(c, a, gridColor);
+            }
+        }
     }
 
     // 帰還地点を緑の柱で示します。
-    const XMFLOAT3 returnBase = ToWorld3D({ 0.0f, 0.0f }, 0.0f, 0.05f);
+    const XMFLOAT3 returnBase = ToWorld3D(m_returnPoint, m_returnDepth, 0.05f);
     DrawDebugBox3D({ returnBase.x, returnBase.y + 0.25f, returnBase.z }, { 0.9f, 0.5f, 0.9f });
     Geometory::AddLine({ returnBase.x, returnBase.y, returnBase.z }, { returnBase.x, returnBase.y + 2.0f, returnBase.z }, returnColor);
 
@@ -1139,7 +1424,7 @@ void SceneNarakuProto::Draw3DField()
         }
 
         // 採掘ポイントの位置を深度0の地表として扱います。
-        const XMFLOAT3 base = ToWorld3D(point.pos, 0.0f, 0.15f);
+        const XMFLOAT3 base = ToWorld3D(point.pos, point.depth, 0.15f);
 
         // 見た目4種類は箱の横幅だけ少し変えて区別します。
         const float width = 0.45f + 0.08f * static_cast<float>(point.visualType);
@@ -1160,7 +1445,7 @@ void SceneNarakuProto::Draw3DField()
         }
 
         // 旧器の位置を3D座標へ変換します。
-        const XMFLOAT3 base = ToWorld3D(relic.pos, 0.0f, 0.12f);
+        const XMFLOAT3 base = ToWorld3D(relic.pos, relic.depth, 0.12f);
 
         // 小さな箱で旧器の本体を描きます。
         DrawDebugBox3D({ base.x, base.y + 0.12f, base.z }, { 0.35f, 0.25f, 0.35f });
@@ -1179,7 +1464,7 @@ void SceneNarakuProto::Draw3DField()
         }
 
         // 敵の位置を地表上の3D座標へ変換します。
-        const XMFLOAT3 center = ToWorld3D(enemy.pos, 0.0f, 0.45f);
+        const XMFLOAT3 center = ToWorld3D(enemy.pos, enemy.depth, 0.45f);
 
         // 球で敵本体を描きます。
         DrawDebugSphere3D(center, 0.45f);
@@ -1248,7 +1533,7 @@ void SceneNarakuProto::DrawField()
     draw->AddRect(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(130, 150, 140, 255));
 
     // 帰還地点のワールド座標を斜め見下ろし座標に変換します。
-    Vec2 ret = WorldToObliqueCanvas(canvasPos, canvasSize, { 0.0f, 0.0f });
+    Vec2 ret = WorldToObliqueCanvas(canvasPos, canvasSize, m_returnPoint, m_returnDepth);
 
     // 帰還地点を青い円で描きます。
     draw->AddCircleFilled(ImVec2(ret.x, ret.y), 9.0f, IM_COL32(80, 180, 255, 255));
@@ -1271,7 +1556,7 @@ void SceneNarakuProto::DrawField()
         if (!visibleInField) continue;
 
         // 採掘ポイント座標を斜め見下ろし座標へ変換します。
-        Vec2 p = WorldToObliqueCanvas(canvasPos, canvasSize, point.pos);
+        Vec2 p = WorldToObliqueCanvas(canvasPos, canvasSize, point.pos, point.depth);
 
         // 採掘済みは暗色、未採掘は黄色系にします。
         ImU32 color = point.mined ? IM_COL32(70, 70, 70, 255) : IM_COL32(185, 155, 90, 255);
@@ -1287,7 +1572,7 @@ void SceneNarakuProto::DrawField()
         if (!relic.active) continue;
 
         // 旧器位置を斜め見下ろし座標へ変換します。
-        Vec2 p = WorldToObliqueCanvas(canvasPos, canvasSize, relic.pos);
+        Vec2 p = WorldToObliqueCanvas(canvasPos, canvasSize, relic.pos, relic.depth);
 
         // 旧器を小さな四角で描きます。
         draw->AddRectFilled(ImVec2(p.x - 4.0f, p.y - 4.0f), ImVec2(p.x + 4.0f, p.y + 4.0f), IM_COL32(240, 220, 130, 255));
@@ -1390,6 +1675,9 @@ void SceneNarakuProto::DrawHud()
 
     // 上昇負荷ゲージを表示します。プロトでは内部確認用に見せています。
     ImGui::Text(u8"上昇負荷: %.2f / %.2f", m_player.upperLoad, kUpperLoadLimit);
+
+    // 段差を踏み越えた時に落下へ移る高さを実行中に調整できるようにします。
+    ImGui::SliderFloat(u8"自動落下開始高さ", &m_autoFallStartHeight, 0.10f, 3.00f, "%.2fm");
 
     // ロープ状態を表示します。
     ImGui::Text(u8"ロープ: %s", m_player.onRope ? u8"使用中" : u8"未使用");
@@ -1510,7 +1798,7 @@ void SceneNarakuProto::DrawRelicPrompt()
     if (ImGui::Button(u8"置いていく"))
     {
         // 発見中の旧器を地面旧器として再登録します。
-        m_groundRelics.push_back({ m_pendingRelic, m_pendingRelicPos, true });
+        m_groundRelics.push_back({ m_pendingRelic, m_pendingRelicPos, m_pendingRelicDepth, true });
 
         // 探索モードへ戻ります。
         m_mode = Mode::Explore;
@@ -1751,26 +2039,43 @@ bool SceneNarakuProto::IsInsideFloor(const FloorRegion& floor, const Vec2& pos) 
 
 const SceneNarakuProto::FloorRegion* SceneNarakuProto::FindFloorAt(const Vec2& pos, float depth) const
 {
-    // 深度がぴったり一致しなくても、ロープ移動直後の誤差を許容します。
     constexpr float kFloorDepthTolerance = 0.20f;
 
-    // 登録された床を順番に調べ、位置と深度の両方が合う床を探します。
     for (const FloorRegion& floor : m_floorRegions)
     {
-        // 深度差が許容範囲外なら、この床は候補から外します。
         if (std::fabs(floor.depth - depth) > kFloorDepthTolerance)
         {
             continue;
         }
 
-        // 矩形内に入っている床を見つけたら、その床を返します。
-        if (IsInsideFloor(floor, pos))
+        if (!IsInsideFloor(floor, pos))
         {
-            return &floor;
+            continue;
         }
+
+        const int layerIndex = NarakuMap::FindLayerIndexById(m_runtimeMap, floor.layerId);
+        if (layerIndex >= 0)
+        {
+            const NarakuMap::TerrainLayer& layer = m_runtimeMap.terrainLayers[layerIndex];
+            int cellX = -1;
+            int cellZ = -1;
+            float fracX = 0.0f;
+            float fracZ = 0.0f;
+            if (!TryGetLayerCellAt(layer, pos, cellX, cellZ, fracX, fracZ))
+            {
+                continue;
+            }
+
+            if (NarakuMap::HasCellAttributeFlag(layer, cellX, cellZ, NarakuMap::CellAttributeBlocked) ||
+                NarakuMap::HasCellAttributeFlag(layer, cellX, cellZ, NarakuMap::CellAttributeRemoved))
+            {
+                continue;
+            }
+        }
+
+        return &floor;
     }
 
-    // 対応する床がない場合は nullptr を返します。
     return nullptr;
 }
 
@@ -1780,30 +2085,113 @@ bool SceneNarakuProto::HasFloorAt(const Vec2& pos, float depth) const
     return FindFloorAt(pos, depth) != nullptr;
 }
 
+std::uint32_t SceneNarakuProto::GetCellAttributeFlagsAt(const Vec2& pos, float depth) const
+{
+    const int layerIndex = FindLayerIndexByDepth(depth);
+    if (layerIndex < 0 || layerIndex >= static_cast<int>(m_runtimeMap.terrainLayers.size()))
+    {
+        return NarakuMap::CellAttributeNone;
+    }
+
+    const NarakuMap::TerrainLayer& layer = m_runtimeMap.terrainLayers[layerIndex];
+    int cellX = -1;
+    int cellZ = -1;
+    float fracX = 0.0f;
+    float fracZ = 0.0f;
+    if (!TryGetLayerCellAt(layer, pos, cellX, cellZ, fracX, fracZ))
+    {
+        return NarakuMap::CellAttributeNone;
+    }
+
+    return NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ);
+}
+
+bool SceneNarakuProto::CanTraverseGround(const Vec2& from, const Vec2& to, float depth) const
+{
+    if (!HasFloorAt(to, depth))
+    {
+        return false;
+    }
+
+    const float fromHeight = SampleTerrainHeightOffsetAt(from, depth);
+    const float toHeight = SampleTerrainHeightOffsetAt(to, depth);
+    const float climbDelta = toHeight - fromHeight;
+    const float dropDelta = fromHeight - toHeight;
+    const std::uint32_t fromFlags = GetCellAttributeFlagsAt(from, depth);
+    const std::uint32_t toFlags = GetCellAttributeFlagsAt(to, depth);
+    const bool dropAllowed = ((fromFlags | toFlags) & NarakuMap::CellAttributeDropAllowed) != 0u;
+    const bool cliffEdge = ((fromFlags | toFlags) & NarakuMap::CellAttributeCliffEdge) != 0u;
+
+    if (climbDelta > kMaxWalkClimbHeight + kSlopeHeightTolerance)
+    {
+        return false;
+    }
+
+    if (dropDelta > kMaxWalkDropHeight + kSlopeHeightTolerance && !dropAllowed)
+    {
+        return false;
+    }
+
+    if (cliffEdge && dropDelta > kCliffEdgeBlockDropHeight + kSlopeHeightTolerance && !dropAllowed)
+    {
+        return false;
+    }
+
+    return true;
+}
+
 SceneNarakuProto::Vec2 SceneNarakuProto::ResolveFloorMove(const Vec2& from, const Vec2& to, float depth) const
 {
-    // 目的地に床があるなら、そのまま移動します。
-    if (HasFloorAt(to, depth))
+    auto tryResolveSingleStep = [this, depth](const Vec2& stepFrom, const Vec2& stepTo, Vec2& outResolved) -> bool
     {
-        return to;
+        if (CanTraverseGround(stepFrom, stepTo, depth))
+        {
+            outResolved = stepTo;
+            return true;
+        }
+
+        const Vec2 xOnly = { stepTo.x, stepFrom.y };
+        if (CanTraverseGround(stepFrom, xOnly, depth))
+        {
+            outResolved = xOnly;
+            return true;
+        }
+
+        const Vec2 yOnly = { stepFrom.x, stepTo.y };
+        if (CanTraverseGround(stepFrom, yOnly, depth))
+        {
+            outResolved = yOnly;
+            return true;
+        }
+
+        outResolved = stepFrom;
+        return false;
+    };
+
+    const float totalDistance = Distance(from, to);
+    if (totalDistance <= kSlopeMoveSampleStep)
+    {
+        Vec2 resolved = from;
+        return tryResolveSingleStep(from, to, resolved) ? resolved : from;
     }
 
-    // 斜め移動で角に当たった時は、X方向だけの移動を試します。
-    const Vec2 xOnly = { to.x, from.y };
-    if (HasFloorAt(xOnly, depth))
+    const int stepCount = std::max(1, static_cast<int>(std::ceil(totalDistance / kSlopeMoveSampleStep)));
+    const Vec2 delta = Sub(to, from);
+    Vec2 current = from;
+
+    for (int stepIndex = 1; stepIndex <= stepCount; ++stepIndex)
     {
-        return xOnly;
+        const float t = static_cast<float>(stepIndex) / static_cast<float>(stepCount);
+        const Vec2 stepTarget = Add(from, Mul(delta, t));
+        Vec2 resolved = current;
+        if (!tryResolveSingleStep(current, stepTarget, resolved))
+        {
+            break;
+        }
+        current = resolved;
     }
 
-    // X方向が駄目なら、Y方向だけの移動を試します。
-    const Vec2 yOnly = { from.x, to.y };
-    if (HasFloorAt(yOnly, depth))
-    {
-        return yOnly;
-    }
-
-    // どの方向にも床がなければ、その場に留めます。
-    return from;
+    return current;
 }
 
 int SceneNarakuProto::FindNearestRopeIndex(float range) const
@@ -1846,24 +2234,36 @@ bool SceneNarakuProto::TryLeaveRopeSide(int ropeIndex, float leaveSign, const Ve
     // 現在深度の床へ横に降りる候補位置を作ります。
     const Vec2 leavePos = Add(rope.pos, Mul(cameraRight, leaveSign * 0.80f));
 
-    // 候補位置に床があるなら、そこへ降ります。
-    if (HasFloorAt(leavePos, m_player.depth))
+    // 候補位置に床があり、地形条件も満たすならそこへ降ります。
+    if (CanTraverseGround(rope.pos, leavePos, m_player.depth))
     {
         m_player.pos = leavePos;
         m_player.onRope = false;
         m_activeRope = -1;
+        m_player.grounded = true;
+        m_player.verticalSpeed = 0.0f;
+        m_player.airTime = 0.0f;
+        m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+        m_player.peakFeetWorldY = m_player.feetWorldY;
+        m_player.landingRecoveryTimer = 0.0f;
         AddMessage(u8"ロープを離しました。");
         return true;
     }
 
     // 深度が端にかなり近い場合は端深度へ吸着して、降りられるかをもう一度試します。
     const float endpointDepth = std::fabs(m_player.depth - rope.bottomDepth) < std::fabs(m_player.depth - rope.topDepth) ? rope.bottomDepth : rope.topDepth;
-    if (std::fabs(m_player.depth - endpointDepth) <= 0.35f && HasFloorAt(leavePos, endpointDepth))
+    if (std::fabs(m_player.depth - endpointDepth) <= 0.35f && CanTraverseGround(rope.pos, leavePos, endpointDepth))
     {
         m_player.depth = endpointDepth;
         m_player.pos = leavePos;
         m_player.onRope = false;
         m_activeRope = -1;
+        m_player.grounded = true;
+        m_player.verticalSpeed = 0.0f;
+        m_player.airTime = 0.0f;
+        m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+        m_player.peakFeetWorldY = m_player.feetWorldY;
+        m_player.landingRecoveryTimer = 0.0f;
         AddMessage(u8"ロープを離しました。");
         return true;
     }
@@ -1887,7 +2287,7 @@ void SceneNarakuProto::DiscoverNearbyMiningPoints()
     for (MiningPoint& point : m_miningPoints)
     {
         // 未発見かつプレイヤーが近いポイントだけ発見済みにします。
-        if (!point.discovered && IsNear(m_player.pos, point.pos, kDiscoverRange))
+        if (!point.discovered && std::fabs(m_player.depth - point.depth) <= 0.35f && IsNear(m_player.pos, point.pos, kDiscoverRange))
         {
             // 採掘ポイントを発見済みにします。
             point.discovered = true;
@@ -1904,7 +2304,7 @@ void SceneNarakuProto::DropInventoryItem(int index)
     if (index < 0 || index >= static_cast<int>(m_inventory.size())) return;
 
     // 選択旧器を現在位置の地面旧器として追加します。
-    m_groundRelics.push_back({ m_inventory[index], m_player.pos, true });
+    m_groundRelics.push_back({ m_inventory[index], m_player.pos, m_player.depth, true });
 
     // 所持品から選択旧器を削除します。
     m_inventory.erase(m_inventory.begin() + index);
@@ -1963,13 +2363,113 @@ SceneNarakuProto::Vec2 SceneNarakuProto::WorldToCanvas(const Vec2& canvasPos, co
     return { canvasPos.x + nx * canvasSize.x, canvasPos.y + ny * canvasSize.y };
 }
 
+int SceneNarakuProto::FindLayerIndexByDepth(float depth, float tolerance) const
+{
+    for (int i = 0; i < static_cast<int>(m_runtimeMap.terrainLayers.size()); ++i)
+    {
+        if (std::fabs(m_runtimeMap.terrainLayers[i].layerDepth - depth) <= tolerance)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool SceneNarakuProto::TryGetLayerCellAt(const NarakuMap::TerrainLayer& layer, const Vec2& pos, int& outCellX, int& outCellZ, float& outFracX, float& outFracZ) const
+{
+    if (layer.gridWidth < 2 || layer.gridHeight < 2 || layer.cellSize <= 0.0f)
+    {
+        return false;
+    }
+
+    const float minX = layer.center.x - (static_cast<float>(layer.gridWidth - 1) * layer.cellSize * 0.5f);
+    const float minZ = layer.center.z - (static_cast<float>(layer.gridHeight - 1) * layer.cellSize * 0.5f);
+    const float localX = (pos.x - minX) / layer.cellSize;
+    const float localZ = (pos.y - minZ) / layer.cellSize;
+    if (localX < 0.0f || localZ < 0.0f || localX > static_cast<float>(layer.gridWidth - 1) || localZ > static_cast<float>(layer.gridHeight - 1))
+    {
+        return false;
+    }
+
+    outCellX = static_cast<int>(std::floor(localX));
+    outCellZ = static_cast<int>(std::floor(localZ));
+    outCellX = std::max(0, std::min(outCellX, layer.gridWidth - 2));
+    outCellZ = std::max(0, std::min(outCellZ, layer.gridHeight - 2));
+    outFracX = std::max(0.0f, std::min(localX - static_cast<float>(outCellX), 1.0f));
+    outFracZ = std::max(0.0f, std::min(localZ - static_cast<float>(outCellZ), 1.0f));
+    return true;
+}
+
+float SceneNarakuProto::SampleTerrainHeightOffsetAt(const Vec2& pos, float depth) const
+{
+    const int layerIndex = FindLayerIndexByDepth(depth);
+    if (layerIndex < 0 || layerIndex >= static_cast<int>(m_runtimeMap.terrainLayers.size()))
+    {
+        return 0.0f;
+    }
+
+    const NarakuMap::TerrainLayer& layer = m_runtimeMap.terrainLayers[layerIndex];
+    int cellX = -1;
+    int cellZ = -1;
+    float fracX = 0.0f;
+    float fracZ = 0.0f;
+    if (!TryGetLayerCellAt(layer, pos, cellX, cellZ, fracX, fracZ))
+    {
+        return 0.0f;
+    }
+
+    const float h00 = NarakuMap::GetVertexHeight(layer, cellX, cellZ);
+    const float h10 = NarakuMap::GetVertexHeight(layer, cellX + 1, cellZ);
+    const float h01 = NarakuMap::GetVertexHeight(layer, cellX, cellZ + 1);
+    const float h11 = NarakuMap::GetVertexHeight(layer, cellX + 1, cellZ + 1);
+    const float hx0 = h00 + (h10 - h00) * fracX;
+    const float hx1 = h01 + (h11 - h01) * fracX;
+    return hx0 + (hx1 - hx0) * fracZ;
+}
+
+float SceneNarakuProto::GetGroundWorldY(const Vec2& pos, float depth) const
+{
+    return SampleTerrainHeightOffsetAt(pos, depth) - depth * 0.35f;
+}
+
+float SceneNarakuProto::GetPlayerAirborneOffset() const
+{
+    if (m_player.grounded || m_player.onRope)
+    {
+        return 0.0f;
+    }
+
+    return std::max(0.0f, m_player.feetWorldY - GetGroundWorldY(m_player.pos, m_player.depth));
+}
+
+float SceneNarakuProto::GetRopeWorldY(int ropeIndex, float depth) const
+{
+    if (ropeIndex < 0 || ropeIndex >= static_cast<int>(m_ropePoints.size()))
+    {
+        return GetGroundWorldY(m_player.pos, depth);
+    }
+
+    const RopePoint& rope = m_ropePoints[ropeIndex];
+    const float topWorldY = GetGroundWorldY(rope.pos, rope.topDepth);
+    const float bottomWorldY = GetGroundWorldY(rope.pos, rope.bottomDepth);
+    const float range = std::max(0.001f, rope.bottomDepth - rope.topDepth);
+    const float t = std::max(0.0f, std::min((depth - rope.topDepth) / range, 1.0f));
+    return topWorldY + (bottomWorldY - topWorldY) * t;
+}
+DirectX::XMFLOAT3 SceneNarakuProto::GetTerrainVertexWorld3D(const NarakuMap::TerrainLayer& layer, int gridX, int gridZ, float heightOffset) const
+{
+    const float minX = layer.center.x - (static_cast<float>(layer.gridWidth - 1) * layer.cellSize * 0.5f);
+    const float minZ = layer.center.z - (static_cast<float>(layer.gridHeight - 1) * layer.cellSize * 0.5f);
+    const float x = minX + static_cast<float>(gridX) * layer.cellSize;
+    const float z = minZ + static_cast<float>(gridZ) * layer.cellSize;
+    const float terrainHeight = NarakuMap::GetVertexHeight(layer, gridX, gridZ);
+    return { x, terrainHeight + heightOffset - layer.layerDepth * 0.35f, z };
+}
+
 DirectX::XMFLOAT3 SceneNarakuProto::ToWorld3D(const Vec2& pos, float depth, float heightOffset) const
 {
-    // 深度1mを3D空間の高さ0.35mぶんとして扱い、深く潜るほど下に表示します。
-    constexpr float kDepthScale = 0.35f;
-
-    // 2DのXは3DのXへ、2DのYは3DのZへ割り当てます。
-    return { pos.x, heightOffset - depth * kDepthScale, pos.y };
+    const float terrainHeight = SampleTerrainHeightOffsetAt(pos, depth);
+    return { pos.x, terrainHeight + heightOffset - depth * 0.35f, pos.y };
 }
 
 void SceneNarakuProto::DrawDebugBox3D(const DirectX::XMFLOAT3& pos, const DirectX::XMFLOAT3& scale, float yawRad) const

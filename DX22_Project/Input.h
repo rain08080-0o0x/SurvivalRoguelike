@@ -41,5 +41,7 @@ bool IsMouseMiddleTrigger();
 bool IsMouseMiddleRelease();
 POINT GetMousePosition();
 POINT GetMouseDelta();
+float GetMouseWheelDelta();
+void PushMouseWheelDelta(float delta);
 
 #endif // __INPUT_H__
