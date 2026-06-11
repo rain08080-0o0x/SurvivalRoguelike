@@ -17,8 +17,11 @@
 
 namespace
 {
-        constexpr int kCurrentMapVersion = 2;
-    const wchar_t* kDefaultMapPath = L"C:\\HAL\\\u500b\\\u4eba\\\u5236\\\u4f5c\\NarakuProto\\Assets\\Maps\\FirstLayer.json";
+    constexpr int kCurrentMapVersion = 2;
+    const wchar_t* kProjectRootPath = L"C:\\HAL\\\u500b\\\u4eba\\\u5236\\\u4f5c\\NarakuProto";
+    const wchar_t* kAssetDirectoryRelativePath = L"Assets";
+    const wchar_t* kMapDirectoryRelativePath = L"Assets\\Maps";
+    const wchar_t* kDefaultMapPath = L"Assets\\Maps\\FirstLayer.json";
     std::wstring gCurrentMapPath = kDefaultMapPath;
 
     struct JsonValue
@@ -323,10 +326,139 @@ namespace
         return true;
     }
 
-        void EnsureMapDirectories()
+    std::wstring ResolveProjectRelativePath(const wchar_t* relativePath)
     {
-        ::CreateDirectoryW(L"C:\\HAL\\\u500b\\\u4eba\\\u5236\\\u4f5c\\NarakuProto\\Assets", nullptr);
-        ::CreateDirectoryW(L"C:\\HAL\\\u500b\\\u4eba\\\u5236\\\u4f5c\\NarakuProto\\Assets\\Maps", nullptr);
+        std::wstring resolvedPath(kProjectRootPath);
+        if (!resolvedPath.empty() &&
+            resolvedPath.back() != L'\\' &&
+            resolvedPath.back() != L'/')
+        {
+            resolvedPath += L"\\";
+        }
+
+        if (relativePath != nullptr)
+        {
+            resolvedPath += relativePath;
+        }
+
+        return resolvedPath;
+    }
+
+    void EnsureMapDirectories()
+    {
+        const std::wstring assetsDirectory = ResolveProjectRelativePath(kAssetDirectoryRelativePath);
+        const std::wstring mapsDirectory = ResolveProjectRelativePath(kMapDirectoryRelativePath);
+        ::CreateDirectoryW(assetsDirectory.c_str(), nullptr);
+        ::CreateDirectoryW(mapsDirectory.c_str(), nullptr);
+    }
+
+    std::wstring GetFileNamePart(const wchar_t* path)
+    {
+        if (path == nullptr || path[0] == L'\0')
+        {
+            return L"";
+        }
+
+        const std::wstring fullPath(path);
+        const size_t slashPos = fullPath.find_last_of(L"\\/");
+        return (slashPos == std::wstring::npos) ? fullPath : fullPath.substr(slashPos + 1);
+    }
+
+    std::wstring SanitizeMapFileName(std::wstring fileName)
+    {
+        if (fileName.empty())
+        {
+            fileName = L"FirstLayer.json";
+        }
+
+        for (wchar_t& ch : fileName)
+        {
+            const bool invalid =
+                ch == L'<' || ch == L'>' || ch == L':' || ch == L'"' ||
+                ch == L'/' || ch == L'\\' || ch == L'|' || ch == L'?' ||
+                ch == L'*' || ch < 0x20;
+            if (invalid)
+            {
+                ch = L'_';
+            }
+        }
+
+        const std::wstring extension = L".json";
+        if (fileName.size() < extension.size() ||
+            _wcsicmp(fileName.c_str() + fileName.size() - extension.size(), extension.c_str()) != 0)
+        {
+            fileName += extension;
+        }
+
+        return fileName;
+    }
+
+    std::wstring NormalizeMapPathIntoAssets(const wchar_t* path)
+    {
+        EnsureMapDirectories();
+
+        if (path == nullptr || path[0] == L'\0')
+        {
+            return kDefaultMapPath;
+        }
+
+        const std::wstring fileName = SanitizeMapFileName(GetFileNamePart(path));
+        return std::wstring(kMapDirectoryRelativePath) + L"\\" + fileName;
+    }
+
+    bool EnsureDirectoryTreeForFile(const wchar_t* filePath)
+    {
+        if (filePath == nullptr || filePath[0] == L'\0')
+        {
+            return false;
+        }
+
+        std::wstring currentPath(filePath);
+        const size_t lastSlash = currentPath.find_last_of(L"\\/");
+        if (lastSlash == std::wstring::npos)
+        {
+            return false;
+        }
+
+        currentPath.resize(lastSlash);
+        if (currentPath.empty())
+        {
+            return false;
+        }
+
+        std::wstring partialPath;
+        if (currentPath.size() >= 2 && currentPath[1] == L':')
+        {
+            partialPath.assign(currentPath.begin(), currentPath.begin() + 2);
+        }
+
+        size_t segmentStart = partialPath.empty() ? 0 : 2;
+        while (segmentStart < currentPath.size())
+        {
+            while (segmentStart < currentPath.size() &&
+                   (currentPath[segmentStart] == L'\\' || currentPath[segmentStart] == L'/'))
+            {
+                partialPath.push_back(L'\\');
+                ++segmentStart;
+            }
+
+            size_t segmentEnd = segmentStart;
+            while (segmentEnd < currentPath.size() &&
+                   currentPath[segmentEnd] != L'\\' && currentPath[segmentEnd] != L'/')
+            {
+                ++segmentEnd;
+            }
+
+            if (segmentEnd > segmentStart)
+            {
+                partialPath.append(currentPath.substr(segmentStart, segmentEnd - segmentStart));
+                ::CreateDirectoryW(partialPath.c_str(), nullptr);
+            }
+
+            segmentStart = segmentEnd;
+        }
+
+        return true;
     }
 
     void AppendIndent(std::ostringstream& out, int indent)
@@ -440,9 +572,16 @@ namespace NarakuMap
     {
         return kDefaultMapPath;
     }
+
     const wchar_t* GetCurrentMapPath()
     {
         return gCurrentMapPath.c_str();
+    }
+
+    std::wstring ResolveMapPathForFileSystem(const wchar_t* path)
+    {
+        const std::wstring relativePath = NormalizeMapPathIntoAssets(path);
+        return ResolveProjectRelativePath(relativePath.c_str());
     }
 
     void SetCurrentMapPath(const wchar_t* path)
@@ -453,7 +592,7 @@ namespace NarakuMap
             return;
         }
 
-        gCurrentMapPath = path;
+        gCurrentMapPath = NormalizeMapPathIntoAssets(path);
     }
 
 
@@ -1035,6 +1174,9 @@ namespace NarakuMap
     bool SaveMap(const wchar_t* path, const MapData& mapData, std::string* errorMessage)
     {
         EnsureMapDirectories();
+        const std::wstring relativePath = NormalizeMapPathIntoAssets(path);
+        const std::wstring fileSystemPath = ResolveMapPathForFileSystem(relativePath.c_str());
+        EnsureDirectoryTreeForFile(fileSystemPath.c_str());
 
         std::ostringstream out;
         out << "{\n";
@@ -1141,7 +1283,7 @@ namespace NarakuMap
         out << "]\n";
         out << "}\n";
 
-        if (!WriteWholeFile(path, out.str()))
+        if (!WriteWholeFile(fileSystemPath.c_str(), out.str()))
         {
             if (errorMessage) *errorMessage = "failed to open map file for writing";
             return false;
@@ -1152,7 +1294,9 @@ namespace NarakuMap
     bool LoadMap(const wchar_t* path, MapData& outMapData, std::string* errorMessage)
     {
         std::string jsonText;
-        if (!ReadWholeFile(path, jsonText))
+        const std::wstring relativePath = NormalizeMapPathIntoAssets(path);
+        const std::wstring fileSystemPath = ResolveMapPathForFileSystem(relativePath.c_str());
+        if (!ReadWholeFile(fileSystemPath.c_str(), jsonText))
         {
             if (errorMessage) *errorMessage = "failed to open map file for reading";
             return false;

@@ -294,6 +294,51 @@ private:
     };
 
     /**
+     * @brief プレイテスト中に調整するプレイヤー用デバッグパラメータです。
+     *
+     * 既存の固定定数を大きく崩さず、移動、攻撃力、スタミナ消費量だけを
+     * ランタイム編集可能な値としてまとめています。
+     */
+    struct PlayerDebugParams
+    {
+        /** @brief 通常移動速度です。 */
+        float walkSpeed = 1.5f;
+
+        /** @brief 走り移動速度です。 */
+        float runSpeed = 2.5f;
+
+        /** @brief ロープ昇降時の深度変化速度です。 */
+        float ropeSpeed = 1.0f;
+
+        /** @brief 1回の攻撃で与えるダメージ量です。 */
+        float attackPower = 1.0f;
+
+        /** @brief 走り続けた時の1秒あたりスタミナ消費です。 */
+        float runCostPerSecond = 1.5f;
+
+        /** @brief ロープ昇降中の1秒あたりスタミナ消費です。 */
+        float ropeCostPerSecond = 3.0f;
+
+        /** @brief 攻撃1回のスタミナ消費です。 */
+        float attackCost = 10.0f;
+
+        /** @brief 採掘1回のスタミナ消費です。 */
+        float miningCost = 7.0f;
+
+        /** @brief ステップ1回のスタミナ消費です。 */
+        float stepCost = 5.0f;
+
+        /** @brief ジャンプ1回のスタミナ消費です。 */
+        float jumpCost = 5.0f;
+
+        /** @brief スタミナを消費していない時の1秒あたり回復量です。 */
+        float staminaRecoverPerSecond = 2.0f;
+
+        /** @brief プレイヤー現在深度より上にある地形レイヤーの描画アルファ値です。 */
+        float upperLayerAlpha = 0.06f;
+    };
+
+    /**
      * @brief プロトタイプシーン内の現在モードです。
      *
      * 探索中、所持品、発見確認、帰還結果、死亡結果を切り替えるために使います。
@@ -385,6 +430,9 @@ private:
 
     /** @brief 所持品表示中に使う簡易地図とピン操作を描画します。 */
     void DrawMapControls();
+
+    /** @brief プレイテスト用のプレイヤー調整UIを描画します。 */
+    void DrawDebugPlayerTuning();
 
     /** @brief 現在の総重量を計算します。 */
     float GetCurrentWeight() const;
@@ -503,6 +551,12 @@ private:
     /** @brief 指定したロープから横へ降りられる床があればロープを離します。 */
     bool TryLeaveRopeSide(int ropeIndex, float leaveSign, const Vec2& cameraRight);
 
+    /** @brief プレイヤー調整値を初期値へ戻します。 */
+    void ResetDebugPlayerParams();
+
+    /** @brief プレイヤー調整値が危険な値にならないよう丸めます。 */
+    void ClampDebugPlayerParams();
+
 private:
     /** @brief 現在のプレイヤー状態です。 */
     PlayerState m_player;
@@ -596,4 +650,7 @@ private:
 
     /** @brief 半透明床をSpriteで描くための1x1白テクスチャです。 */
     Texture* m_debugWhiteTexture = nullptr;
+
+    /** @brief プレイテスト中に編集するプレイヤー調整値です。 */
+    PlayerDebugParams m_debugPlayerParams;
 };

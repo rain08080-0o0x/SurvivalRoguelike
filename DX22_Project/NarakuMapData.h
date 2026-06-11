@@ -198,14 +198,26 @@ namespace NarakuMap
         float autoFallStartHeight = 0.90f;
     };
 
-    /** @brief 既定のマップ JSON ファイルパスを返します。 */
+    /** @brief プロジェクトルート基準の既定マップ JSON 相対パスを返します。 */
     const wchar_t* GetDefaultMapPath();
 
-    /** @brief 現在の編集対象 / 実行対象として使うマップ JSON ファイルパスを返します。 */
+    /** @brief 現在の編集対象 / 実行対象として使うマップ JSON 相対パスを返します。 */
     const wchar_t* GetCurrentMapPath();
 
-    /** @brief 現在の編集対象 / 実行対象として使うマップ JSON ファイルパスを更新します。 */
+    /**
+     * @brief 現在の編集対象 / 実行対象として使うマップ JSON 相対パスを更新します。
+     * @details
+     * 絶対パスや危険な相対パスが渡された場合でも、ファイル名だけを利用して
+     * Assets/Maps 配下の相対パスへ正規化します。
+     */
     void SetCurrentMapPath(const wchar_t* path);
+
+    /**
+     * @brief マップ相対パスを実ファイルアクセス用の絶対パスへ解決します。
+     * @param path プロジェクトルート基準の相対パス、または外部から渡された候補パスです。
+     * @return 実際の保存/読込に使う絶対パスを返します。
+     */
+    std::wstring ResolveMapPathForFileSystem(const wchar_t* path);
 
     /** @brief エディタ起動時に使う既定マップデータを作成します。 */
     MapData CreateDefaultMap();

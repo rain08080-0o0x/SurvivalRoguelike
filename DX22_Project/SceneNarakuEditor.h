@@ -20,6 +20,93 @@ class SceneNarakuEditor : public Scene
 {
 public:
     /**
+     * @brief メインウィンドウのネイティブメニューで使用するコマンド ID 群です。
+     * @details
+     * Win32 の `WM_COMMAND` から Editor 固有の設定変更やビュー操作を判別するために使います。
+     */
+    enum NativeMenuCommand : unsigned int
+    {
+        /** @brief 現在の保存先へマップを保存します。 */
+        MenuSaveMap = 50000,
+        /** @brief 保存先を選んでマップを保存します。 */
+        MenuSaveMapAs,
+        /** @brief ファイルを選んでマップを読み込みます。 */
+        MenuOpenMap,
+        /** @brief 新規マップを作成します。 */
+        MenuCreateNewMap,
+        /** @brief 自動フォーカス同期の ON/OFF を切り替えます。 */
+        MenuToggleAutoFocus,
+        /** @brief 表示設定ウィンドウの表示を切り替えます。 */
+        MenuToggleDisplaySettingsWindow,
+        /** @brief 床プレビューの表示を切り替えます。 */
+        MenuToggleFloorPreview,
+        /** @brief グリッド線表示を切り替えます。 */
+        MenuToggleGridLines,
+        /** @brief 全グリッド線表示を切り替えます。 */
+        MenuToggleFullGridLines,
+        /** @brief 高精細床プレビューを切り替えます。 */
+        MenuToggleDetailedFloorPreview,
+        /** @brief ロープ表示を切り替えます。 */
+        MenuToggleRopePreview,
+        /** @brief 採掘ポイント表示を切り替えます。 */
+        MenuToggleMiningPreview,
+        /** @brief 開始地点・帰還地点表示を切り替えます。 */
+        MenuToggleStartReturnPreview,
+        /** @brief 境界表示を切り替えます。 */
+        MenuToggleBoundaryPreview,
+        /** @brief ホバー頂点表示を切り替えます。 */
+        MenuToggleHoveredVertexPreview,
+        /** @brief 位置スナップを切り替えます。 */
+        MenuTogglePositionSnap,
+        /** @brief セル中心スナップを切り替えます。 */
+        MenuToggleCellCenterSnap,
+        /** @brief Alt+左ドラッグの Y 反転を切り替えます。 */
+        MenuToggleInvertOrbitY,
+        /** @brief カメラを真上ビューへ切り替えます。 */
+        MenuSnapTopView,
+        /** @brief 現在の選択対象へカメラをフォーカスします。 */
+        MenuFocusSelection,
+        /** @brief 地形エディタ本体ウィンドウの表示を切り替えます。 */
+        MenuToggleMapWindow,
+        /** @brief レイヤー編集ウィンドウの表示を切り替えます。 */
+        MenuToggleLayerWindow,
+        /** @brief ロープ編集ウィンドウの表示を切り替えます。 */
+        MenuToggleRopeWindow,
+        /** @brief 採掘ポイント編集ウィンドウの表示を切り替えます。 */
+        MenuToggleMiningWindow,
+        /** @brief インスペクタウィンドウの表示を切り替えます。 */
+        MenuToggleInspectorWindow,
+        /** @brief 機能紹介ウィンドウの表示を切り替えます。 */
+        MenuToggleFeatureWindow,
+        /** @brief 操作ログウィンドウの表示を切り替えます。 */
+        MenuToggleOperationLogWindow,
+        /** @brief 操作説明ウィンドウの表示を切り替えます。 */
+        MenuToggleHelpWindow,
+        /** @brief 前景地形アルファを 0.15 に設定します。 */
+        MenuFrontAlpha015,
+        /** @brief 前景地形アルファを 0.30 に設定します。 */
+        MenuFrontAlpha030,
+        /** @brief 前景地形アルファを 0.50 に設定します。 */
+        MenuFrontAlpha050,
+        /** @brief 前景地形アルファを 0.75 に設定します。 */
+        MenuFrontAlpha075,
+        /** @brief 前景地形アルファを 1.00 に設定します。 */
+        MenuFrontAlpha100,
+        /** @brief 高精細セル上限を 128 に設定します。 */
+        MenuDetailedLimit128,
+        /** @brief 高精細セル上限を 256 に設定します。 */
+        MenuDetailedLimit256,
+        /** @brief 高精細セル上限を 512 に設定します。 */
+        MenuDetailedLimit512,
+        /** @brief 高精細セル上限を 1024 に設定します。 */
+        MenuDetailedLimit1024,
+        /** @brief 高精細セル上限を 2048 に設定します。 */
+        MenuDetailedLimit2048,
+        /** @brief 高精細セル上限を 4096 に設定します。 */
+        MenuDetailedLimit4096
+    };
+
+    /**
      * @brief 地形エディタシーンを生成します。
      * @details
      * エディタ用の一時テクスチャを作成し、現在のマップデータを初期化します。
@@ -46,6 +133,23 @@ public:
      * 3D ワールドのプレビューを描画した後、ImGui の編集 UI を描画します。
      */
     void Draw() override;
+
+    /**
+     * @brief メインウィンドウのネイティブメニューコマンドを処理します。
+     * @param commandId `WM_COMMAND` から渡されたコマンド ID です。
+     * @details
+     * エディタ専用メニューで操作された設定変更やビュー操作を Editor 内部状態へ反映します。
+     * @return コマンドを処理した場合は true、対象外なら false を返します。
+     */
+    bool HandleNativeMenuCommand(unsigned int commandId);
+
+    /**
+     * @brief ネイティブメニューのチェック状態を現在の Editor 状態へ同期します。
+     * @param menuBar チェック状態を書き換える対象のメニューバーです。
+     * @details
+     * Inspector やショートカットで変更された設定値を、メインウィンドウメニューへ反映します。
+     */
+    void SyncNativeMenuState(HMENU menuBar) const;
 
 private:
     /**
@@ -368,9 +472,17 @@ private:
     /**
      * @brief マップ全体設定ウィンドウを描画します。
      * @details
-     * 保存・読込・リセット・編集モード切替・前景透過設定などを表示します。
+     * 現在のマップパス、リセット、編集モード切替など、作業中に常時確認したい項目だけを表示します。
      */
     void DrawMapWindow();
+
+    /**
+     * @brief 表示設定ウィンドウを描画します。
+     * @details
+     * Settings メニューから開き、前景レイヤーや非作業レイヤーの透明度など、
+     * 3D プレビューの見え方に関わる設定をまとめて調整します。
+     */
+    void DrawDisplaySettingsWindow();
 
     /**
      * @brief 地形レイヤー編集ウィンドウを描画します。
@@ -416,6 +528,22 @@ private:
      * @brief 主要な操作履歴を表示するログウィンドウを描画します。
      */
     void DrawOperationLogWindow();
+
+    /**
+     * @brief プレイテスト起動要求を処理します。
+     * @details
+     * 現在のマップを保存し、成功した場合だけ奈落塔プロトシーンへの遷移要求を出します。
+     * 保存失敗時はエラーポップアップ表示用の状態を更新します。
+     * @return 保存とシーン遷移要求の発行に成功した場合は true を返します。
+     */
+    bool TryLaunchPlaytest();
+
+    /**
+     * @brief 保存失敗などの短期エラーポップアップを描画します。
+     * @details
+     * プレイテスト起動前の保存失敗など、見落としやすい I/O エラーを即座に表示します。
+     */
+    void DrawTransientPopups();
 
     /**
      * @brief 矩形選択中のスクリーン矩形をオーバーレイ描画します。
@@ -594,11 +722,12 @@ private:
     /**
      * @brief レイヤー描画時のアルファ値を取得します。
      * @param layer アルファ値を求める対象レイヤーです。
+     * @param layerIndex 対象レイヤーの配列インデックスです。
      * @return 描画時に使うアルファ値を返します。
      * @details
-     * 現在の注目深度より手前にあるレイヤーは、前景として透過表示します。
+     * 作業レイヤーは従来の見え方を維持し、それ以外のレイヤーだけ設定値に応じて透過表示します。
      */
-    float GetLayerAlpha(const NarakuMap::TerrainLayer& layer) const;
+    float GetLayerAlpha(const NarakuMap::TerrainLayer& layer, int layerIndex) const;
 
     /**
      * @brief 地面テクスチャ ID に対応する表示ラベルを取得します。
@@ -968,6 +1097,16 @@ private:
      */
     std::string m_lastIoMessage;
 
+    /**
+     * @brief プレイテスト起動失敗時に表示する詳細メッセージです。
+     * @details
+     * モーダルポップアップへ渡す本文として使います。
+     */
+    std::string m_modalErrorMessage;
+
+    /** @brief 次回描画時に I/O エラーポップアップを開くかどうかです。 */
+    bool m_openIoErrorPopup = false;
+
     /** @brief 直近の主要操作を表示するログ一覧です。 */
     std::vector<std::string> m_operationLogs;
 
@@ -987,8 +1126,42 @@ private:
      */
     float m_frontLayerAlpha = 0.22f;
 
+    /**
+     * @brief 非作業レイヤーを透過表示する時のアルファ値です。
+     * @details
+     * 現在選択中ではないレイヤーへ適用し、作業レイヤーを見分けやすくします。
+     */
+    float m_inactiveLayerAlpha = 0.35f;
+
     /** @brief 地形床プレビューの表示有無です。 */
     bool m_showFloorPreview = true;
+
+    /** @brief 奈落塔地形エディタ本体ウィンドウの表示有無です。 */
+    bool m_showMapWindow = true;
+
+    /** @brief 表示設定ウィンドウの表示有無です。 */
+    bool m_showDisplaySettingsWindow = false;
+
+    /** @brief レイヤー編集ウィンドウの表示有無です。 */
+    bool m_showLayerWindow = true;
+
+    /** @brief ロープ編集ウィンドウの表示有無です。 */
+    bool m_showRopeWindow = true;
+
+    /** @brief 採掘ポイント編集ウィンドウの表示有無です。 */
+    bool m_showMiningWindow = true;
+
+    /** @brief インスペクタウィンドウの表示有無です。 */
+    bool m_showInspectorWindow = true;
+
+    /** @brief 機能紹介ウィンドウの表示有無です。 */
+    bool m_showFeatureWindow = true;
+
+    /** @brief 操作ログウィンドウの表示有無です。 */
+    bool m_showOperationLogWindow = true;
+
+    /** @brief 操作説明ウィンドウの表示有無です。 */
+    bool m_showHelpWindow = true;
 
     /** @brief 床プレビューをセル単位で高精細描画するかどうかです。false の時はレイヤー単位の簡易描画を使います。 */
     bool m_useDetailedFloorPreview = false;
@@ -1040,6 +1213,9 @@ private:
 
     /** @brief 選択一覧と 3D プレビューのフォーカス同期を自動で行うかどうかです。 */
     bool m_autoFocusSelection = true;
+
+    /** @brief Alt + 左ドラッグ時の縦回転入力を反転するかどうかです。 */
+    bool m_invertOrbitY = false;
 
     /**
      * @brief カメラの注視点座標です。

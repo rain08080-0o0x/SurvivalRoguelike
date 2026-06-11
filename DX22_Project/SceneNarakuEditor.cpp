@@ -73,6 +73,19 @@ namespace
     {
         return std::sqrt(x * x + y * y);
     }
+
+    void SetMenuCheckState(HMENU menuBar, UINT commandId, bool checked)
+    {
+        CheckMenuItem(menuBar, commandId, MF_BYCOMMAND | (checked ? MF_CHECKED : MF_UNCHECKED));
+    }
+
+    void SetMenuRadioState(HMENU menuBar, UINT commandId, const UINT* commandIds, int count)
+    {
+        for (int i = 0; i < count; ++i)
+        {
+            SetMenuCheckState(menuBar, commandIds[i], commandIds[i] == commandId);
+        }
+    }
 }
 
 
@@ -105,6 +118,232 @@ SceneNarakuEditor::SceneNarakuEditor()
 SceneNarakuEditor::~SceneNarakuEditor()
 {
     SAFE_DELETE(m_debugWhiteTexture);
+}
+
+bool SceneNarakuEditor::HandleNativeMenuCommand(unsigned int commandId)
+{
+    switch (commandId)
+    {
+    case MenuSaveMap:
+        SaveCurrentMap();
+        return true;
+    case MenuSaveMapAs:
+        SaveCurrentMapAs();
+        return true;
+    case MenuOpenMap:
+        OpenMapByDialog();
+        return true;
+    case MenuCreateNewMap:
+        CreateNewMap();
+        return true;
+    case MenuToggleAutoFocus:
+        m_autoFocusSelection = !m_autoFocusSelection;
+        AppendOperationLog(std::string(u8"メニュー設定: 自動フォーカス同期 = ") + (m_autoFocusSelection ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleDisplaySettingsWindow:
+        m_showDisplaySettingsWindow = !m_showDisplaySettingsWindow;
+        AppendOperationLog(std::string(u8"メニュー設定: 表示設定ウィンドウ = ") + (m_showDisplaySettingsWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleFloorPreview:
+        m_showFloorPreview = !m_showFloorPreview;
+        AppendOperationLog(std::string(u8"メニュー設定: 床プレビュー = ") + (m_showFloorPreview ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleGridLines:
+        m_showGridLines = !m_showGridLines;
+        AppendOperationLog(std::string(u8"メニュー設定: グリッド線 = ") + (m_showGridLines ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleFullGridLines:
+        m_showFullGridLines = !m_showFullGridLines;
+        AppendOperationLog(std::string(u8"メニュー設定: 全グリッド線 = ") + (m_showFullGridLines ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleDetailedFloorPreview:
+        m_useDetailedFloorPreview = !m_useDetailedFloorPreview;
+        AppendOperationLog(std::string(u8"メニュー設定: 高精細床プレビュー = ") + (m_useDetailedFloorPreview ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleRopePreview:
+        m_showRopePreview = !m_showRopePreview;
+        AppendOperationLog(std::string(u8"メニュー設定: ロープ表示 = ") + (m_showRopePreview ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleMiningPreview:
+        m_showMiningPreview = !m_showMiningPreview;
+        AppendOperationLog(std::string(u8"メニュー設定: 採掘ポイント表示 = ") + (m_showMiningPreview ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleStartReturnPreview:
+        m_showStartReturnPreview = !m_showStartReturnPreview;
+        AppendOperationLog(std::string(u8"メニュー設定: 開始/帰還地点表示 = ") + (m_showStartReturnPreview ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleBoundaryPreview:
+        m_showBoundaryPreview = !m_showBoundaryPreview;
+        AppendOperationLog(std::string(u8"メニュー設定: 境界表示 = ") + (m_showBoundaryPreview ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleHoveredVertexPreview:
+        m_showHoveredVertexPreview = !m_showHoveredVertexPreview;
+        AppendOperationLog(std::string(u8"メニュー設定: ホバー頂点 = ") + (m_showHoveredVertexPreview ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuTogglePositionSnap:
+        m_enablePositionSnap = !m_enablePositionSnap;
+        AppendOperationLog(std::string(u8"メニュー設定: 位置スナップ = ") + (m_enablePositionSnap ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleCellCenterSnap:
+        m_snapToCellCenter = !m_snapToCellCenter;
+        AppendOperationLog(std::string(u8"メニュー設定: セル中心スナップ = ") + (m_snapToCellCenter ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleInvertOrbitY:
+        m_invertOrbitY = !m_invertOrbitY;
+        AppendOperationLog(std::string(u8"メニュー設定: Alt+左ドラッグY反転 = ") + (m_invertOrbitY ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuSnapTopView:
+        SnapCameraToTopView();
+        AppendOperationLog(u8"メニュー操作: 真上ビューへ切り替え");
+        return true;
+    case MenuFocusSelection:
+        FocusSelection();
+        AppendOperationLog(u8"メニュー操作: 選択対象へフォーカス");
+        return true;
+    case MenuToggleMapWindow:
+        m_showMapWindow = !m_showMapWindow;
+        AppendOperationLog(std::string(u8"メニュー表示: 地形エディタ本体 = ") + (m_showMapWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleLayerWindow:
+        m_showLayerWindow = !m_showLayerWindow;
+        AppendOperationLog(std::string(u8"メニュー表示: レイヤー = ") + (m_showLayerWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleRopeWindow:
+        m_showRopeWindow = !m_showRopeWindow;
+        AppendOperationLog(std::string(u8"メニュー表示: ロープ = ") + (m_showRopeWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleMiningWindow:
+        m_showMiningWindow = !m_showMiningWindow;
+        AppendOperationLog(std::string(u8"メニュー表示: 採掘ポイント = ") + (m_showMiningWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleInspectorWindow:
+        m_showInspectorWindow = !m_showInspectorWindow;
+        AppendOperationLog(std::string(u8"メニュー表示: インスペクタ = ") + (m_showInspectorWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleFeatureWindow:
+        m_showFeatureWindow = !m_showFeatureWindow;
+        AppendOperationLog(std::string(u8"メニュー表示: 機能紹介 = ") + (m_showFeatureWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleOperationLogWindow:
+        m_showOperationLogWindow = !m_showOperationLogWindow;
+        AppendOperationLog(std::string(u8"メニュー表示: 操作ログ = ") + (m_showOperationLogWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuToggleHelpWindow:
+        m_showHelpWindow = !m_showHelpWindow;
+        AppendOperationLog(std::string(u8"メニュー表示: 操作説明 = ") + (m_showHelpWindow ? u8"ON" : u8"OFF"));
+        return true;
+    case MenuFrontAlpha015:
+        m_frontLayerAlpha = 0.15f;
+        AppendOperationLog(u8"メニュー設定: 前景地形アルファ = 0.15");
+        return true;
+    case MenuFrontAlpha030:
+        m_frontLayerAlpha = 0.30f;
+        AppendOperationLog(u8"メニュー設定: 前景地形アルファ = 0.30");
+        return true;
+    case MenuFrontAlpha050:
+        m_frontLayerAlpha = 0.50f;
+        AppendOperationLog(u8"メニュー設定: 前景地形アルファ = 0.50");
+        return true;
+    case MenuFrontAlpha075:
+        m_frontLayerAlpha = 0.75f;
+        AppendOperationLog(u8"メニュー設定: 前景地形アルファ = 0.75");
+        return true;
+    case MenuFrontAlpha100:
+        m_frontLayerAlpha = 1.00f;
+        AppendOperationLog(u8"メニュー設定: 前景地形アルファ = 1.00");
+        return true;
+    case MenuDetailedLimit128:
+        m_detailedFloorPreviewCellLimit = 128;
+        AppendOperationLog(u8"メニュー設定: 高精細セル上限 = 128");
+        return true;
+    case MenuDetailedLimit256:
+        m_detailedFloorPreviewCellLimit = 256;
+        AppendOperationLog(u8"メニュー設定: 高精細セル上限 = 256");
+        return true;
+    case MenuDetailedLimit512:
+        m_detailedFloorPreviewCellLimit = 512;
+        AppendOperationLog(u8"メニュー設定: 高精細セル上限 = 512");
+        return true;
+    case MenuDetailedLimit1024:
+        m_detailedFloorPreviewCellLimit = 1024;
+        AppendOperationLog(u8"メニュー設定: 高精細セル上限 = 1024");
+        return true;
+    case MenuDetailedLimit2048:
+        m_detailedFloorPreviewCellLimit = 2048;
+        AppendOperationLog(u8"メニュー設定: 高精細セル上限 = 2048");
+        return true;
+    case MenuDetailedLimit4096:
+        m_detailedFloorPreviewCellLimit = 4096;
+        AppendOperationLog(u8"メニュー設定: 高精細セル上限 = 4096");
+        return true;
+    default:
+        return false;
+    }
+}
+
+void SceneNarakuEditor::SyncNativeMenuState(HMENU menuBar) const
+{
+    if (menuBar == nullptr)
+    {
+        return;
+    }
+
+    SetMenuCheckState(menuBar, MenuToggleAutoFocus, m_autoFocusSelection);
+    SetMenuCheckState(menuBar, MenuToggleDisplaySettingsWindow, m_showDisplaySettingsWindow);
+    SetMenuCheckState(menuBar, MenuToggleFloorPreview, m_showFloorPreview);
+    SetMenuCheckState(menuBar, MenuToggleGridLines, m_showGridLines);
+    SetMenuCheckState(menuBar, MenuToggleFullGridLines, m_showFullGridLines);
+    SetMenuCheckState(menuBar, MenuToggleDetailedFloorPreview, m_useDetailedFloorPreview);
+    SetMenuCheckState(menuBar, MenuToggleRopePreview, m_showRopePreview);
+    SetMenuCheckState(menuBar, MenuToggleMiningPreview, m_showMiningPreview);
+    SetMenuCheckState(menuBar, MenuToggleStartReturnPreview, m_showStartReturnPreview);
+    SetMenuCheckState(menuBar, MenuToggleBoundaryPreview, m_showBoundaryPreview);
+    SetMenuCheckState(menuBar, MenuToggleHoveredVertexPreview, m_showHoveredVertexPreview);
+    SetMenuCheckState(menuBar, MenuTogglePositionSnap, m_enablePositionSnap);
+    SetMenuCheckState(menuBar, MenuToggleCellCenterSnap, m_snapToCellCenter);
+    SetMenuCheckState(menuBar, MenuToggleInvertOrbitY, m_invertOrbitY);
+    SetMenuCheckState(menuBar, MenuToggleMapWindow, m_showMapWindow);
+    SetMenuCheckState(menuBar, MenuToggleLayerWindow, m_showLayerWindow);
+    SetMenuCheckState(menuBar, MenuToggleRopeWindow, m_showRopeWindow);
+    SetMenuCheckState(menuBar, MenuToggleMiningWindow, m_showMiningWindow);
+    SetMenuCheckState(menuBar, MenuToggleInspectorWindow, m_showInspectorWindow);
+    SetMenuCheckState(menuBar, MenuToggleFeatureWindow, m_showFeatureWindow);
+    SetMenuCheckState(menuBar, MenuToggleOperationLogWindow, m_showOperationLogWindow);
+    SetMenuCheckState(menuBar, MenuToggleHelpWindow, m_showHelpWindow);
+
+    const UINT alphaIds[] =
+    {
+        MenuFrontAlpha015,
+        MenuFrontAlpha030,
+        MenuFrontAlpha050,
+        MenuFrontAlpha075,
+        MenuFrontAlpha100
+    };
+    UINT selectedAlphaId = MenuFrontAlpha030;
+    if (m_frontLayerAlpha <= 0.22f) selectedAlphaId = MenuFrontAlpha015;
+    else if (m_frontLayerAlpha <= 0.40f) selectedAlphaId = MenuFrontAlpha030;
+    else if (m_frontLayerAlpha <= 0.62f) selectedAlphaId = MenuFrontAlpha050;
+    else if (m_frontLayerAlpha <= 0.87f) selectedAlphaId = MenuFrontAlpha075;
+    else selectedAlphaId = MenuFrontAlpha100;
+    SetMenuRadioState(menuBar, selectedAlphaId, alphaIds, _countof(alphaIds));
+
+    const UINT detailedLimitIds[] =
+    {
+        MenuDetailedLimit128,
+        MenuDetailedLimit256,
+        MenuDetailedLimit512,
+        MenuDetailedLimit1024,
+        MenuDetailedLimit2048,
+        MenuDetailedLimit4096
+    };
+    UINT selectedLimitId = MenuDetailedLimit128;
+    if (m_detailedFloorPreviewCellLimit <= 128) selectedLimitId = MenuDetailedLimit128;
+    else if (m_detailedFloorPreviewCellLimit <= 256) selectedLimitId = MenuDetailedLimit256;
+    else if (m_detailedFloorPreviewCellLimit <= 512) selectedLimitId = MenuDetailedLimit512;
+    else if (m_detailedFloorPreviewCellLimit <= 1024) selectedLimitId = MenuDetailedLimit1024;
+    else if (m_detailedFloorPreviewCellLimit <= 2048) selectedLimitId = MenuDetailedLimit2048;
+    else selectedLimitId = MenuDetailedLimit4096;
+    SetMenuRadioState(menuBar, selectedLimitId, detailedLimitIds, _countof(detailedLimitIds));
 }
 
 // Load the current map and normalize the initial selection state.
@@ -153,7 +392,8 @@ void SceneNarakuEditor::UpdateCamera(float dt)
     if (allowMouseCamera && io.KeyAlt && IsMouseLeftPress())
     {
         m_cameraYaw -= static_cast<float>(mouseDelta.x) * 0.010f;
-        m_cameraPitch -= static_cast<float>(mouseDelta.y) * 0.010f;
+        const float orbitPitchSign = m_invertOrbitY ? -1.0f : 1.0f;
+        m_cameraPitch += static_cast<float>(mouseDelta.y) * 0.010f * orbitPitchSign;
     }
 
     m_cameraPitch = ClampValue(m_cameraPitch, kMinPitch, kMaxPitch);
@@ -253,6 +493,7 @@ void SceneNarakuEditor::UpdateSelectionAndEditing()
     const POINT mousePos = GetMousePosition();
     const POINT mouseDelta = GetMouseDelta();
     const bool shiftPressed = IsRawKeyPress(VK_SHIFT) || IsRawKeyPress(VK_LSHIFT) || IsRawKeyPress(VK_RSHIFT);
+    const bool ctrlPressed = IsRawKeyPress(VK_CONTROL) || IsRawKeyPress(VK_LCONTROL) || IsRawKeyPress(VK_RCONTROL);
 
     if (m_editMode == EditMode::Terrain && !ImGui::GetIO().KeyAlt)
     {
@@ -424,7 +665,10 @@ void SceneNarakuEditor::UpdateSelectionAndEditing()
             int gridZ = -1;
             if (PickTerrainVertex(mousePos, gridX, gridZ))
             {
-                ClearMultiSelection();
+                if (!ctrlPressed)
+                {
+                    ClearMultiSelection();
+                }
                 m_selectedLayerPoint = LayerPointSelectionTarget::None;
                 m_armLayerPointPlacement = false;
                 m_selectedVertex.layerIndex = m_selectedLayer;
@@ -446,7 +690,10 @@ void SceneNarakuEditor::UpdateSelectionAndEditing()
             int cellZ = -1;
             if (PickTerrainCell(mousePos, cellX, cellZ))
             {
-                ClearMultiSelection();
+                if (!ctrlPressed)
+                {
+                    ClearMultiSelection();
+                }
                 m_selectedLayerPoint = LayerPointSelectionTarget::None;
                 m_armLayerPointPlacement = false;
                 m_selectedCell.layerIndex = m_selectedLayer;
@@ -631,6 +878,7 @@ void SceneNarakuEditor::FocusSelection()
 std::wstring SceneNarakuEditor::MakeUniqueUntitledMapPath() const
 {
     const std::wstring baseDirectory = GetDirectoryPart(NarakuMap::GetDefaultMapPath());
+    const std::wstring absoluteBaseDirectory = GetDirectoryPart(NarakuMap::ResolveMapPathForFileSystem(NarakuMap::GetDefaultMapPath()).c_str());
     if (baseDirectory.empty())
     {
         return L"Untitled_01.json";
@@ -641,7 +889,8 @@ std::wstring SceneNarakuEditor::MakeUniqueUntitledMapPath() const
         wchar_t fileName[64] = {};
         swprintf_s(fileName, L"Untitled_%02d.json", index);
         const std::wstring candidate = baseDirectory + L"\\" + fileName;
-        if (GetFileAttributesW(candidate.c_str()) == INVALID_FILE_ATTRIBUTES)
+        const std::wstring absoluteCandidate = absoluteBaseDirectory + L"\\" + fileName;
+        if (GetFileAttributesW(absoluteCandidate.c_str()) == INVALID_FILE_ATTRIBUTES)
         {
             return candidate;
         }
@@ -657,12 +906,11 @@ bool SceneNarakuEditor::PromptMapPath(bool saveDialog, std::wstring& outPath) co
     const wchar_t* currentPath = NarakuMap::GetCurrentMapPath();
     if (currentPath != nullptr && currentPath[0] != L'\0')
     {
-        wcsncpy_s(filePath, currentPath, _TRUNCATE);
+        const std::wstring absoluteCurrentPath = NarakuMap::ResolveMapPathForFileSystem(currentPath);
+        wcsncpy_s(filePath, absoluteCurrentPath.c_str(), _TRUNCATE);
     }
 
-    const std::wstring initialDirectory = GetDirectoryPart((currentPath != nullptr && currentPath[0] != L'\0')
-        ? currentPath
-        : NarakuMap::GetDefaultMapPath());
+    const std::wstring initialDirectory = GetDirectoryPart(NarakuMap::ResolveMapPathForFileSystem(NarakuMap::GetDefaultMapPath()).c_str());
 
     OPENFILENAMEW ofn = {};
     ofn.lStructSize = sizeof(ofn);
@@ -715,7 +963,14 @@ bool SceneNarakuEditor::SaveCurrentMapAs()
         return false;
     }
 
+    const std::wstring selectedPathBefore = selectedPath;
     NarakuMap::SetCurrentMapPath(selectedPath.c_str());
+    const std::wstring resolvedCurrentPath = NarakuMap::ResolveMapPathForFileSystem(NarakuMap::GetCurrentMapPath());
+    if (_wcsicmp(selectedPathBefore.c_str(), resolvedCurrentPath.c_str()) != 0)
+    {
+        m_lastIoMessage = u8"保存先を Assets/Maps 配下へ正規化しました: " + WideToUtf8(NarakuMap::GetCurrentMapPath());
+        AppendOperationLog(m_lastIoMessage);
+    }
     return SaveCurrentMap();
 }
 
@@ -770,7 +1025,14 @@ bool SceneNarakuEditor::OpenMapByDialog()
         return false;
     }
 
+    const std::wstring selectedPathBefore = selectedPath;
     NarakuMap::SetCurrentMapPath(selectedPath.c_str());
+    const std::wstring resolvedCurrentPath = NarakuMap::ResolveMapPathForFileSystem(NarakuMap::GetCurrentMapPath());
+    if (_wcsicmp(selectedPathBefore.c_str(), resolvedCurrentPath.c_str()) != 0)
+    {
+        m_lastIoMessage = u8"読込先を Assets/Maps 配下へ正規化しました: " + WideToUtf8(NarakuMap::GetCurrentMapPath());
+        AppendOperationLog(m_lastIoMessage);
+    }
     const bool loaded = LoadCurrentMap();
     if (loaded)
     {
@@ -1034,22 +1296,52 @@ void SceneNarakuEditor::DrawWorld()
 // Draw every ImGui window that makes up the editor UI.
 void SceneNarakuEditor::DrawEditorUi()
 {
+    if (m_showMapWindow)
+    {
+        DrawMapWindow();
+    }
 
-    DrawMapWindow();
+    if (m_showDisplaySettingsWindow)
+    {
+        DrawDisplaySettingsWindow();
+    }
 
-    DrawLayerWindow();
+    if (m_showLayerWindow)
+    {
+        DrawLayerWindow();
+    }
 
-    DrawRopeWindow();
+    if (m_showRopeWindow)
+    {
+        DrawRopeWindow();
+    }
 
-    DrawMiningWindow();
+    if (m_showMiningWindow)
+    {
+        DrawMiningWindow();
+    }
 
-    DrawInspectorWindow();
+    if (m_showInspectorWindow)
+    {
+        DrawInspectorWindow();
+    }
 
-    DrawFeatureWindow();
+    if (m_showFeatureWindow)
+    {
+        DrawFeatureWindow();
+    }
 
-    DrawOperationLogWindow();
+    if (m_showOperationLogWindow)
+    {
+        DrawOperationLogWindow();
+    }
 
-    DrawHelpWindow();
+    if (m_showHelpWindow)
+    {
+        DrawHelpWindow();
+    }
+
+    DrawTransientPopups();
 }
 
 // Draw file IO controls and the top-level edit mode selector.
@@ -1057,31 +1349,15 @@ void SceneNarakuEditor::DrawMapWindow()
 {
     ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(420.0f, 420.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin(u8"奈落塔地形エディタ");
+    if (!ImGui::Begin(u8"奈落塔地形エディタ", &m_showMapWindow))
+    {
+        ImGui::End();
+        return;
+    }
 
     const std::string pathText = WideToUtf8(NarakuMap::GetCurrentMapPath());
     ImGui::TextUnformatted(u8"現在のマップ");
     ImGui::TextWrapped("%s", pathText.c_str());
-
-    if (ImGui::Button(u8"保存", ImVec2(80.0f, 0.0f)))
-    {
-        SaveCurrentMap();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"別名保存", ImVec2(96.0f, 0.0f)))
-    {
-        SaveCurrentMapAs();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"開く", ImVec2(72.0f, 0.0f)))
-    {
-        OpenMapByDialog();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(u8"新規", ImVec2(72.0f, 0.0f)))
-    {
-        CreateNewMap();
-    }
 
     if (ImGui::Button(u8"既定マップ内容に戻す", ImVec2(180.0f, 0.0f)))
     {
@@ -1110,6 +1386,7 @@ void SceneNarakuEditor::DrawMapWindow()
 
     ImGui::Separator();
     ImGui::SliderFloat(u8"前景地形アルファ", &m_frontLayerAlpha, 0.05f, 1.0f, "%.2f");
+    ImGui::SliderFloat(u8"非作業レイヤー透明度", &m_inactiveLayerAlpha, 0.05f, 1.0f, "%.2f");
 
     auto drawLayerPointEditor = [this](const char* label, NarakuMap::LayerPoint& point, LayerPointSelectionTarget target)
     {
@@ -1198,11 +1475,28 @@ void SceneNarakuEditor::DrawMapWindow()
     ImGui::SameLine();
     if (ImGui::Button(u8"プレイテスト起動", ImVec2(180.0f, 0.0f)))
     {
-        if (SaveCurrentMap())
-        {
-            SceneManager::ChangeScene(SceneManager::SCENE_NARAKU_PROTO);
-        }
+        TryLaunchPlaytest();
     }
+
+    ImGui::End();
+}
+
+// Draw preview visibility settings opened from the native Settings menu.
+void SceneNarakuEditor::DrawDisplaySettingsWindow()
+{
+    ImGui::SetNextWindowPos(ImVec2(460.0f, 300.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 180.0f), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(u8"表示設定", &m_showDisplaySettingsWindow))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::TextUnformatted(u8"レイヤー透明度");
+    ImGui::SliderFloat(u8"作業手前レイヤー", &m_frontLayerAlpha, 0.05f, 1.0f, "%.2f");
+    ImGui::SliderFloat(u8"非作業レイヤー", &m_inactiveLayerAlpha, 0.05f, 1.0f, "%.2f");
+    ImGui::Separator();
+    ImGui::TextWrapped(u8"作業レイヤーは現在選択中のレイヤーです。非作業レイヤー透明度を下げると、編集対象を見分けやすくなります。");
 
     ImGui::End();
 }
@@ -1212,7 +1506,11 @@ void SceneNarakuEditor::DrawLayerWindow()
 {
     ImGui::SetNextWindowPos(ImVec2(20.0f, 452.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(420.0f, 520.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin(u8"レイヤー");
+    if (!ImGui::Begin(u8"レイヤー", &m_showLayerWindow))
+    {
+        ImGui::End();
+        return;
+    }
 
     if (ImGui::Button(u8"レイヤー追加", ImVec2(110.0f, 0.0f)))
     {
@@ -1574,7 +1872,11 @@ void SceneNarakuEditor::DrawRopeWindow()
 {
     ImGui::SetNextWindowPos(ImVec2(900.0f, 20.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360.0f, 320.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin(u8"ロープ");
+    if (!ImGui::Begin(u8"ロープ", &m_showRopeWindow))
+    {
+        ImGui::End();
+        return;
+    }
 
     if (ImGui::Button(u8"ロープ追加", ImVec2(100.0f, 0.0f)))
     {
@@ -1742,7 +2044,11 @@ void SceneNarakuEditor::DrawMiningWindow()
 {
     ImGui::SetNextWindowPos(ImVec2(900.0f, 352.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(380.0f, 380.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin(u8"採掘ポイント");
+    if (!ImGui::Begin(u8"採掘ポイント", &m_showMiningWindow))
+    {
+        ImGui::End();
+        return;
+    }
 
     if (ImGui::Button(u8"採掘ポイント追加", ImVec2(130.0f, 0.0f)))
     {
@@ -1965,7 +2271,11 @@ void SceneNarakuEditor::DrawHelpWindow()
 {
     ImGui::SetNextWindowPos(ImVec2(390.0f, 560.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(560.0f, 170.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin(u8"操作説明");
+    if (!ImGui::Begin(u8"操作説明", &m_showHelpWindow))
+    {
+        ImGui::End();
+        return;
+    }
     ImGui::Text(u8"Alt + 左ドラッグ: Orbit");
     ImGui::Text(u8"中ドラッグ: Pan");
     ImGui::Text(u8"ホイール: Zoom");
@@ -1981,7 +2291,11 @@ void SceneNarakuEditor::DrawFeatureWindow()
 {
     ImGui::SetNextWindowPos(ImVec2(390.0f, 20.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(280.0f, 260.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin(u8"機能紹介");
+    if (!ImGui::Begin(u8"機能紹介", &m_showFeatureWindow))
+    {
+        ImGui::End();
+        return;
+    }
     ImGui::TextUnformatted(u8"地形");
     ImGui::BulletText(u8"頂点 / 面の高さ編集");
     ImGui::BulletText(u8"面削除と面復活");
@@ -2008,7 +2322,11 @@ void SceneNarakuEditor::DrawInspectorWindow()
 {
     ImGui::SetNextWindowPos(ImVec2(1288.0f, 20.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300.0f, 280.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin(u8"インスペクタ");
+    if (!ImGui::Begin(u8"インスペクタ", &m_showInspectorWindow))
+    {
+        ImGui::End();
+        return;
+    }
 
     const int vertexCount = m_multiSelectedVertices.empty() ? 1 : ToInt(m_multiSelectedVertices.size());
     const int cellCount = m_multiSelectedCells.empty() ? 1 : ToInt(m_multiSelectedCells.size());
@@ -2080,10 +2398,7 @@ void SceneNarakuEditor::DrawInspectorWindow()
     ImGui::SameLine();
     if (ImGui::Button(u8"プレイテスト起動", ImVec2(120.0f, 0.0f)))
     {
-        if (SaveCurrentMap())
-        {
-            SceneManager::ChangeScene(SceneManager::SCENE_NARAKU_PROTO);
-        }
+        TryLaunchPlaytest();
     }
 
     ImGui::Separator();
@@ -2121,7 +2436,11 @@ void SceneNarakuEditor::DrawOperationLogWindow()
 {
     ImGui::SetNextWindowPos(ImVec2(1288.0f, 320.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300.0f, 320.0f), ImGuiCond_FirstUseEver);
-    ImGui::Begin(u8"操作ログ");
+    if (!ImGui::Begin(u8"操作ログ", &m_showOperationLogWindow))
+    {
+        ImGui::End();
+        return;
+    }
     ImGui::Checkbox(u8"末尾へ自動追従", &m_autoScrollOperationLog);
     ImGui::SameLine();
     if (ImGui::Button(u8"クリア", ImVec2(70.0f, 0.0f)))
@@ -2144,6 +2463,44 @@ void SceneNarakuEditor::DrawOperationLogWindow()
     ImGui::End();
 }
 
+bool SceneNarakuEditor::TryLaunchPlaytest()
+{
+    if (SaveCurrentMap())
+    {
+        m_lastIoMessage = u8"保存成功。プレイテストを起動します。";
+        AppendOperationLog(m_lastIoMessage);
+        SceneManager::ChangeScene(SceneManager::SCENE_NARAKU_PROTO);
+        return true;
+    }
+
+    m_modalErrorMessage = m_lastIoMessage.empty()
+        ? u8"プレイテスト起動前の保存に失敗しました。"
+        : m_lastIoMessage;
+    m_openIoErrorPopup = true;
+    AppendOperationLog(u8"プレイテスト起動失敗: " + m_modalErrorMessage);
+    return false;
+}
+
+void SceneNarakuEditor::DrawTransientPopups()
+{
+    if (m_openIoErrorPopup)
+    {
+        ImGui::OpenPopup(u8"プレイテスト起動失敗");
+        m_openIoErrorPopup = false;
+    }
+
+    if (ImGui::BeginPopupModal(u8"プレイテスト起動失敗", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ImGui::TextWrapped("%s", m_modalErrorMessage.c_str());
+        ImGui::Spacing();
+        if (ImGui::Button(u8"閉じる", ImVec2(120.0f, 0.0f)))
+        {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 // Draw the current marquee rectangle as a 2D overlay.
 void SceneNarakuEditor::DrawMarqueeOverlay()
 {
@@ -2153,12 +2510,13 @@ void SceneNarakuEditor::DrawMarqueeOverlay()
     }
 
     ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    const ImVec2 viewportPos = ImGui::GetMainViewport()->Pos;
     const ImVec2 minPos(
-        static_cast<float>(std::min(m_marqueeStart.x, m_marqueeEnd.x)),
-        static_cast<float>(std::min(m_marqueeStart.y, m_marqueeEnd.y)));
+        viewportPos.x + static_cast<float>(std::min(m_marqueeStart.x, m_marqueeEnd.x)),
+        viewportPos.y + static_cast<float>(std::min(m_marqueeStart.y, m_marqueeEnd.y)));
     const ImVec2 maxPos(
-        static_cast<float>(std::max(m_marqueeStart.x, m_marqueeEnd.x)),
-        static_cast<float>(std::max(m_marqueeStart.y, m_marqueeEnd.y)));
+        viewportPos.x + static_cast<float>(std::max(m_marqueeStart.x, m_marqueeEnd.x)),
+        viewportPos.y + static_cast<float>(std::max(m_marqueeStart.y, m_marqueeEnd.y)));
 
     drawList->AddRectFilled(minPos, maxPos, IM_COL32(255, 196, 64, 40));
     drawList->AddRect(minPos, maxPos, IM_COL32(255, 196, 64, 220), 0.0f, 0, 2.0f);
@@ -2212,11 +2570,11 @@ void SceneNarakuEditor::DrawTerrainLayer(const NarakuMap::TerrainLayer& layer, i
     }
 
     XMFLOAT4 floorColor = GetGroundTextureTint(layer.groundTextureId);
-    floorColor.w = GetLayerAlpha(layer);
+    floorColor.w = GetLayerAlpha(layer, layerIndex);
 
     const XMFLOAT4 wireColor = (layerIndex == m_selectedLayer)
         ? XMFLOAT4(0.90f, 0.95f, 1.00f, 1.0f)
-        : XMFLOAT4(0.55f, 0.58f, 0.65f, 1.0f);
+        : XMFLOAT4(0.55f * m_inactiveLayerAlpha, 0.58f * m_inactiveLayerAlpha, 0.65f * m_inactiveLayerAlpha, m_inactiveLayerAlpha);
     const float kGridLineLift = 0.03f;
     const bool drawDetailedFloorPreview = ShouldDrawDetailedFloorPreview(layer, layerIndex);
 
@@ -3413,10 +3771,14 @@ float SceneNarakuEditor::GetFocusDepth() const
 }
 
 // Choose a display alpha for a layer based on the focus depth.
-float SceneNarakuEditor::GetLayerAlpha(const NarakuMap::TerrainLayer& layer) const
+float SceneNarakuEditor::GetLayerAlpha(const NarakuMap::TerrainLayer& layer, int layerIndex) const
 {
+    if (layerIndex == m_selectedLayer)
+    {
+        return (layer.layerDepth < GetFocusDepth()) ? m_frontLayerAlpha : 0.32f;
+    }
 
-    return (layer.layerDepth < GetFocusDepth()) ? m_frontLayerAlpha : 0.32f;
+    return m_inactiveLayerAlpha;
 }
 
 // Return the UI label for a ground texture slot.
@@ -4024,9 +4386,3 @@ void SceneNarakuEditor::HandleShortcuts()
         SnapCameraToTopView();
     }
 }
-
-
-
-
-
-

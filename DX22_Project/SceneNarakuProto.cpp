@@ -16,26 +16,6 @@ namespace
 {
     // 既存プロジェクトは固定FPS前提なので、1フレーム秒数も固定値で扱います。
     constexpr float kDt = 1.0f / fFPS;
-    // 通常移動速度です。
-    constexpr float kWalkSpeed = 1.5f;
-    // 走り移動速度です。
-    constexpr float kRunSpeed = 2.5f;
-    // ロープ昇降時の深度変化速度です。
-    constexpr float kRopeSpeed = 1.0f;
-    // 走り続けた時の1秒あたりスタミナ消費です。
-    constexpr float kRunCostPerSecond = 1.5f;
-    // ロープ昇降中の1秒あたりスタミナ消費です。
-    constexpr float kRopeCostPerSecond = 3.0f;
-    // 攻撃1回のスタミナ消費です。
-    constexpr float kAttackCost = 10.0f;
-    // 採掘1回のスタミナ消費です。
-    constexpr float kMiningCost = 7.0f;
-    // ステップ1回のスタミナ消費です。
-    constexpr float kStepCost = 5.0f;
-    // ジャンプ1回のスタミナ消費です。
-    constexpr float kJumpCost = 5.0f;
-    // スタミナを消費していない時の1秒あたり回復量です。
-    constexpr float kStaminaRecoverPerSecond = 2.0f;
     // ステップで進む距離です。
     constexpr float kStepDistance = 5.0f;
     // ステップの無敵時間です。
@@ -60,8 +40,8 @@ namespace
     constexpr float kMaxWeight = 100.0f;
     // 拾える限界重量です。これを超える拾得は拒否します。
     constexpr float kPickupWeightLimit = 150.0f;
-    // 敵の通常移動速度です。プレイヤー通常速度の50%です。
-    constexpr float kEnemyWalkSpeed = kWalkSpeed * 0.5f;
+    // 敵の通常移動速度です。既定プレイヤー通常速度1.5m/sの50%です。
+    constexpr float kEnemyWalkSpeed = 0.75f;
     // 敵の体当たり速度です。敵通常移動の3倍です。
     constexpr float kEnemyChargeSpeed = kEnemyWalkSpeed * 3.0f;
     // 敵が次の体当たりを開始するまでの間隔です。
@@ -136,6 +116,9 @@ SceneNarakuProto::SceneNarakuProto()
 
     // Sprite側の色指定だけで床色を変えられるよう、元テクスチャは白にします。
     m_debugWhiteTexture->Create(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, &whitePixel);
+
+    // プレイテスト用の調整値を既定値で初期化します。
+    ResetDebugPlayerParams();
 
     // シーン作成時に最初の潜行状態を作ります。
     ResetRun();
@@ -316,6 +299,9 @@ void SceneNarakuProto::Update()
 
 void SceneNarakuProto::UpdateExplore(float dt)
 {
+    // ImGui からの変更値が不正でもゲーム進行が壊れないよう毎フレーム丸めます。
+    ClampDebugPlayerParams();
+
     // 今フレームの上昇量を後で計算できるよう、更新前の深度を保存します。
     m_player.previousDepth = m_player.depth;
 
@@ -511,10 +497,10 @@ void SceneNarakuProto::UpdateMovement(float dt)
         if (wantsRun && canRun && (move.x != 0.0f || move.y != 0.0f))
         {
             // 走り速度へ切り替えます。
-            speed = kRunSpeed;
+            speed = m_debugPlayerParams.runSpeed;
 
             // 1フレームぶんの走りスタミナを消費します。
-            SpendStamina(kRunCostPerSecond * dt);
+            SpendStamina(m_debugPlayerParams.runCostPerSecond * dt);
         }
 
         // 決まった速度で平面座標を進めます。
@@ -562,13 +548,13 @@ void SceneNarakuProto::UpdateMovement(float dt)
         }
 
         // 深度入力があり、スタミナを払える時だけ昇降します。
-        if (m_player.onRope && depthInput != 0.0f && CanSpendStamina(kRopeCostPerSecond * dt))
+        if (m_player.onRope && depthInput != 0.0f && CanSpendStamina(m_debugPlayerParams.ropeCostPerSecond * dt))
         {
             // ロープ昇降のスタミナを消費します。
-            SpendStamina(kRopeCostPerSecond * dt);
+            SpendStamina(m_debugPlayerParams.ropeCostPerSecond * dt);
 
             // ロープの上端から下端までの範囲内に深度を制限します。
-            m_player.depth = std::max(rope.topDepth, std::min(m_player.depth + depthInput * kRopeSpeed * dt, rope.bottomDepth));
+            m_player.depth = std::max(rope.topDepth, std::min(m_player.depth + depthInput * m_debugPlayerParams.ropeSpeed * dt, rope.bottomDepth));
 
             // ロープ中は平面位置をロープ位置へ固定して、床外へずれないようにします。
             m_player.pos = rope.pos;
@@ -701,7 +687,7 @@ void SceneNarakuProto::UpdateAction(float dt)
                 if (Distance(enemy.pos, m_player.pos) <= kAttackRange && Dot(Normalize(toEnemy), m_player.facing) > 0.25f)
                 {
                     // つるはし1回ぶんのダメージを与えます。
-                    enemy.hp -= 1.0f;
+                    enemy.hp -= m_debugPlayerParams.attackPower;
 
                     // HPが0以下なら敵を倒します。
                     if (enemy.hp <= 0.0f)
@@ -725,13 +711,13 @@ void SceneNarakuProto::UpdateAction(float dt)
     {
         // Shift中またはロープ中はスタミナ消費行動中として回復を止めます。
         // ロープは掴まっているだけなら回復し、実際に昇降できる入力中だけ消費行動として扱います。
-        const bool ropeClimbing = m_player.onRope && (IsKeyPress('W') || IsKeyPress('S')) && CanSpendStamina(kRopeCostPerSecond * dt);
+        const bool ropeClimbing = m_player.onRope && (IsKeyPress('W') || IsKeyPress('S')) && CanSpendStamina(m_debugPlayerParams.ropeCostPerSecond * dt);
 
         // Shift中またはロープ昇降中はスタミナ消費行動中として回復を止めます。
         bool spending = IsShiftPress() || ropeClimbing;
 
         // 消費行動中でなければ1フレームぶん回復します。
-        if (!spending) m_player.stamina = std::min(100.0f, m_player.stamina + kStaminaRecoverPerSecond * dt);
+        if (!spending) m_player.stamina = std::min(100.0f, m_player.stamina + m_debugPlayerParams.staminaRecoverPerSecond * dt);
     }
 }
 
@@ -1077,7 +1063,7 @@ void SceneNarakuProto::TryInteract()
         if (point.mined || std::fabs(m_player.depth - point.depth) > 0.35f || !IsNear(m_player.pos, point.pos, kInteractRange)) continue;
 
         // スタミナが足りない場合は採掘を開始しません。
-        if (!CanSpendStamina(kMiningCost))
+        if (!CanSpendStamina(m_debugPlayerParams.miningCost))
         {
             // HUDログにスタミナ不足を出します。
             AddMessage(u8"スタミナが足りないため採掘できません。");
@@ -1087,7 +1073,7 @@ void SceneNarakuProto::TryInteract()
         }
 
         // 採掘開始時にスタミナを消費します。
-        SpendStamina(kMiningCost);
+        SpendStamina(m_debugPlayerParams.miningCost);
 
         // 採掘中のポイント番号を記録します。
         m_miningIndex = i;
@@ -1112,10 +1098,10 @@ void SceneNarakuProto::TryStartStep()
     if (GetCurrentWeight() >= kMaxWeight) { AddMessage(u8"重量が重すぎてステップできません。"); return; }
 
     // スタミナ不足ならステップ不可です。
-    if (!CanSpendStamina(kStepCost)) { AddMessage(u8"スタミナが足りないためステップできません。"); return; }
+    if (!CanSpendStamina(m_debugPlayerParams.stepCost)) { AddMessage(u8"スタミナが足りないためステップできません。"); return; }
 
     // ステップ1回ぶんのスタミナを消費します。
-    SpendStamina(kStepCost);
+    SpendStamina(m_debugPlayerParams.stepCost);
 
     // 無敵時間と後硬直の合計時間を設定します。
     m_player.stepTimer = kStepInvincibleTime + kStepRecoveryTime;
@@ -1136,10 +1122,10 @@ void SceneNarakuProto::TryStartJump()
     if (GetCurrentWeight() >= kMaxWeight) { AddMessage(u8"重量が重すぎてジャンプできません。"); return; }
 
     // スタミナ不足ならジャンプ不可です。
-    if (!CanSpendStamina(kJumpCost)) { AddMessage(u8"スタミナが足りないためジャンプできません。"); return; }
+    if (!CanSpendStamina(m_debugPlayerParams.jumpCost)) { AddMessage(u8"スタミナが足りないためジャンプできません。"); return; }
 
     // ジャンプ1回ぶんのスタミナを消費します。
-    SpendStamina(kJumpCost);
+    SpendStamina(m_debugPlayerParams.jumpCost);
 
     // 空中状態へ切り替えます。
     m_player.grounded = false;
@@ -1164,10 +1150,10 @@ void SceneNarakuProto::TryStartAttack()
     if (m_player.attackTimer > 0.0f) return;
 
     // スタミナ不足なら攻撃不可です。
-    if (!CanSpendStamina(kAttackCost)) { AddMessage(u8"スタミナが足りないため攻撃できません。"); return; }
+    if (!CanSpendStamina(m_debugPlayerParams.attackCost)) { AddMessage(u8"スタミナが足りないため攻撃できません。"); return; }
 
     // 攻撃1回ぶんのスタミナを消費します。
-    SpendStamina(kAttackCost);
+    SpendStamina(m_debugPlayerParams.attackCost);
 
     // 攻撃全体時間を設定します。
     m_player.attackTimer = kAttackTotal;
@@ -1241,6 +1227,9 @@ void SceneNarakuProto::Draw()
     // 常時確認するステータスHUDを描画します。
     DrawHud();
 
+    // プレイテスト中にプレイヤー性能を調整するデバッグUIを描画します。
+    DrawDebugPlayerTuning();
+
     // 所持品モードでは所持品と地図ピンUIを重ねます。
     if (m_mode == Mode::Inventory) { DrawInventory(); DrawMapControls(); }
 
@@ -1312,10 +1301,20 @@ void SceneNarakuProto::Draw3DField()
         }
     };
 
+    // プレイヤーより浅い深度にあるレイヤーは、視界を塞がないよう上層扱いで薄くします。
+    auto applyGameplayLayerAlpha = [this](const NarakuMap::TerrainLayer& layer, XMFLOAT4 color) -> XMFLOAT4
+    {
+        if (layer.layerDepth < m_player.depth - 0.01f)
+        {
+            color.w = m_debugPlayerParams.upperLayerAlpha;
+        }
+        return color;
+    };
+
     // 実際の有効セルだけを半透明床として描画し、削除セルは穴として残します。
     for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
     {
-        const XMFLOAT4 layerColor = getLayerFloorColor(layer.groundTextureId);
+        const XMFLOAT4 layerColor = applyGameplayLayerAlpha(layer, getLayerFloorColor(layer.groundTextureId));
         for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
         {
             for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
@@ -1361,6 +1360,9 @@ void SceneNarakuProto::Draw3DField()
             continue;
         }
 
+        // 上層レイヤーのグリッド線も床と同じ透明度へ寄せ、プレイヤー視認性を優先します。
+        const XMFLOAT4 layerGridColor = applyGameplayLayerAlpha(layer, gridColor);
+
         for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
         {
             for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
@@ -1383,10 +1385,10 @@ void SceneNarakuProto::Draw3DField()
                 const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, 0.03f);
                 const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, 0.03f);
                 const XMFLOAT3 d = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ + 1, 0.03f);
-                Geometory::AddLine(a, b, gridColor);
-                Geometory::AddLine(b, d, gridColor);
-                Geometory::AddLine(d, c, gridColor);
-                Geometory::AddLine(c, a, gridColor);
+                Geometory::AddLine(a, b, layerGridColor);
+                Geometory::AddLine(b, d, layerGridColor);
+                Geometory::AddLine(d, c, layerGridColor);
+                Geometory::AddLine(c, a, layerGridColor);
             }
         }
     }
@@ -1699,6 +1701,66 @@ void SceneNarakuProto::DrawHud()
     ImGui::End();
 }
 
+void SceneNarakuProto::DrawDebugPlayerTuning()
+{
+    // 調整ウィンドウの初期位置をHUDの右側へ置きます。
+    ImGui::SetNextWindowPos(ImVec2(1240.0f, 20.0f), ImGuiCond_FirstUseEver);
+
+    // 調整項目が見切れない程度の初期サイズを指定します。
+    ImGui::SetNextWindowSize(ImVec2(380.0f, 430.0f), ImGuiCond_FirstUseEver);
+
+    // プレイテスト専用の調整ウィンドウを開始します。
+    ImGui::Begin(u8"プレイテスト調整");
+
+    // 現在の重量補正を確認しながら調整できるよう、実効状態を先頭に表示します。
+    ImGui::Text(u8"実効歩行速度: %.2f", GetMoveSpeed());
+    ImGui::Text(u8"重量補正: %.0f%%", GetWeightRate() * 100.0f);
+    ImGui::Separator();
+
+    // 調整値は毎フレームクランプされますが、UI操作直後にも即座に丸めます。
+    if (ImGui::CollapsingHeader(u8"移動", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        // 通常移動、走り、ロープ昇降の速度を調整します。
+        ImGui::SliderFloat(u8"通常移動速度", &m_debugPlayerParams.walkSpeed, 0.0f, 10.0f, "%.2f");
+        ImGui::SliderFloat(u8"走り速度", &m_debugPlayerParams.runSpeed, 0.0f, 15.0f, "%.2f");
+        ImGui::SliderFloat(u8"ロープ昇降速度", &m_debugPlayerParams.ropeSpeed, 0.0f, 10.0f, "%.2f");
+    }
+
+    if (ImGui::CollapsingHeader(u8"戦闘", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        // 攻撃1回あたりのダメージと消費スタミナを調整します。
+        ImGui::SliderFloat(u8"攻撃力", &m_debugPlayerParams.attackPower, 0.0f, 20.0f, "%.2f");
+        ImGui::SliderFloat(u8"攻撃スタミナ消費", &m_debugPlayerParams.attackCost, 0.0f, 100.0f, "%.2f");
+    }
+
+    if (ImGui::CollapsingHeader(u8"スタミナ", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        // 各行動のスタミナ消費量と自然回復速度を調整します。
+        ImGui::SliderFloat(u8"走り秒間消費", &m_debugPlayerParams.runCostPerSecond, 0.0f, 30.0f, "%.2f");
+        ImGui::SliderFloat(u8"ロープ秒間消費", &m_debugPlayerParams.ropeCostPerSecond, 0.0f, 30.0f, "%.2f");
+        ImGui::SliderFloat(u8"採掘消費", &m_debugPlayerParams.miningCost, 0.0f, 100.0f, "%.2f");
+        ImGui::SliderFloat(u8"回避消費", &m_debugPlayerParams.stepCost, 0.0f, 100.0f, "%.2f");
+        ImGui::SliderFloat(u8"ジャンプ消費", &m_debugPlayerParams.jumpCost, 0.0f, 100.0f, "%.2f");
+        ImGui::SliderFloat(u8"回復速度", &m_debugPlayerParams.staminaRecoverPerSecond, 0.0f, 30.0f, "%.2f");
+    }
+
+    if (ImGui::CollapsingHeader(u8"描画", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        // 現在深度より上にあるレイヤーの透明度を調整します。0に近いほど見えなくなります。
+        ImGui::SliderFloat(u8"上層レイヤー透明度", &m_debugPlayerParams.upperLayerAlpha, 0.0f, 0.30f, "%.2f");
+    }
+
+    if (ImGui::Button(u8"初期値に戻す"))
+    {
+        ResetDebugPlayerParams();
+    }
+
+    ClampDebugPlayerParams();
+
+    // プレイテスト専用の調整ウィンドウを閉じます。
+    ImGui::End();
+}
+
 void SceneNarakuProto::DrawInventory()
 {
     // 所持品ウィンドウの初期位置を指定します。
@@ -1923,6 +1985,40 @@ void SceneNarakuProto::DrawMapControls()
     ImGui::End();
 }
 
+void SceneNarakuProto::ResetDebugPlayerParams()
+{
+    // 既存実装で使っていた固定値を、そのまま初期値として再設定します。
+    m_debugPlayerParams.walkSpeed = 1.5f;
+    m_debugPlayerParams.runSpeed = 2.5f;
+    m_debugPlayerParams.ropeSpeed = 1.0f;
+    m_debugPlayerParams.attackPower = 1.0f;
+    m_debugPlayerParams.runCostPerSecond = 1.5f;
+    m_debugPlayerParams.ropeCostPerSecond = 3.0f;
+    m_debugPlayerParams.attackCost = 10.0f;
+    m_debugPlayerParams.miningCost = 7.0f;
+    m_debugPlayerParams.stepCost = 5.0f;
+    m_debugPlayerParams.jumpCost = 5.0f;
+    m_debugPlayerParams.staminaRecoverPerSecond = 2.0f;
+    m_debugPlayerParams.upperLayerAlpha = 0.06f;
+}
+
+void SceneNarakuProto::ClampDebugPlayerParams()
+{
+    // 速度、攻撃力、各種消費量、回復量は負値にしないよう安全側へ丸めます。
+    m_debugPlayerParams.walkSpeed = std::max(0.0f, m_debugPlayerParams.walkSpeed);
+    m_debugPlayerParams.runSpeed = std::max(0.0f, m_debugPlayerParams.runSpeed);
+    m_debugPlayerParams.ropeSpeed = std::max(0.0f, m_debugPlayerParams.ropeSpeed);
+    m_debugPlayerParams.attackPower = std::max(0.0f, m_debugPlayerParams.attackPower);
+    m_debugPlayerParams.runCostPerSecond = std::max(0.0f, m_debugPlayerParams.runCostPerSecond);
+    m_debugPlayerParams.ropeCostPerSecond = std::max(0.0f, m_debugPlayerParams.ropeCostPerSecond);
+    m_debugPlayerParams.attackCost = std::max(0.0f, m_debugPlayerParams.attackCost);
+    m_debugPlayerParams.miningCost = std::max(0.0f, m_debugPlayerParams.miningCost);
+    m_debugPlayerParams.stepCost = std::max(0.0f, m_debugPlayerParams.stepCost);
+    m_debugPlayerParams.jumpCost = std::max(0.0f, m_debugPlayerParams.jumpCost);
+    m_debugPlayerParams.staminaRecoverPerSecond = std::max(0.0f, m_debugPlayerParams.staminaRecoverPerSecond);
+    m_debugPlayerParams.upperLayerAlpha = std::max(0.0f, std::min(m_debugPlayerParams.upperLayerAlpha, 0.30f));
+}
+
 float SceneNarakuProto::GetCurrentWeight() const
 {
     // 初期装備のつるはし重量10から計算を始めます。
@@ -1944,7 +2040,7 @@ float SceneNarakuProto::GetWeightRate() const
 float SceneNarakuProto::GetMoveSpeed() const
 {
     // まず通常歩行速度を基準にします。
-    float speed = kWalkSpeed;
+    float speed = m_debugPlayerParams.walkSpeed;
 
     // 重量70%以上では移動速度を25%下げます。
     if (GetWeightRate() >= 0.70f) speed *= 0.75f;
