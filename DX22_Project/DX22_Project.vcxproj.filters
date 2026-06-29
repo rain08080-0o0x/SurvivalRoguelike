@@ -215,6 +215,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="NewLastBossEditor.cpp" />
+    <ClCompile Include="NarakuPieceData.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SceneNarakuPieceEditor.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Defines.h">
@@ -401,6 +407,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="NewLastBossEditor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="NarakuPieceData.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SceneNarakuPieceEditor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

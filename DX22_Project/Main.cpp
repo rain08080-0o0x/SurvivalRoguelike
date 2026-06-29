@@ -92,6 +92,8 @@ namespace
 			return "NewLastBoss";
 		case SceneManager::SceneType::SCENE_NARAKU_EDITOR:
 			return "NarakuEditor";
+		case SceneManager::SceneType::SCENE_NARAKU_PIECE_EDITOR:
+			return "NarakuPieceEditor";
 		case SceneManager::SceneType::SCENE_NARAKU_PROTO:
 			return "NarakuProto";
 		default:
@@ -765,6 +767,9 @@ void Draw()
 		case SceneManager::SceneType::SCENE_NARAKU_EDITOR:
 			sceneTxt = u8"奈落塔地形エディタ";
 			break;
+		case SceneManager::SceneType::SCENE_NARAKU_PIECE_EDITOR:
+			sceneTxt = u8"奈落塔小ステージエディタ";
+			break;
 		case SceneManager::SceneType::SCENE_NARAKU_PROTO:
 			sceneTxt = u8"奈落塔プロト";
 			break;
@@ -799,6 +804,7 @@ void Draw()
 			u8"ラスボス攻撃エディタ",
 			u8"NewLastBoss",
 			u8"奈落塔地形エディタ",
+			u8"奈落塔小ステージエディタ",
 			u8"奈落塔プロト",
 		};
 		const char* debugResultItems[] =
@@ -1658,6 +1664,10 @@ void Draw()
 					changeScene = SceneManager::SceneType::SCENE_NARAKU_EDITOR;
 					break;
 				case 9:
+					sceneTxt = u8"奈落塔小ステージエディタ";
+					changeScene = SceneManager::SceneType::SCENE_NARAKU_PIECE_EDITOR;
+					break;
+				case 10:
 					sceneTxt = u8"奈落塔プロト";
 					changeScene = SceneManager::SceneType::SCENE_NARAKU_PROTO;
 					break;
@@ -2096,7 +2106,8 @@ void Draw()
 	}
 	if (!IsEngineEditorScene(SceneManager::GetCurrent()) &&
 		SceneManager::GetCurrent() != SceneManager::SceneType::SCENE_NARAKU_PROTO &&
-		SceneManager::GetCurrent() != SceneManager::SceneType::SCENE_NARAKU_EDITOR)
+		SceneManager::GetCurrent() != SceneManager::SceneType::SCENE_NARAKU_EDITOR &&
+		SceneManager::GetCurrent() != SceneManager::SceneType::SCENE_NARAKU_PIECE_EDITOR)
 	{
 		// 軸線の表示
 		// グリッド

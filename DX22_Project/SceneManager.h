@@ -15,6 +15,7 @@ public:
         SCENE_FINAL_BOSS_EDITOR,
         SCENE_NEW_BOSS_EDITOR,
         SCENE_NARAKU_EDITOR,
+        SCENE_NARAKU_PIECE_EDITOR,
         SCENE_NARAKU_PROTO,
         SCENE_MAX
     };

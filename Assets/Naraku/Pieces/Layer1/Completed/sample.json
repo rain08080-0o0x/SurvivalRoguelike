@@ -1,0 +1,2150 @@
+{
+    "version":  1,
+    "id":  "piece_0001",
+    "displayName":  "piece_0001",
+    "abyssLayer":  1,
+    "sizePreset":  "16x16",
+    "gridWidth":  16,
+    "gridDepth":  16,
+    "cellSize":  2,
+    "stageRole":  "normal",
+    "stageCategory":  "cliff",
+    "edgeCategories":  {
+                           "north":  "plain_low",
+                           "south":  "blocked",
+                           "east":  "blocked",
+                           "west":  "plain_low"
+                       },
+    "lockedEdges":  {
+                        "north":  true,
+                        "south":  true,
+                        "east":  true,
+                        "west":  true
+                    },
+    "heights":  [
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.22,
+                    -5.22,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.31,
+                    -5.31,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.31,
+                    -5.31,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.31,
+                    -5.31,
+                    -5.31,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    -5.31,
+                    -5.31,
+                    -5.31,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ],
+    "cells":  [
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  false,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  },
+                  {
+                      "deleted":  true,
+                      "walkable":  true,
+                      "ropeAllowed":  true,
+                      "miningAllowed":  true,
+                      "enemySpawnAllowed":  true,
+                      "groundTextureId":  0
+                  }
+              ],
+    "rope":  {
+                 "enabled":  false,
+                 "top":  {
+                             "x":  11,
+                             "z":  14
+                         },
+                 "bottom":  {
+                                "x":  10,
+                                "z":  14
+                            }
+             },
+    "miningPoints":  [
+                         {
+                             "id":  "mining_01",
+                             "cell":  {
+                                          "x":  10,
+                                          "z":  11
+                                      },
+                             "visualType":  0,
+                             "initiallyRecorded":  false
+                         },
+                         {
+                             "id":  "mining_02",
+                             "cell":  {
+                                          "x":  12,
+                                          "z":  5
+                                      },
+                             "visualType":  1,
+                             "initiallyRecorded":  true
+                         },
+                         {
+                             "id":  "mining_03",
+                             "cell":  {
+                                          "x":  5,
+                                          "z":  8
+                                      },
+                             "visualType":  0,
+                             "initiallyRecorded":  false
+                         },
+                         {
+                             "id":  "mining_04",
+                             "cell":  {
+                                          "x":  7,
+                                          "z":  5
+                                      },
+                             "visualType":  1,
+                             "initiallyRecorded":  true
+                         },
+                         {
+                             "id":  "mining_05",
+                             "cell":  {
+                                          "x":  2,
+                                          "z":  2
+                                      },
+                             "visualType":  0,
+                             "initiallyRecorded":  false
+                         }
+                     ],
+    "startReturnCandidate":  {
+                                 "enabled":  false,
+                                 "cell":  {
+                                              "x":  0,
+                                              "z":  0
+                                          },
+                                 "facing":  "south"
+                             }
+}
