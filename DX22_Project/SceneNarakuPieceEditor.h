@@ -26,6 +26,37 @@ class SceneNarakuPieceEditor : public Scene
 {
 public:
     /**
+     * @brief 小ステージエディタ用ネイティブメニューのコマンドID一覧です。
+     * @details
+     * 地形エディタ側のID帯と衝突しないよう、十分に離した値を起点に定義します。
+     */
+    enum NativeMenuCommand : unsigned int
+    {
+        /** @brief ピース保存ダイアログを開きます。 */
+        MenuSavePiece = 2000,
+        /** @brief ピース読み込みダイアログを開きます。 */
+        MenuLoadPiece,
+        /** @brief 基本情報ウィンドウの表示状態を切り替えます。 */
+        MenuTogglePieceBasicWindow,
+        /** @brief 接続設定ウィンドウの表示状態を切り替えます。 */
+        MenuTogglePieceConnectionWindow,
+        /** @brief 地形編集ウィンドウの表示状態を切り替えます。 */
+        MenuToggleTerrainEditWindow,
+        /** @brief 配置ツールウィンドウの表示状態を切り替えます。 */
+        MenuToggleGridObjectPlacementWindow,
+        /** @brief 選択オブジェクトウィンドウの表示状態を切り替えます。 */
+        MenuToggleGridObjectSelectionWindow,
+        /** @brief 保存・検証ウィンドウの表示状態を切り替えます。 */
+        MenuTogglePieceFileAndValidationWindow,
+        /** @brief 3Dプレビューウィンドウの表示状態を切り替えます。 */
+        MenuTogglePreviewWindow,
+        /** @brief 高さグリッドウィンドウの表示状態を切り替えます。 */
+        MenuToggleHeightGridWindow,
+        /** @brief 小ステージHierarchyウィンドウの表示状態を切り替えます。 */
+        MenuTogglePieceHierarchyWindow
+    };
+
+    /**
      * @brief 奈落ピースエディタシーンを初期化します。
      */
     SceneNarakuPieceEditor();
@@ -44,6 +75,19 @@ public:
      * @brief エディタの各ウィンドウと3Dプレビューを描画します。
      */
     void Draw() override;
+
+    /**
+     * @brief メインウィンドウのネイティブメニューコマンドを処理します。
+     * @param commandId `WM_COMMAND` から渡されたコマンド ID です。
+     * @return コマンドを処理した場合は true、対象外なら false を返します。
+     */
+    bool HandleNativeMenuCommand(unsigned int commandId);
+
+    /**
+     * @brief ネイティブメニューのチェック状態を現在の Editor 状態へ同期します。
+     * @param menuBar チェック状態を書き換える対象のメニューバーです。
+     */
+    void SyncNativeMenuState(HMENU menuBar) const;
 
 private:
     /**
@@ -231,25 +275,6 @@ private:
      * @brief エディタ全体を統括するメインウィンドウを描画します。
      */
     void DrawEditorWindow();
-
-    /**
-     * @brief メインメニューバーを描画します。
-     */
-    void DrawMainMenuBar();
-
-    /**
-     * @brief メニューバー込みの作業領域を基準にウィンドウの初回配置を設定します。
-     * @param debugName 補正状態の管理に使うImGuiウィンドウ名です。
-     * @param defaultOffset 作業領域左上からの初期オフセットです。
-     * @param defaultSize 初回表示時に適用する初期サイズです。
-     */
-    void ApplySafeWindowPlacement(const char* debugName, const ImVec2& defaultOffset, const ImVec2& defaultSize);
-
-    /**
-     * @brief 保存済み位置がメニューバーへ被っている場合に一度だけ下方向へ補正します。
-     * @param debugName 補正済み管理に使うImGuiウィンドウ名です。
-     */
-    void EnsureWindowBelowMainMenuBar(const char* debugName);
 
     /**
      * @brief ピース保存用モーダルを描画します。
@@ -880,6 +905,9 @@ private:
     /** @brief 保存モーダルで下書き保存を選択しているかどうかです。 */
     bool m_saveAsDraft = true;
 
+    /** @brief 次回描画で保存モーダルを安全に開くための要求フラグです。 */
+    bool m_requestOpenSavePiecePopup = false;
+
     /** @brief 最新検証で検出された問題一覧です。 */
     std::vector<NarakuPiece::ValidationIssue> m_validationIssues;
 
@@ -1012,8 +1040,6 @@ private:
     /** @brief 保存済み小ステージの登録一覧です。 */
     std::vector<PieceHierarchyEntry> m_pieceHierarchyEntries;
 
-    /** @brief メニューバー干渉補正を一度適用したウィンドウ名一覧です。 */
-    std::vector<std::string> m_menuBarAdjustedWindowNames;
 };
 
 

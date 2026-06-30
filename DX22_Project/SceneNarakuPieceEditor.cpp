@@ -22,6 +22,17 @@ using namespace DirectX;
 namespace
 {
     /**
+     * @brief ネイティブメニュー項目のチェック状態を更新します。
+     * @param menuBar 更新対象のメニューバーです。
+     * @param commandId 更新対象のコマンドIDです。
+     * @param checked チェック状態にする場合はtrueです。
+     */
+    void SetMenuCheckState(HMENU menuBar, UINT commandId, bool checked)
+    {
+        CheckMenuItem(menuBar, commandId, MF_BYCOMMAND | (checked ? MF_CHECKED : MF_UNCHECKED));
+    }
+
+    /**
      * @brief 座標変換に使用するウィンドウハンドルを取得します。
      */
     HWND GetPreviewHostWindow()
@@ -650,12 +661,78 @@ void SceneNarakuPieceEditor::Update()
 void SceneNarakuPieceEditor::Draw()
 {
     RenderTerrainPreviewToTexture();
-    DrawMainMenuBar();
+    if (m_requestOpenSavePiecePopup)
+    {
+        ImGui::OpenPopup(u8"ピースを保存");
+        m_requestOpenSavePiecePopup = false;
+    }
     DrawEditorWindow();
     DrawPreviewWindow();
     DrawHeightGridWindow();
     DrawPieceHierarchyWindow();
     DrawSavePiecePopup();
+}
+
+bool SceneNarakuPieceEditor::HandleNativeMenuCommand(unsigned int commandId)
+{
+    switch (commandId)
+    {
+    case MenuSavePiece:
+        SyncSaveFileNameInput();
+        m_saveAsDraft = true;
+        m_requestOpenSavePiecePopup = true;
+        return true;
+    case MenuLoadPiece:
+        OpenLoadPieceDialog();
+        return true;
+    case MenuTogglePieceBasicWindow:
+        m_showPieceBasicWindow = !m_showPieceBasicWindow;
+        return true;
+    case MenuTogglePieceConnectionWindow:
+        m_showPieceConnectionWindow = !m_showPieceConnectionWindow;
+        return true;
+    case MenuToggleTerrainEditWindow:
+        m_showTerrainEditWindow = !m_showTerrainEditWindow;
+        return true;
+    case MenuToggleGridObjectPlacementWindow:
+        m_showGridObjectPlacementWindow = !m_showGridObjectPlacementWindow;
+        return true;
+    case MenuToggleGridObjectSelectionWindow:
+        m_showGridObjectSelectionWindow = !m_showGridObjectSelectionWindow;
+        return true;
+    case MenuTogglePieceFileAndValidationWindow:
+        m_showPieceFileAndValidationWindow = !m_showPieceFileAndValidationWindow;
+        return true;
+    case MenuTogglePreviewWindow:
+        m_showPreviewWindow = !m_showPreviewWindow;
+        return true;
+    case MenuToggleHeightGridWindow:
+        m_showHeightGridWindow = !m_showHeightGridWindow;
+        return true;
+    case MenuTogglePieceHierarchyWindow:
+        m_showPieceHierarchyWindow = !m_showPieceHierarchyWindow;
+        return true;
+    default:
+        return false;
+    }
+}
+
+void SceneNarakuPieceEditor::SyncNativeMenuState(HMENU menuBar) const
+{
+    if (menuBar == nullptr)
+    {
+        return;
+    }
+
+    SetMenuCheckState(menuBar, MenuTogglePieceBasicWindow, m_showPieceBasicWindow);
+    SetMenuCheckState(menuBar, MenuTogglePieceConnectionWindow, m_showPieceConnectionWindow);
+    SetMenuCheckState(menuBar, MenuToggleTerrainEditWindow, m_showTerrainEditWindow);
+    SetMenuCheckState(menuBar, MenuToggleGridObjectPlacementWindow, m_showGridObjectPlacementWindow);
+    SetMenuCheckState(menuBar, MenuToggleGridObjectSelectionWindow, m_showGridObjectSelectionWindow);
+    SetMenuCheckState(menuBar, MenuTogglePieceFileAndValidationWindow, m_showPieceFileAndValidationWindow);
+    SetMenuCheckState(menuBar, MenuTogglePreviewWindow, m_showPreviewWindow);
+    SetMenuCheckState(menuBar, MenuToggleHeightGridWindow, m_showHeightGridWindow);
+    SetMenuCheckState(menuBar, MenuTogglePieceHierarchyWindow, m_showPieceHierarchyWindow);
 }
 
 int SceneNarakuPieceEditor::GetHeightIndex(int x, int z) const
@@ -993,10 +1070,10 @@ void SceneNarakuPieceEditor::DrawPreviewWindow()
     m_previewImageHovered = false;
     const ImGuiViewport* const viewport = ImGui::GetMainViewport();
     const ImVec2 workSize = (viewport != nullptr) ? viewport->WorkSize : ImVec2(1280.0f, 720.0f);
-    ApplySafeWindowPlacement(
-        "3Dプレビュー",
-        ImVec2(392.0f, 16.0f),
-        ImVec2(std::max(520.0f, workSize.x - 408.0f), std::max(360.0f, workSize.y * 0.62f)));
+    ImGui::SetNextWindowPos(ImVec2(392.0f, 16.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(
+        ImVec2(std::max(520.0f, workSize.x - 408.0f), std::max(360.0f, workSize.y * 0.62f)),
+        ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"3Dプレビュー", &m_showPreviewWindow))
     {
         m_previewImageTopLeft = {};
@@ -1005,7 +1082,6 @@ void SceneNarakuPieceEditor::DrawPreviewWindow()
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("3Dプレビュー");
 
     ImVec2 area = ImGui::GetContentRegionAvail();
     area.x = std::max(area.x, 320.0f);
@@ -1144,14 +1220,14 @@ bool SceneNarakuPieceEditor::IsMouseInsidePreviewImage() const
 
 void SceneNarakuPieceEditor::DrawEditorWindow()
 {
-    ApplySafeWindowPlacement("奈落塔ピースエディタ", ImVec2(16.0f, 16.0f), ImVec2(360.0f, 260.0f));
+    ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 260.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"奈落塔ピースエディタ"))
     {
         m_previewImageSize = {};
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("奈落塔ピースエディタ");
 
     ImGui::SeparatorText(u8"共通操作");
     ImGui::TextUnformatted(u8"Alt+左ドラッグ: カメラ回転");
@@ -1217,86 +1293,6 @@ void SceneNarakuPieceEditor::DrawEditorWindow()
     DrawPieceFileAndValidationWindow();
 }
 
-void SceneNarakuPieceEditor::DrawMainMenuBar()
-{
-    if (!ImGui::BeginMainMenuBar())
-    {
-        return;
-    }
-
-    if (ImGui::BeginMenu("File"))
-    {
-        if (ImGui::MenuItem("Save..."))
-        {
-            SyncSaveFileNameInput();
-            m_saveAsDraft = true;
-            ImGui::OpenPopup(u8"ピースを保存");
-        }
-        if (ImGui::MenuItem("Load..."))
-        {
-            OpenLoadPieceDialog();
-        }
-        ImGui::EndMenu();
-    }
-
-    if (ImGui::BeginMenu("View"))
-    {
-        ImGui::MenuItem(u8"基本情報", nullptr, &m_showPieceBasicWindow);
-        ImGui::MenuItem(u8"接続設定", nullptr, &m_showPieceConnectionWindow);
-        ImGui::MenuItem(u8"地形編集", nullptr, &m_showTerrainEditWindow);
-        ImGui::MenuItem(u8"配置ツール", nullptr, &m_showGridObjectPlacementWindow);
-        ImGui::MenuItem(u8"選択オブジェクト", nullptr, &m_showGridObjectSelectionWindow);
-        ImGui::MenuItem(u8"保存・検証", nullptr, &m_showPieceFileAndValidationWindow);
-        ImGui::MenuItem(u8"3Dプレビュー", nullptr, &m_showPreviewWindow);
-        ImGui::MenuItem(u8"高さグリッド", nullptr, &m_showHeightGridWindow);
-        ImGui::MenuItem(u8"小ステージHierarchy", nullptr, &m_showPieceHierarchyWindow);
-        ImGui::EndMenu();
-    }
-
-    ImGui::EndMainMenuBar();
-}
-
-void SceneNarakuPieceEditor::ApplySafeWindowPlacement(const char* debugName, const ImVec2& defaultOffset, const ImVec2& defaultSize)
-{
-    (void)debugName;
-
-    const ImGuiViewport* const viewport = ImGui::GetMainViewport();
-    if (viewport == nullptr)
-    {
-        ImGui::SetNextWindowPos(defaultOffset, ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(defaultSize, ImGuiCond_FirstUseEver);
-        return;
-    }
-
-    const ImVec2 initialPos(viewport->WorkPos.x + defaultOffset.x, viewport->WorkPos.y + defaultOffset.y);
-    ImGui::SetNextWindowPos(initialPos, ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(defaultSize, ImGuiCond_FirstUseEver);
-}
-
-void SceneNarakuPieceEditor::EnsureWindowBelowMainMenuBar(const char* debugName)
-{
-    const ImGuiViewport* const viewport = ImGui::GetMainViewport();
-    if (viewport == nullptr || debugName == nullptr)
-    {
-        return;
-    }
-
-    if (std::find(m_menuBarAdjustedWindowNames.begin(), m_menuBarAdjustedWindowNames.end(), debugName) !=
-        m_menuBarAdjustedWindowNames.end())
-    {
-        return;
-    }
-
-    const ImVec2 currentPos = ImGui::GetWindowPos();
-    if (currentPos.y >= viewport->WorkPos.y)
-    {
-        return;
-    }
-
-    ImGui::SetWindowPos(ImVec2(currentPos.x, viewport->WorkPos.y), ImGuiCond_Always);
-    m_menuBarAdjustedWindowNames.push_back(debugName);
-}
-
 void SceneNarakuPieceEditor::DrawPieceBasicWindow()
 {
     if (!m_showPieceBasicWindow)
@@ -1304,14 +1300,14 @@ void SceneNarakuPieceEditor::DrawPieceBasicWindow()
         return;
     }
 
-    ApplySafeWindowPlacement("基本情報", ImVec2(16.0f, 292.0f), ImVec2(360.0f, 230.0f));
+    ImGui::SetNextWindowPos(ImVec2(16.0f, 292.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 230.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"基本情報", &m_showPieceBasicWindow))
     {
         m_previewImageSize = {};
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("基本情報");
 
     char idBuffer[128] = {};
     std::snprintf(idBuffer, sizeof(idBuffer), "%s", m_piece.id.c_str());
@@ -1384,14 +1380,14 @@ void SceneNarakuPieceEditor::DrawPieceConnectionWindow()
         return;
     }
 
-    ApplySafeWindowPlacement("接続設定", ImVec2(16.0f, 536.0f), ImVec2(360.0f, 230.0f));
+    ImGui::SetNextWindowPos(ImVec2(16.0f, 536.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 230.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"接続設定", &m_showPieceConnectionWindow))
     {
         m_previewImageSize = {};
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("接続設定");
 
     int stageRoleIndex = ToStageRoleIndex(m_piece.stageRole);
     if (ImGui::Combo(u8"ステージ役割", &stageRoleIndex, kStageRoleLabels, IM_ARRAYSIZE(kStageRoleLabels)))
@@ -1466,14 +1462,14 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
         return;
     }
 
-    ApplySafeWindowPlacement("地形編集", ImVec2(392.0f, 16.0f), ImVec2(420.0f, 340.0f));
+    ImGui::SetNextWindowPos(ImVec2(392.0f, 16.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(420.0f, 340.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"地形編集", &m_showTerrainEditWindow))
     {
         m_previewImageSize = {};
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("地形編集");
 
     if (m_editMode != EditMode::Height)
     {
@@ -1678,14 +1674,14 @@ void SceneNarakuPieceEditor::DrawGridObjectPlacementWindow()
         return;
     }
 
-    ApplySafeWindowPlacement("配置ツール", ImVec2(16.0f, 780.0f), ImVec2(360.0f, 190.0f));
+    ImGui::SetNextWindowPos(ImVec2(16.0f, 780.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 190.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"配置ツール", &m_showGridObjectPlacementWindow))
     {
         m_previewImageSize = {};
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("配置ツール");
 
     if (m_editMode != EditMode::GridObject)
     {
@@ -1723,14 +1719,14 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
         return;
     }
 
-    ApplySafeWindowPlacement("選択オブジェクト", ImVec2(392.0f, 372.0f), ImVec2(360.0f, 280.0f));
+    ImGui::SetNextWindowPos(ImVec2(392.0f, 372.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 280.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"選択オブジェクト", &m_showGridObjectSelectionWindow))
     {
         m_previewImageSize = {};
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("選択オブジェクト");
 
     switch (m_selectedGridObjectKind)
     {
@@ -1840,14 +1836,14 @@ void SceneNarakuPieceEditor::DrawPieceFileAndValidationWindow()
         return;
     }
 
-    ApplySafeWindowPlacement("保存・検証", ImVec2(768.0f, 372.0f), ImVec2(420.0f, 280.0f));
+    ImGui::SetNextWindowPos(ImVec2(768.0f, 372.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(420.0f, 280.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"保存・検証", &m_showPieceFileAndValidationWindow))
     {
         m_previewImageSize = {};
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("保存・検証");
 
     if (ImGui::Button(u8"検証を実行"))
     {
@@ -2097,13 +2093,13 @@ void SceneNarakuPieceEditor::DrawPieceHierarchyWindow()
         return;
     }
 
-    ApplySafeWindowPlacement("小ステージHierarchy", ImVec2(1204.0f, 16.0f), ImVec2(320.0f, 300.0f));
+    ImGui::SetNextWindowPos(ImVec2(1204.0f, 16.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(320.0f, 300.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"小ステージHierarchy", &m_showPieceHierarchyWindow))
     {
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("小ステージHierarchy");
 
     if (ImGui::Button(u8"再読込"))
     {
@@ -2358,14 +2354,14 @@ void SceneNarakuPieceEditor::DrawHeightGridWindow()
         return;
     }
 
-    ApplySafeWindowPlacement("高さグリッド", ImVec2(1204.0f, 332.0f), ImVec2(320.0f, 360.0f));
+    ImGui::SetNextWindowPos(ImVec2(1204.0f, 332.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(320.0f, 360.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"高さグリッド", &m_showHeightGridWindow))
     {
         m_previewImageSize = {};
         ImGui::End();
         return;
     }
-    EnsureWindowBelowMainMenuBar("高さグリッド");
 
     const ImGuiIO& io = ImGui::GetIO();
     ImGui::TextUnformatted(u8"Ctrl+クリック: トグル / Shift+クリック: 追加");
