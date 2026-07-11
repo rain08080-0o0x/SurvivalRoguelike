@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <map>
 #include <sstream>
 #include <string>
@@ -442,6 +443,21 @@ namespace
         }
         std::fclose(fp);
         return true;
+    }
+
+    /**
+     * @brief 現在のローカル日時を保存用文字列へ整形します。
+     * @return `YYYY/MM/DD HH:MM:SS` 形式の日時文字列です。
+     */
+    std::string BuildCurrentTimestamp()
+    {
+        std::time_t now = std::time(nullptr);
+        std::tm localTime = {};
+        localtime_s(&localTime, &now);
+
+        char buffer[20] = {};
+        std::strftime(buffer, sizeof(buffer), "%Y/%m/%d %H:%M:%S", &localTime);
+        return std::string(buffer);
     }
 
     /**
@@ -1182,6 +1198,7 @@ namespace NarakuPiece
             return false;
         }
 
+        const std::string lastModified = data.lastModified.empty() ? BuildCurrentTimestamp() : data.lastModified;
         std::ostringstream out;
         out << "{\n";
         AppendIndent(out, 1);
@@ -1190,6 +1207,8 @@ namespace NarakuPiece
         out << "\"id\": \"" << EscapeJsonString(data.id) << "\",\n";
         AppendIndent(out, 1);
         out << "\"displayName\": \"" << EscapeJsonString(data.displayName) << "\",\n";
+        AppendIndent(out, 1);
+        out << "\"lastModified\": \"" << EscapeJsonString(lastModified) << "\",\n";
         AppendIndent(out, 1);
         out << "\"abyssLayer\": " << data.abyssLayer << ",\n";
         AppendIndent(out, 1);
@@ -1356,6 +1375,10 @@ namespace NarakuPiece
         if (GetString(rootValue, "displayName", text))
         {
             loadedData.displayName = text;
+        }
+        if (GetString(rootValue, "lastModified", text))
+        {
+            loadedData.lastModified = text;
         }
         if (GetNumber(rootValue, "abyssLayer", number))
         {

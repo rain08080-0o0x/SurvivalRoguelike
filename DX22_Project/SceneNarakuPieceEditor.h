@@ -32,10 +32,18 @@ public:
      */
     enum NativeMenuCommand : unsigned int
     {
+        /** @brief 新規ピース作成ダイアログを開きます。 */
+        MenuNewPiece = 2000,
         /** @brief ピース保存ダイアログを開きます。 */
-        MenuSavePiece = 2000,
+        MenuSavePiece,
         /** @brief ピース読み込みダイアログを開きます。 */
         MenuLoadPiece,
+        /** @brief 現在のピース名を変更します。 */
+        MenuRenamePiece,
+        /** @brief 現在のピースを削除します。 */
+        MenuDeletePiece,
+        /** @brief 現在の編集中ファイル状態を表示する無効メニュー項目です。 */
+        MenuFileStatus,
         /** @brief 基本情報ウィンドウの表示状態を切り替えます。 */
         MenuTogglePieceBasicWindow,
         /** @brief 接続設定ウィンドウの表示状態を切り替えます。 */
@@ -229,6 +237,27 @@ private:
 
         /** @brief 完成品として扱う場合はtrue、下書き扱いならfalseです。 */
         bool isCompleted = false;
+
+        /** @brief 一覧表示と保存に使用する最終更新日時です。 */
+        std::wstring lastModified;
+
+        /** @brief 追加順ソートに使用する登録順序です。 */
+        size_t insertionOrder = 0;
+    };
+
+    /**
+     * @brief Hierarchy一覧の並び順種別です。
+     */
+    enum class PieceHierarchySortMode
+    {
+        /** @brief 追加順です。 */
+        Insertion,
+
+        /** @brief 更新日時順です。 */
+        LastModified,
+
+        /** @brief ファイル名順です。 */
+        FileName,
     };
 
     /**
@@ -277,9 +306,19 @@ private:
     void DrawEditorWindow();
 
     /**
+     * @brief 新規ピース作成用モーダルを描画します。
+     */
+    void DrawNewPiecePopup();
+
+    /**
      * @brief ピース保存用モーダルを描画します。
      */
     void DrawSavePiecePopup();
+
+    /**
+     * @brief ピース名変更用モーダルを描画します。
+     */
+    void DrawRenamePiecePopup();
 
     /**
      * @brief ピース名やサイズなど基本情報を編集するウィンドウを描画します。
@@ -322,9 +361,26 @@ private:
     void CommitSaveFileNameInput();
 
     /**
+     * @brief 新規作成モーダル入力欄の内容を作業中ファイル名へ整形して反映します。
+     */
+    void CommitNewPieceFileNameInput();
+
+    /**
      * @brief 現在の保存ファイル名をメインウィンドウタイトルへ反映します。
      */
     void UpdateMainWindowTitle() const;
+
+    /**
+     * @brief 現在の編集状態をネイティブメニューへ反映する表示文字列を取得します。
+     * @return 編集中ファイル名、dirty、下書き/完成状態を含む表示文字列です。
+     */
+    std::wstring BuildEditingStatusLabel() const;
+
+    /**
+     * @brief 現在表示用に使うファイル名を取得します。
+     * @return 未設定時は `(unnamed)` を返します。
+     */
+    std::wstring GetDisplayFileName() const;
 
     /**
      * @brief 現在の保存種別に応じた保存先パスを取得します。
@@ -340,6 +396,13 @@ private:
     bool SavePiece(bool saveAsDraft);
 
     /**
+     * @brief 現在の編集内容について保存確認を行います。
+     * @param actionName 確認ダイアログに表示する操作名です。
+     * @return 操作を続行してよい場合はtrueを返します。
+     */
+    bool ConfirmDiscardDirtyChanges(const wchar_t* actionName);
+
+    /**
      * @brief 指定パスのピースJSONを読み込み、エディタ状態へ反映します。
      * @param path 読み込むJSONファイルのパスです。
      * @return 読み込みと反映に成功した場合はtrueを返します。
@@ -353,9 +416,27 @@ private:
     void ApplyLoadedPiece(const NarakuPiece::PieceData& loadedPiece);
 
     /**
+     * @brief 新規ピースを完全初期化して編集状態へ反映します。
+     * @param fileName 新規作成後に設定する作業中ファイル名です。
+     */
+    void CreateNewPiece(const std::wstring& fileName);
+
+    /**
      * @brief Windows標準のファイル選択ダイアログからピースJSONを読み込みます。
      */
     void OpenLoadPieceDialog();
+
+    /**
+     * @brief 現在のピース名を変更します。
+     * @return 変更に成功した場合はtrueを返します。
+     */
+    bool RenameCurrentPiece();
+
+    /**
+     * @brief 現在のピースを削除します。
+     * @return 削除または新規状態への移行に成功した場合はtrueを返します。
+     */
+    bool DeleteCurrentPiece();
 
     /**
      * @brief 小ステージHierarchyウィンドウを描画します。
@@ -414,6 +495,48 @@ private:
      * @return 登録内容に変更があった場合はtrueを返します。
      */
     bool RegisterPieceHierarchyEntry(const std::wstring& path, bool isCompleted);
+
+    /**
+     * @brief 更新日時付きで指定したピース情報をHierarchyへ追加または更新します。
+     * @param path 登録対象ピースの絶対または相対パスです。
+     * @param isCompleted 完成品として扱う場合はtrueです。
+     * @param lastModified 最終更新日時です。
+     * @return 登録内容に変更があった場合はtrueを返します。
+     */
+    bool RegisterPieceHierarchyEntry(const std::wstring& path, bool isCompleted, const std::wstring& lastModified);
+
+    /**
+     * @brief 指定したHierarchy項目を削除します。
+     * @param path 削除対象ピースの絶対または相対パスです。
+     * @return 削除された場合はtrueを返します。
+     */
+    bool RemovePieceHierarchyEntry(const std::wstring& path);
+
+    /**
+     * @brief 指定したHierarchy項目を検索します。
+     * @param path 検索対象ピースの絶対または相対パスです。
+     * @return 見つかった項目へのポインタです。未検出ならnullptrです。
+     */
+    PieceHierarchyEntry* FindPieceHierarchyEntry(const std::wstring& path);
+
+    /**
+     * @brief 現在のソート設定に従ってHierarchy表示順を取得します。
+     * @return 表示順に並べ替えた項目ポインタ一覧です。
+     */
+    std::vector<const PieceHierarchyEntry*> BuildSortedPieceHierarchyEntries() const;
+
+    /**
+     * @brief Hierarchy用の日時表示ラベルを作成します。
+     * @param lastModified 最終更新日時文字列です。
+     * @return 一覧表示用の日付文字列です。
+     */
+    std::wstring BuildHierarchyDateLabel(const std::wstring& lastModified) const;
+
+    /**
+     * @brief Hierarchy選択時の読込失敗処理を行います。
+     * @param entry 対象のHierarchy項目です。
+     */
+    void HandleMissingHierarchyEntry(const PieceHierarchyEntry& entry);
 
     /**
      * @brief 現在の保存状態から編集中ピースをHierarchyへ登録します。
@@ -828,6 +951,21 @@ private:
     void RefreshValidationIssues();
 
     /**
+     * @brief 検証再計算が必要な状態に更新します。
+     */
+    void InvalidateValidationState();
+
+    /**
+     * @brief 編集内容を未保存扱いに更新します。
+     */
+    void MarkPieceDirty();
+
+    /**
+     * @brief 編集内容を保存済み扱いに更新します。
+     */
+    void MarkPieceClean();
+
+    /**
      * @brief エディタ下部などへ表示するメッセージを更新します。
      * @param message ユーザーへ通知するメッセージ文字列です。
      */
@@ -902,11 +1040,29 @@ private:
     /** @brief 保存モーダルのファイル名入力欄に保持するUTF-8文字列バッファです。 */
     std::array<char, 260> m_saveFileNameInput = {};
 
+    /** @brief 名前変更モーダルの入力欄に保持するUTF-8文字列バッファです。 */
+    std::array<char, 260> m_renameFileNameInput = {};
+
     /** @brief 保存モーダルで下書き保存を選択しているかどうかです。 */
     bool m_saveAsDraft = true;
 
+    /** @brief 新規作成モーダルで確定前に保持する作業用ファイル名です。 */
+    std::wstring m_newPieceFileName;
+
+    /** @brief 新規作成モーダルのファイル名入力欄に保持するUTF-8文字列バッファです。 */
+    std::array<char, 260> m_newPieceFileNameInput = {};
+
+    /** @brief 次回描画で新規作成モーダルを安全に開くための要求フラグです。 */
+    bool m_requestOpenNewPiecePopup = false;
+
     /** @brief 次回描画で保存モーダルを安全に開くための要求フラグです。 */
     bool m_requestOpenSavePiecePopup = false;
+
+    /** @brief 次回描画で名前変更モーダルを安全に開くための要求フラグです。 */
+    bool m_requestOpenRenamePiecePopup = false;
+
+    /** @brief 現在の編集中データが未保存かどうかです。 */
+    bool m_isPieceDirty = false;
 
     /** @brief 最新検証で検出された問題一覧です。 */
     std::vector<NarakuPiece::ValidationIssue> m_validationIssues;
@@ -1039,6 +1195,15 @@ private:
 
     /** @brief 保存済み小ステージの登録一覧です。 */
     std::vector<PieceHierarchyEntry> m_pieceHierarchyEntries;
+
+    /** @brief Hierarchy一覧の並び順です。 */
+    PieceHierarchySortMode m_pieceHierarchySortMode = PieceHierarchySortMode::Insertion;
+
+    /** @brief Hierarchy一覧を降順表示するかどうかです。 */
+    bool m_pieceHierarchySortDescending = false;
+
+    /** @brief Hierarchy項目の次回登録順です。 */
+    size_t m_nextPieceHierarchyInsertionOrder = 0;
 
 };
 

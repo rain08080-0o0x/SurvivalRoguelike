@@ -101,8 +101,11 @@ namespace
 		HMENU fileMenu = CreatePopupMenu();
 		HMENU viewMenu = CreatePopupMenu();
 
+		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuNewPiece, L"New File...");
 		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuSavePiece, L"Save...");
 		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuLoadPiece, L"Load...");
+		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuRenamePiece, L"Rename...");
+		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuDeletePiece, L"Delete...");
 
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuTogglePieceBasicWindow, L"\x57FA\x672C\x60C5\x5831");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuTogglePieceConnectionWindow, L"\x63A5\x7D9A\x8A2D\x5B9A");
@@ -116,6 +119,7 @@ namespace
 
 		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(fileMenu), L"File");
 		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(viewMenu), L"View");
+		AppendMenuW(menuBar, MF_STRING | MF_GRAYED, SceneNarakuPieceEditor::MenuFileStatus, L"\x7DE8\x96C6\x4E2D: piece_0001.json [\x4E0B\x66F8\x304D]");
 		return menuBar;
 	}
 

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <ctime>
 #include <cstdint>
 #include <cwchar>
 #include <cwctype>
@@ -30,6 +31,17 @@ namespace
     void SetMenuCheckState(HMENU menuBar, UINT commandId, bool checked)
     {
         CheckMenuItem(menuBar, commandId, MF_BYCOMMAND | (checked ? MF_CHECKED : MF_UNCHECKED));
+    }
+
+    /**
+     * @brief ネイティブメニュー項目の表示文字列を更新します。
+     * @param menuBar 更新対象のメニューバーです。
+     * @param commandId 更新対象のコマンドIDです。
+     * @param label 設定する表示文字列です。
+     */
+    void SetMenuItemLabel(HMENU menuBar, UINT commandId, const std::wstring& label)
+    {
+        ModifyMenuW(menuBar, commandId, MF_BYCOMMAND | MF_STRING | MF_GRAYED, commandId, label.c_str());
     }
 
     /**
@@ -113,7 +125,40 @@ namespace
     bool HasInvalidFileNameChar(const std::wstring& fileName)
     {
         static const wchar_t* kInvalidChars = L"\\/:*?\"<>|";
-        return fileName.find_first_of(kInvalidChars) != std::wstring::npos;
+        if (fileName.empty())
+        {
+            return true;
+        }
+
+        if (fileName.find_first_of(kInvalidChars) != std::wstring::npos)
+        {
+            return true;
+        }
+
+        for (wchar_t ch : fileName)
+        {
+            if (ch < 0x20)
+            {
+                return true;
+            }
+        }
+
+        return fileName == L"." || fileName == L"..";
+    }
+
+    /**
+     * @brief 現在のローカル日時をワイド文字列へ整形します。
+     * @return `YYYY/MM/DD HH:MM:SS` 形式の日時文字列です。
+     */
+    std::wstring BuildCurrentDateTimeString()
+    {
+        std::time_t now = std::time(nullptr);
+        std::tm localTime = {};
+        localtime_s(&localTime, &now);
+
+        wchar_t buffer[20] = {};
+        std::wcsftime(buffer, std::size(buffer), L"%Y/%m/%d %H:%M:%S", &localTime);
+        return std::wstring(buffer);
     }
 
     /**
@@ -637,7 +682,7 @@ void SceneNarakuPieceEditor::Update()
                     cell->deleted = true;
                 }
             }
-            m_validationDirty = true;
+            MarkPieceDirty();
             SetMessage(u8"選択セルを削除しました");
         }
         UpdateHeightEditing();
@@ -661,29 +706,81 @@ void SceneNarakuPieceEditor::Update()
 void SceneNarakuPieceEditor::Draw()
 {
     RenderTerrainPreviewToTexture();
+    if (m_requestOpenNewPiecePopup)
+    {
+        ImGui::OpenPopup(u8"新規ピースを作成");
+        m_requestOpenNewPiecePopup = false;
+    }
     if (m_requestOpenSavePiecePopup)
     {
         ImGui::OpenPopup(u8"ピースを保存");
         m_requestOpenSavePiecePopup = false;
     }
+    if (m_requestOpenRenamePiecePopup)
+    {
+        ImGui::OpenPopup(u8"ピース名を変更");
+        m_requestOpenRenamePiecePopup = false;
+    }
     DrawEditorWindow();
     DrawPreviewWindow();
     DrawHeightGridWindow();
     DrawPieceHierarchyWindow();
+    DrawNewPiecePopup();
     DrawSavePiecePopup();
+    DrawRenamePiecePopup();
 }
 
 bool SceneNarakuPieceEditor::HandleNativeMenuCommand(unsigned int commandId)
 {
     switch (commandId)
     {
+    case MenuNewPiece:
+        if (!ConfirmDiscardDirtyChanges(L"新規作成"))
+        {
+            return true;
+        }
+        std::fill(m_newPieceFileNameInput.begin(), m_newPieceFileNameInput.end(), '\0');
+        {
+            const std::string fileNameUtf8 = WideToUtf8(EnsureJsonFileName(m_saveFileName));
+            const size_t copyLength = std::min(fileNameUtf8.size(), m_newPieceFileNameInput.size() - 1);
+            std::copy_n(fileNameUtf8.data(), copyLength, m_newPieceFileNameInput.data());
+            m_newPieceFileNameInput[copyLength] = '\0';
+        }
+        m_newPieceFileName = EnsureJsonFileName(m_saveFileName);
+        m_requestOpenNewPiecePopup = true;
+        return true;
     case MenuSavePiece:
         SyncSaveFileNameInput();
         m_saveAsDraft = true;
         m_requestOpenSavePiecePopup = true;
         return true;
     case MenuLoadPiece:
+        if (!ConfirmDiscardDirtyChanges(L"読込"))
+        {
+            return true;
+        }
         OpenLoadPieceDialog();
+        return true;
+    case MenuRenamePiece:
+        if (!ConfirmDiscardDirtyChanges(L"名前変更"))
+        {
+            return true;
+        }
+        std::fill(m_renameFileNameInput.begin(), m_renameFileNameInput.end(), '\0');
+        {
+            const std::string fileNameUtf8 = WideToUtf8(EnsureJsonFileName(m_saveFileName));
+            const size_t copyLength = std::min(fileNameUtf8.size(), m_renameFileNameInput.size() - 1);
+            std::copy_n(fileNameUtf8.data(), copyLength, m_renameFileNameInput.data());
+            m_renameFileNameInput[copyLength] = '\0';
+        }
+        m_requestOpenRenamePiecePopup = true;
+        return true;
+    case MenuDeletePiece:
+        if (!ConfirmDiscardDirtyChanges(L"削除"))
+        {
+            return true;
+        }
+        DeleteCurrentPiece();
         return true;
     case MenuTogglePieceBasicWindow:
         m_showPieceBasicWindow = !m_showPieceBasicWindow;
@@ -733,6 +830,12 @@ void SceneNarakuPieceEditor::SyncNativeMenuState(HMENU menuBar) const
     SetMenuCheckState(menuBar, MenuTogglePreviewWindow, m_showPreviewWindow);
     SetMenuCheckState(menuBar, MenuToggleHeightGridWindow, m_showHeightGridWindow);
     SetMenuCheckState(menuBar, MenuTogglePieceHierarchyWindow, m_showPieceHierarchyWindow);
+    SetMenuItemLabel(menuBar, MenuFileStatus, BuildEditingStatusLabel());
+
+    if (HWND window = GetPreviewHostWindow())
+    {
+        DrawMenuBar(window);
+    }
 }
 
 int SceneNarakuPieceEditor::GetHeightIndex(int x, int z) const
@@ -775,7 +878,7 @@ void SceneNarakuPieceEditor::SetHeight(int x, int z, float height)
     }
 
     m_piece.heights[static_cast<size_t>(index)] = ClampFloat(height, -10.0f, 10.0f);
-    m_validationDirty = true;
+    MarkPieceDirty();
 }
 
 XMFLOAT3 SceneNarakuPieceEditor::GetVertexWorldPosition(int x, int z) const
@@ -982,7 +1085,7 @@ bool SceneNarakuPieceEditor::DeleteSelectedGridObject()
         PushUndoSnapshot();
         m_piece.miningPoints.erase(m_piece.miningPoints.begin() + m_selectedMiningPointIndex);
         ClearGridObjectSelection();
-        m_validationDirty = true;
+        MarkPieceDirty();
         SetMessage(u8"採掘ポイントを削除しました");
         return true;
 
@@ -993,7 +1096,7 @@ bool SceneNarakuPieceEditor::DeleteSelectedGridObject()
         }
         PushUndoSnapshot();
         m_piece.rope.enabled = false;
-        m_validationDirty = true;
+        MarkPieceDirty();
         SetMessage(u8"ロープを削除しました");
         return true;
 
@@ -1004,7 +1107,7 @@ bool SceneNarakuPieceEditor::DeleteSelectedGridObject()
         }
         PushUndoSnapshot();
         m_piece.startReturnCandidate.enabled = false;
-        m_validationDirty = true;
+        MarkPieceDirty();
         SetMessage(u8"開始・帰還地点を削除しました");
         return true;
 
@@ -1319,7 +1422,7 @@ void SceneNarakuPieceEditor::DrawPieceBasicWindow()
     if (idChanged)
     {
         m_piece.id = idBuffer;
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
 
     char displayNameBuffer[128] = {};
@@ -1332,7 +1435,7 @@ void SceneNarakuPieceEditor::DrawPieceBasicWindow()
     if (displayNameChanged)
     {
         m_piece.displayName = displayNameBuffer;
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
 
     int abyssLayer = m_piece.abyssLayer;
@@ -1344,7 +1447,7 @@ void SceneNarakuPieceEditor::DrawPieceBasicWindow()
     if (abyssLayerChanged)
     {
         m_piece.abyssLayer = (abyssLayer < 1) ? 1 : abyssLayer;
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
 
     ImGui::Text("%s %s", u8"サイズプリセット:", NarakuPiece::ToString(m_piece.sizePreset));
@@ -1394,7 +1497,7 @@ void SceneNarakuPieceEditor::DrawPieceConnectionWindow()
     {
         PushUndoSnapshot();
         m_piece.stageRole = FromStageRoleIndex(stageRoleIndex);
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
 
     int stageCategoryIndex = ToStageCategoryIndex(m_piece.stageCategory);
@@ -1402,7 +1505,7 @@ void SceneNarakuPieceEditor::DrawPieceConnectionWindow()
     {
         PushUndoSnapshot();
         m_piece.stageCategory = FromStageCategoryIndex(stageCategoryIndex);
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
 
     const auto drawEdgeCategoryCombo = [&](const char* label, NarakuPiece::StageCategory& category)
@@ -1412,7 +1515,7 @@ void SceneNarakuPieceEditor::DrawPieceConnectionWindow()
         {
             PushUndoSnapshot();
             category = FromStageCategoryIndex(edgeIndex);
-            m_validationDirty = true;
+            MarkPieceDirty();
         }
     };
 
@@ -1428,28 +1531,28 @@ void SceneNarakuPieceEditor::DrawPieceConnectionWindow()
     {
         PushUndoSnapshot();
         m_piece.lockedEdges.north = northLocked;
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
     bool southLocked = m_piece.lockedEdges.south;
     if (ImGui::Checkbox(u8"南をロック", &southLocked))
     {
         PushUndoSnapshot();
         m_piece.lockedEdges.south = southLocked;
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
     bool eastLocked = m_piece.lockedEdges.east;
     if (ImGui::Checkbox(u8"東をロック", &eastLocked))
     {
         PushUndoSnapshot();
         m_piece.lockedEdges.east = eastLocked;
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
     bool westLocked = m_piece.lockedEdges.west;
     if (ImGui::Checkbox(u8"西をロック", &westLocked))
     {
         PushUndoSnapshot();
         m_piece.lockedEdges.west = westLocked;
-        m_validationDirty = true;
+        MarkPieceDirty();
     }
 
     ImGui::End();
@@ -1530,7 +1633,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
             {
                 height = 0.0f;
             }
-            m_validationDirty = true;
+            MarkPieceDirty();
             SetMessage(u8"全頂点の高さを0に戻しました");
         }
     }
@@ -1561,7 +1664,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
                             cell->deleted = deleted;
                         }
                     }
-                    m_validationDirty = true;
+                    MarkPieceDirty();
                 }
 
                 bool walkable = primaryCell->walkable;
@@ -1575,7 +1678,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
                             cell->walkable = walkable;
                         }
                     }
-                    m_validationDirty = true;
+                    MarkPieceDirty();
                 }
 
                 bool ropeAllowed = primaryCell->ropeAllowed;
@@ -1589,7 +1692,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
                             cell->ropeAllowed = ropeAllowed;
                         }
                     }
-                    m_validationDirty = true;
+                    MarkPieceDirty();
                 }
 
                 bool miningAllowed = primaryCell->miningAllowed;
@@ -1603,7 +1706,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
                             cell->miningAllowed = miningAllowed;
                         }
                     }
-                    m_validationDirty = true;
+                    MarkPieceDirty();
                 }
 
                 bool enemySpawnAllowed = primaryCell->enemySpawnAllowed;
@@ -1617,7 +1720,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
                             cell->enemySpawnAllowed = enemySpawnAllowed;
                         }
                     }
-                    m_validationDirty = true;
+                    MarkPieceDirty();
                 }
 
                 int groundTextureId = std::max(0, primaryCell->groundTextureId);
@@ -1632,7 +1735,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
                             cell->groundTextureId = groundTextureId;
                         }
                     }
-                    m_validationDirty = true;
+                    MarkPieceDirty();
                 }
 
                 if (ImGui::Button(u8"削除"))
@@ -1645,7 +1748,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
                             cell->deleted = true;
                         }
                     }
-                    m_validationDirty = true;
+                    MarkPieceDirty();
                 }
                 ImGui::SameLine();
                 if (ImGui::Button(u8"復元"))
@@ -1658,7 +1761,7 @@ void SceneNarakuPieceEditor::DrawTerrainEditWindow()
                             cell->deleted = false;
                         }
                     }
-                    m_validationDirty = true;
+                    MarkPieceDirty();
                 }
             }
         }
@@ -1747,7 +1850,7 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
             if (miningIdChanged)
             {
                 point.id = miningIdBuffer;
-                m_validationDirty = true;
+                MarkPieceDirty();
             }
 
             int visualType = point.visualType;
@@ -1755,7 +1858,7 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
             {
                 PushUndoSnapshot();
                 point.visualType = visualType;
-                m_validationDirty = true;
+                MarkPieceDirty();
             }
 
             bool initiallyRecorded = point.initiallyRecorded;
@@ -1763,7 +1866,7 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
             {
                 PushUndoSnapshot();
                 point.initiallyRecorded = initiallyRecorded;
-                m_validationDirty = true;
+                MarkPieceDirty();
             }
 
             if (ImGui::Button(u8"採掘ポイントを削除"))
@@ -1785,7 +1888,7 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
         {
             PushUndoSnapshot();
             m_piece.rope.enabled = enabled;
-            m_validationDirty = true;
+            MarkPieceDirty();
         }
         ImGui::Text("%s (%d, %d)", u8"ロープ上端", m_piece.rope.top.x, m_piece.rope.top.z);
         ImGui::Text("%s (%d, %d)", u8"ロープ下端", m_piece.rope.bottom.x, m_piece.rope.bottom.z);
@@ -1803,7 +1906,7 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
         {
             PushUndoSnapshot();
             m_piece.startReturnCandidate.enabled = enabled;
-            m_validationDirty = true;
+            MarkPieceDirty();
         }
         ImGui::Text("%s (%d, %d)", u8"セル", m_piece.startReturnCandidate.cell.x, m_piece.startReturnCandidate.cell.z);
         int facingIndex = ToDirectionIndex(m_piece.startReturnCandidate.facing);
@@ -1811,7 +1914,7 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
         {
             PushUndoSnapshot();
             m_piece.startReturnCandidate.facing = FromDirectionIndex(facingIndex);
-            m_validationDirty = true;
+            MarkPieceDirty();
         }
         if (ImGui::Button(u8"開始帰還候補を削除"))
         {
@@ -1879,6 +1982,48 @@ void SceneNarakuPieceEditor::DrawPieceFileAndValidationWindow()
     ImGui::End();
 }
 
+void SceneNarakuPieceEditor::DrawNewPiecePopup()
+{
+    bool keepOpen = true;
+    if (!ImGui::BeginPopupModal(u8"新規ピースを作成", &keepOpen, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        return;
+    }
+
+    ImGui::TextUnformatted(u8"新規ファイル名");
+    ImGui::SetNextItemWidth(320.0f);
+    if (ImGui::InputText(u8"##NewPieceFileName", m_newPieceFileNameInput.data(), m_newPieceFileNameInput.size()))
+    {
+        CommitNewPieceFileNameInput();
+    }
+
+    if (ImGui::Button(u8"作成", ImVec2(120.0f, 0.0f)))
+    {
+        CommitNewPieceFileNameInput();
+        if (m_newPieceFileName.empty())
+        {
+            SetMessage(u8"新規ファイル名を入力してください");
+        }
+        else if (HasInvalidFileNameChar(m_newPieceFileName))
+        {
+            SetMessage(u8"新規ファイル名に使用できない文字が含まれています");
+        }
+        else
+        {
+            CreateNewPiece(m_newPieceFileName);
+            SetMessage(u8"新規ピースを作成しました");
+            ImGui::CloseCurrentPopup();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"キャンセル", ImVec2(120.0f, 0.0f)))
+    {
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
 void SceneNarakuPieceEditor::DrawSavePiecePopup()
 {
     bool keepOpen = true;
@@ -1924,6 +2069,34 @@ void SceneNarakuPieceEditor::DrawSavePiecePopup()
     ImGui::EndPopup();
 }
 
+void SceneNarakuPieceEditor::DrawRenamePiecePopup()
+{
+    bool keepOpen = true;
+    if (!ImGui::BeginPopupModal(u8"ピース名を変更", &keepOpen, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        return;
+    }
+
+    ImGui::TextUnformatted(u8"新しいファイル名");
+    ImGui::SetNextItemWidth(320.0f);
+    ImGui::InputText(u8"##RenamePieceFileName", m_renameFileNameInput.data(), m_renameFileNameInput.size());
+
+    if (ImGui::Button(u8"変更", ImVec2(120.0f, 0.0f)))
+    {
+        if (RenameCurrentPiece())
+        {
+            ImGui::CloseCurrentPopup();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"キャンセル", ImVec2(120.0f, 0.0f)))
+    {
+        ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+}
+
 void SceneNarakuPieceEditor::SyncSaveFileNameInput()
 {
     m_saveFileName = EnsureJsonFileName(m_saveFileName);
@@ -1942,6 +2115,29 @@ void SceneNarakuPieceEditor::CommitSaveFileNameInput()
     UpdateMainWindowTitle();
 }
 
+void SceneNarakuPieceEditor::CommitNewPieceFileNameInput()
+{
+    m_newPieceFileName = EnsureJsonFileName(Utf8ToWide(m_newPieceFileNameInput.data()));
+}
+
+std::wstring SceneNarakuPieceEditor::GetDisplayFileName() const
+{
+    return m_saveFileName.empty() ? L"(unnamed)" : m_saveFileName;
+}
+
+std::wstring SceneNarakuPieceEditor::BuildEditingStatusLabel() const
+{
+    std::wstring label = L"\x7DE8\x96C6\x4E2D: ";
+    label += GetDisplayFileName();
+    if (m_isPieceDirty)
+    {
+        label += L" *";
+    }
+    label += m_isPieceDirty ? L" [\x672A\x4FDD\x5B58]" : L" [\x4FDD\x5B58\x6E08\x307F]";
+    label += m_saveAsDraft ? L" [\x4E0B\x66F8\x304D]" : L" [\x5B8C\x6210]";
+    return label;
+}
+
 void SceneNarakuPieceEditor::UpdateMainWindowTitle() const
 {
     HWND mainWindow = ::GetActiveWindow();
@@ -1954,9 +2150,18 @@ void SceneNarakuPieceEditor::UpdateMainWindowTitle() const
         return;
     }
 
-    const std::wstring fileName = m_saveFileName.empty() ? L"(unnamed)" : m_saveFileName;
-    const std::wstring title = L"NarakuProto - PieceEditor - " + fileName;
+    std::wstring title = L"NarakuProto - PieceEditor - ";
+    title += GetDisplayFileName();
+    if (m_isPieceDirty)
+    {
+        title += L" *";
+    }
+    title += m_saveAsDraft ? L" [Draft]" : L" [Completed]";
     ::SetWindowTextW(mainWindow, title.c_str());
+    if (HMENU menuBar = ::GetMenu(mainWindow))
+    {
+        SyncNativeMenuState(menuBar);
+    }
 }
 
 std::wstring SceneNarakuPieceEditor::GetCurrentSaveTargetPath() const
@@ -1991,6 +2196,7 @@ bool SceneNarakuPieceEditor::SavePiece(bool saveAsDraft)
         }
     }
 
+    m_piece.lastModified = WideToUtf8(BuildCurrentDateTimeString());
     std::string error;
     const std::wstring savePath = saveAsDraft
         ? NarakuPiece::MakeDraftPiecePath(m_piece.abyssLayer, m_saveFileName)
@@ -2003,13 +2209,48 @@ bool SceneNarakuPieceEditor::SavePiece(bool saveAsDraft)
 
     SetMessage(saveAsDraft ? u8"下書き保存に成功しました" : u8"完成保存に成功しました");
     m_saveAsDraft = saveAsDraft;
-    RegisterPieceHierarchyEntry(savePath, !saveAsDraft);
+    RegisterPieceHierarchyEntry(savePath, !saveAsDraft, Utf8ToWide(m_piece.lastModified));
     if (!SavePieceHierarchyEntries())
     {
         SetMessage(u8"ピース保存には成功しましたがHierarchy登録ファイルの保存に失敗しました");
     }
     SyncSaveFileNameInput();
+    MarkPieceClean();
     return true;
+}
+
+bool SceneNarakuPieceEditor::ConfirmDiscardDirtyChanges(const wchar_t* actionName)
+{
+    if (!m_isPieceDirty)
+    {
+        return true;
+    }
+
+    std::wstring message = L"現在のピースは未保存です。";
+    if (actionName != nullptr && actionName[0] != L'\0')
+    {
+        message += actionName;
+        message += L"の前に保存しますか?";
+    }
+    else
+    {
+        message += L"保存しますか?";
+    }
+
+    const int result = ::MessageBoxW(
+        ::GetActiveWindow(),
+        message.c_str(),
+        L"PieceEditor",
+        MB_ICONQUESTION | MB_YESNOCANCEL | MB_DEFBUTTON1);
+    if (result == IDYES)
+    {
+        return SavePiece(m_saveAsDraft);
+    }
+    if (result == IDNO)
+    {
+        return true;
+    }
+    return false;
 }
 
 bool SceneNarakuPieceEditor::LoadPieceFromPath(const std::wstring& path)
@@ -2034,7 +2275,8 @@ bool SceneNarakuPieceEditor::LoadPieceFromPath(const std::wstring& path)
     m_saveFileName = EnsureJsonFileName(GetFileNamePart(path));
     m_saveAsDraft = !IsCompletedPiecePath(path);
     SyncSaveFileNameInput();
-    RegisterPieceHierarchyEntry(path, IsCompletedPiecePath(path));
+    MarkPieceClean();
+    RegisterPieceHierarchyEntry(path, IsCompletedPiecePath(path), Utf8ToWide(m_piece.lastModified));
     if (!SavePieceHierarchyEntries())
     {
         SetMessage(u8"ピース読込には成功しましたがHierarchy登録ファイルの保存に失敗しました");
@@ -2046,7 +2288,6 @@ bool SceneNarakuPieceEditor::LoadPieceFromPath(const std::wstring& path)
 
 void SceneNarakuPieceEditor::ApplyLoadedPiece(const NarakuPiece::PieceData& loadedPiece)
 {
-    PushUndoSnapshot();
     m_piece = loadedPiece;
     ClearTerrainSelection();
     m_selectedX = ClampInt(0, 0, m_piece.gridWidth - 1);
@@ -2056,10 +2297,51 @@ void SceneNarakuPieceEditor::ApplyLoadedPiece(const NarakuPiece::PieceData& load
     EnsureSelectionNotEmpty();
     EnsureCellSelectionValid();
     ClearGridObjectSelection();
+    m_undoStack.clear();
+    m_redoStack.clear();
     m_hoverCellX = -1;
     m_hoverCellZ = -1;
-    m_validationDirty = true;
+    InvalidateValidationState();
     RefreshValidationIssues();
+}
+
+void SceneNarakuPieceEditor::CreateNewPiece(const std::wstring& fileName)
+{
+    m_piece = NarakuPiece::CreateDefaultPiece(NarakuPiece::SizePreset::Size16x16);
+    for (NarakuPiece::CellData& cell : m_piece.cells)
+    {
+        cell.deleted = false;
+    }
+
+    m_selectedX = 0;
+    m_selectedZ = 0;
+    m_selectedVertices.clear();
+    m_selectedVertices.push_back(VertexSelection{ 0, 0 });
+    m_selectedCellX = 0;
+    m_selectedCellZ = 0;
+    m_selectedCells.clear();
+    m_selectedCells.push_back(CellSelection{ 0, 0 });
+    m_editMode = EditMode::Height;
+    m_terrainSelectionMode = TerrainSelectionMode::Vertex;
+    m_gridObjectTool = GridObjectTool::MiningPoint;
+    m_selectedGridObjectKind = GridObjectKind::None;
+    m_selectedMiningPointIndex = -1;
+    m_hoverCellX = -1;
+    m_hoverCellZ = -1;
+    m_newMiningVisualType = 0;
+    m_newMiningInitiallyRecorded = false;
+    m_saveFileName = EnsureJsonFileName(fileName);
+    m_saveAsDraft = true;
+    m_undoStack.clear();
+    m_redoStack.clear();
+    m_validationIssues.clear();
+    m_message.clear();
+    m_heightDragFloatEditing = false;
+    m_draggingHeight = false;
+    SyncSaveFileNameInput();
+    InvalidateValidationState();
+    RefreshValidationIssues();
+    MarkPieceDirty();
 }
 
 void SceneNarakuPieceEditor::OpenLoadPieceDialog()
@@ -2084,6 +2366,102 @@ void SceneNarakuPieceEditor::OpenLoadPieceDialog()
     }
 
     LoadPieceFromPath(filePath);
+}
+
+bool SceneNarakuPieceEditor::RenameCurrentPiece()
+{
+    const std::wstring newFileName = EnsureJsonFileName(Utf8ToWide(m_renameFileNameInput.data()));
+    if (newFileName.empty() || HasInvalidFileNameChar(newFileName))
+    {
+        SetMessage(u8"変更後ファイル名に使用できない文字が含まれています");
+        return false;
+    }
+
+    const std::wstring oldPath = GetCurrentSaveTargetPath();
+    const std::wstring oldRelativePath = NormalizePieceHierarchyPath(oldPath);
+    const std::wstring newPath = m_saveAsDraft
+        ? NarakuPiece::MakeDraftPiecePath(m_piece.abyssLayer, newFileName)
+        : NarakuPiece::MakeCompletedPiecePath(m_piece.abyssLayer, newFileName);
+    const std::wstring newRelativePath = NormalizePieceHierarchyPath(newPath);
+
+    if (ToLowerWide(NormalizePathSeparators(oldRelativePath)) ==
+        ToLowerWide(NormalizePathSeparators(newRelativePath)))
+    {
+        m_saveFileName = newFileName;
+        SyncSaveFileNameInput();
+        SetMessage(u8"ピース名を更新しました");
+        return true;
+    }
+
+    const std::wstring oldAbsolutePath = ResolvePieceHierarchyPath(oldRelativePath);
+    const std::wstring newAbsolutePath = ResolvePieceHierarchyPath(newRelativePath);
+    const bool hadExistingFile = PathExists(oldAbsolutePath);
+    if (hadExistingFile)
+    {
+        if (PathExists(newAbsolutePath))
+        {
+            SetMessage(u8"変更先のファイル名は既に存在します");
+            return false;
+        }
+
+        if (!::MoveFileExW(oldAbsolutePath.c_str(), newAbsolutePath.c_str(), MOVEFILE_COPY_ALLOWED))
+        {
+            SetMessage(u8"ファイル名の変更に失敗しました");
+            return false;
+        }
+    }
+
+    const std::wstring lastModified = hadExistingFile
+        ? BuildCurrentDateTimeString()
+        : Utf8ToWide(m_piece.lastModified);
+    RemovePieceHierarchyEntry(oldRelativePath);
+    RegisterPieceHierarchyEntry(newRelativePath, !m_saveAsDraft, lastModified);
+    SavePieceHierarchyEntries();
+
+    m_saveFileName = newFileName;
+    if (!lastModified.empty())
+    {
+        m_piece.lastModified = WideToUtf8(lastModified);
+    }
+    SyncSaveFileNameInput();
+    if (hadExistingFile)
+    {
+        MarkPieceClean();
+    }
+    else
+    {
+        MarkPieceDirty();
+    }
+    SetMessage(u8"ピース名を変更しました");
+    return true;
+}
+
+bool SceneNarakuPieceEditor::DeleteCurrentPiece()
+{
+    const std::wstring targetPath = GetCurrentSaveTargetPath();
+    const std::wstring targetRelativePath = NormalizePieceHierarchyPath(targetPath);
+    const std::wstring targetAbsolutePath = ResolvePieceHierarchyPath(targetRelativePath);
+    const std::wstring displayName = GetDisplayFileName();
+
+    std::wstring confirmMessage = L"";
+    confirmMessage += displayName;
+    confirmMessage += L" を削除しますか?";
+    if (::MessageBoxW(::GetActiveWindow(), confirmMessage.c_str(), L"PieceEditor", MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2) != IDYES)
+    {
+        return false;
+    }
+
+    if (PathExists(targetAbsolutePath) && !::DeleteFileW(targetAbsolutePath.c_str()))
+    {
+        SetMessage(u8"ファイル削除に失敗しました");
+        return false;
+    }
+
+    RemovePieceHierarchyEntry(targetRelativePath);
+    SavePieceHierarchyEntries();
+    CreateNewPiece(displayName);
+    SetMessage(u8"ピースを削除して新規状態へ移行しました");
+    return true;
 }
 
 void SceneNarakuPieceEditor::DrawPieceHierarchyWindow()
@@ -2111,6 +2489,16 @@ void SceneNarakuPieceEditor::DrawPieceHierarchyWindow()
         RegisterCurrentPieceToHierarchy();
     }
 
+    const char* sortModeLabels[] = { u8"デフォルト", u8"日付", u8"名前" };
+    int sortMode = static_cast<int>(m_pieceHierarchySortMode);
+    ImGui::SetNextItemWidth(150.0f);
+    if (ImGui::Combo(u8"並び順", &sortMode, sortModeLabels, IM_ARRAYSIZE(sortModeLabels)))
+    {
+        m_pieceHierarchySortMode = static_cast<PieceHierarchySortMode>(sortMode);
+    }
+    ImGui::SameLine();
+    ImGui::Checkbox(u8"降順", &m_pieceHierarchySortDescending);
+
     ImGui::Separator();
     if (m_pieceHierarchyEntries.empty())
     {
@@ -2120,26 +2508,43 @@ void SceneNarakuPieceEditor::DrawPieceHierarchyWindow()
     }
 
     const std::wstring currentPath = ToLowerWide(NormalizePathSeparators(GetCurrentEditingPieceRelativePath()));
-    for (const PieceHierarchyEntry& entry : m_pieceHierarchyEntries)
+    const std::vector<const PieceHierarchyEntry*> sortedEntries = BuildSortedPieceHierarchyEntries();
+    for (const PieceHierarchyEntry* entry : sortedEntries)
     {
-        const std::string label = std::string(entry.isCompleted ? u8"[完成] " : u8"[下書き] ") + WideToUtf8(entry.fileName);
-        const bool isSelected = ToLowerWide(NormalizePathSeparators(entry.relativePath)) == currentPath;
+        const std::wstring prefix =
+            L"[" + BuildHierarchyDateLabel(entry->lastModified) + L" : " + (entry->isCompleted ? L"完成" : L"下書き") + L"] ";
+        const std::string label = WideToUtf8(prefix + entry->fileName);
+        const bool isSelected = ToLowerWide(NormalizePathSeparators(entry->relativePath)) == currentPath;
         if (ImGui::Selectable(label.c_str(), isSelected))
         {
-            const std::wstring absolutePath = ResolvePieceHierarchyPath(entry.relativePath);
+            if (!ConfirmDiscardDirtyChanges(L"読込"))
+            {
+                continue;
+            }
+
+            const std::wstring absolutePath = ResolvePieceHierarchyPath(entry->relativePath);
             if (!PathExists(absolutePath))
             {
-                SetMessage(std::string(u8"読込失敗: ファイルが見つかりません: ") + WideToUtf8(entry.relativePath));
+                HandleMissingHierarchyEntry(*entry);
+                ImGui::End();
+                return;
             }
             else
             {
-                LoadPieceFromPath(absolutePath);
+                if (!LoadPieceFromPath(absolutePath))
+                {
+                    HandleMissingHierarchyEntry(*entry);
+                    ImGui::End();
+                    return;
+                }
+                ImGui::End();
+                return;
             }
         }
 
         if (ImGui::IsItemHovered())
         {
-            ImGui::SetTooltip("%s", WideToUtf8(entry.relativePath).c_str());
+            ImGui::SetTooltip("%s", WideToUtf8(entry->relativePath).c_str());
         }
     }
 
@@ -2210,6 +2615,7 @@ std::wstring SceneNarakuPieceEditor::GetCurrentEditingPieceRelativePath() const
 bool SceneNarakuPieceEditor::ReloadPieceHierarchyEntries()
 {
     m_pieceHierarchyEntries.clear();
+    m_nextPieceHierarchyInsertionOrder = 0;
     const std::wstring configPath = ResolvePieceHierarchyPath(GetPieceHierarchyConfigPath());
     if (!PathExists(configPath))
     {
@@ -2249,16 +2655,18 @@ bool SceneNarakuPieceEditor::ReloadPieceHierarchyEntries()
         std::string fileNameUtf8;
         std::string relativePathUtf8;
         std::string completedFlag;
+        std::string lastModifiedUtf8;
         if (!std::getline(lineStream, fileNameUtf8, '\t') ||
             !std::getline(lineStream, relativePathUtf8, '\t') ||
             !std::getline(lineStream, completedFlag))
         {
             continue;
         }
+        std::getline(lineStream, lastModifiedUtf8);
 
         const std::wstring relativePath = NormalizePathSeparators(Utf8ToWide(relativePathUtf8));
         const bool isCompleted = (completedFlag == "1");
-        RegisterPieceHierarchyEntry(relativePath, isCompleted);
+        RegisterPieceHierarchyEntry(relativePath, isCompleted, Utf8ToWide(lastModifiedUtf8));
         const std::wstring normalizedKey = ToLowerWide(NormalizePathSeparators(NormalizePieceHierarchyPath(relativePath)));
         for (PieceHierarchyEntry& registeredEntry : m_pieceHierarchyEntries)
         {
@@ -2293,12 +2701,18 @@ bool SceneNarakuPieceEditor::SavePieceHierarchyEntries() const
     {
         stream << WideToUtf8(entry.fileName) << '\t'
             << WideToUtf8(entry.relativePath) << '\t'
-            << (entry.isCompleted ? '1' : '0') << "\n";
+            << (entry.isCompleted ? '1' : '0') << '\t'
+            << WideToUtf8(entry.lastModified) << "\n";
     }
     return static_cast<bool>(stream);
 }
 
 bool SceneNarakuPieceEditor::RegisterPieceHierarchyEntry(const std::wstring& path, bool isCompleted)
+{
+    return RegisterPieceHierarchyEntry(path, isCompleted, std::wstring());
+}
+
+bool SceneNarakuPieceEditor::RegisterPieceHierarchyEntry(const std::wstring& path, bool isCompleted, const std::wstring& lastModified)
 {
     const std::wstring normalizedPath = NormalizePieceHierarchyPath(path);
     const std::wstring normalizedKey = ToLowerWide(NormalizePathSeparators(normalizedPath));
@@ -2308,12 +2722,15 @@ bool SceneNarakuPieceEditor::RegisterPieceHierarchyEntry(const std::wstring& pat
     {
         if (ToLowerWide(NormalizePathSeparators(entry.relativePath)) == normalizedKey)
         {
+            const std::wstring nextLastModified = lastModified.empty() ? entry.lastModified : lastModified;
             const bool changed = entry.fileName != fileName ||
                 entry.relativePath != normalizedPath ||
-                entry.isCompleted != isCompleted;
+                entry.isCompleted != isCompleted ||
+                entry.lastModified != nextLastModified;
             entry.fileName = fileName;
             entry.relativePath = normalizedPath;
             entry.isCompleted = isCompleted;
+            entry.lastModified = nextLastModified;
             return changed;
         }
     }
@@ -2322,8 +2739,120 @@ bool SceneNarakuPieceEditor::RegisterPieceHierarchyEntry(const std::wstring& pat
     entry.fileName = fileName;
     entry.relativePath = normalizedPath;
     entry.isCompleted = isCompleted;
+    entry.lastModified = lastModified;
+    entry.insertionOrder = m_nextPieceHierarchyInsertionOrder++;
     m_pieceHierarchyEntries.push_back(entry);
     return true;
+}
+
+bool SceneNarakuPieceEditor::RemovePieceHierarchyEntry(const std::wstring& path)
+{
+    const std::wstring normalizedKey = ToLowerWide(NormalizePathSeparators(NormalizePieceHierarchyPath(path)));
+    const auto it = std::remove_if(
+        m_pieceHierarchyEntries.begin(),
+        m_pieceHierarchyEntries.end(),
+        [&normalizedKey](const PieceHierarchyEntry& entry)
+        {
+            return ToLowerWide(NormalizePathSeparators(entry.relativePath)) == normalizedKey;
+        });
+    if (it == m_pieceHierarchyEntries.end())
+    {
+        return false;
+    }
+
+    m_pieceHierarchyEntries.erase(it, m_pieceHierarchyEntries.end());
+    return true;
+}
+
+SceneNarakuPieceEditor::PieceHierarchyEntry* SceneNarakuPieceEditor::FindPieceHierarchyEntry(const std::wstring& path)
+{
+    const std::wstring normalizedKey = ToLowerWide(NormalizePathSeparators(NormalizePieceHierarchyPath(path)));
+    for (PieceHierarchyEntry& entry : m_pieceHierarchyEntries)
+    {
+        if (ToLowerWide(NormalizePathSeparators(entry.relativePath)) == normalizedKey)
+        {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+std::vector<const SceneNarakuPieceEditor::PieceHierarchyEntry*> SceneNarakuPieceEditor::BuildSortedPieceHierarchyEntries() const
+{
+    std::vector<const PieceHierarchyEntry*> entries;
+    entries.reserve(m_pieceHierarchyEntries.size());
+    for (const PieceHierarchyEntry& entry : m_pieceHierarchyEntries)
+    {
+        entries.push_back(&entry);
+    }
+
+    auto comparator = [this](const PieceHierarchyEntry* lhs, const PieceHierarchyEntry* rhs)
+    {
+        switch (m_pieceHierarchySortMode)
+        {
+        case PieceHierarchySortMode::LastModified:
+            if (lhs->lastModified != rhs->lastModified)
+            {
+                return lhs->lastModified < rhs->lastModified;
+            }
+            break;
+        case PieceHierarchySortMode::FileName:
+            if (lhs->fileName != rhs->fileName)
+            {
+                return lhs->fileName < rhs->fileName;
+            }
+            break;
+        case PieceHierarchySortMode::Insertion:
+        default:
+            if (lhs->insertionOrder != rhs->insertionOrder)
+            {
+                return lhs->insertionOrder < rhs->insertionOrder;
+            }
+            break;
+        }
+
+        return lhs->relativePath < rhs->relativePath;
+    };
+    std::sort(entries.begin(), entries.end(), comparator);
+    if (m_pieceHierarchySortDescending)
+    {
+        std::reverse(entries.begin(), entries.end());
+    }
+    return entries;
+}
+
+std::wstring SceneNarakuPieceEditor::BuildHierarchyDateLabel(const std::wstring& lastModified) const
+{
+    if (lastModified.size() >= 10)
+    {
+        return lastModified.substr(0, 10);
+    }
+    return L"未記録";
+}
+
+void SceneNarakuPieceEditor::HandleMissingHierarchyEntry(const PieceHierarchyEntry& entry)
+{
+    const std::wstring message =
+        entry.fileName + L" の読込に失敗しました。Hierarchyから削除しますか?";
+    const int result = ::MessageBoxW(::GetActiveWindow(), message.c_str(), L"PieceEditor", MB_ICONWARNING | MB_YESNO);
+    if (result == IDYES)
+    {
+        RemovePieceHierarchyEntry(entry.relativePath);
+        SavePieceHierarchyEntries();
+        SetMessage(u8"読込不能なHierarchy項目を削除しました");
+        return;
+    }
+
+    m_saveFileName = EnsureJsonFileName(entry.fileName);
+    m_saveAsDraft = !entry.isCompleted;
+    CreateNewPiece(m_saveFileName);
+    m_saveAsDraft = !entry.isCompleted;
+    SyncSaveFileNameInput();
+    if (!entry.lastModified.empty())
+    {
+        m_piece.lastModified = WideToUtf8(entry.lastModified);
+    }
+    SetMessage(u8"読込不能のため同名新規ピース状態へ移行しました");
 }
 
 bool SceneNarakuPieceEditor::RegisterCurrentPieceToHierarchy()
@@ -2336,7 +2865,7 @@ bool SceneNarakuPieceEditor::RegisterCurrentPieceToHierarchy()
     }
 
     const std::wstring targetPath = GetCurrentSaveTargetPath();
-    const bool changed = RegisterPieceHierarchyEntry(targetPath, !m_saveAsDraft);
+    const bool changed = RegisterPieceHierarchyEntry(targetPath, !m_saveAsDraft, Utf8ToWide(m_piece.lastModified));
     if (!SavePieceHierarchyEntries())
     {
         SetMessage(u8"Hierarchy登録ファイルの保存に失敗しました");
@@ -3134,7 +3663,7 @@ void SceneNarakuPieceEditor::RestoreEditorSnapshot(const EditorSnapshot& snapsho
     {
         ClearGridObjectSelection();
     }
-    m_validationDirty = true;
+    MarkPieceDirty();
     m_heightDragFloatEditing = false;
     m_draggingHeight = false;
     m_hoverCellX = -1;
@@ -3527,7 +4056,7 @@ void SceneNarakuPieceEditor::UpdateGridObjectEditing()
         point.initiallyRecorded = m_newMiningInitiallyRecorded;
         m_piece.miningPoints.push_back(point);
         SelectMiningPoint(static_cast<int>(m_piece.miningPoints.size()) - 1);
-        m_validationDirty = true;
+        MarkPieceDirty();
         SetMessage(u8"採掘ポイントを追加しました");
         return;
     }
@@ -3538,7 +4067,7 @@ void SceneNarakuPieceEditor::UpdateGridObjectEditing()
         m_piece.rope.top.x = cellX;
         m_piece.rope.top.z = cellZ;
         SelectRope();
-        m_validationDirty = true;
+        MarkPieceDirty();
         SetMessage(u8"ロープ上端を設定しました");
         return;
 
@@ -3548,7 +4077,7 @@ void SceneNarakuPieceEditor::UpdateGridObjectEditing()
         m_piece.rope.bottom.x = cellX;
         m_piece.rope.bottom.z = cellZ;
         SelectRope();
-        m_validationDirty = true;
+        MarkPieceDirty();
         SetMessage(u8"ロープ下端を設定しました");
         return;
 
@@ -3558,7 +4087,7 @@ void SceneNarakuPieceEditor::UpdateGridObjectEditing()
         m_piece.startReturnCandidate.cell.x = cellX;
         m_piece.startReturnCandidate.cell.z = cellZ;
         SelectStartReturn();
-        m_validationDirty = true;
+        MarkPieceDirty();
         SetMessage(u8"開始・帰還地点を設定しました");
         return;
 
@@ -3743,6 +4272,32 @@ void SceneNarakuPieceEditor::RefreshValidationIssues()
     m_validationDirty = false;
 }
 
+void SceneNarakuPieceEditor::InvalidateValidationState()
+{
+    m_validationDirty = true;
+}
+
+void SceneNarakuPieceEditor::MarkPieceDirty()
+{
+    const bool wasDirty = m_isPieceDirty;
+    m_isPieceDirty = true;
+    InvalidateValidationState();
+    if (!wasDirty)
+    {
+        UpdateMainWindowTitle();
+    }
+}
+
+void SceneNarakuPieceEditor::MarkPieceClean()
+{
+    const bool wasDirty = m_isPieceDirty;
+    m_isPieceDirty = false;
+    if (wasDirty)
+    {
+        UpdateMainWindowTitle();
+    }
+}
+
 void SceneNarakuPieceEditor::SetMessage(const std::string& message)
 {
     m_message = message;
@@ -3803,6 +4358,3 @@ std::string SceneNarakuPieceEditor::WideToUtf8(const std::wstring& text) const
     }
     return result;
 }
-
-
-

@@ -539,6 +539,9 @@ private:
     /** @brief 指定座標と深度に対応するセル属性フラグを返します。範囲外なら CellAttributeNone を返します。 */
     std::uint32_t GetCellAttributeFlagsAt(const Vec2& pos, float depth) const;
 
+    /** @brief 深度と位置の両方に一致するレイヤー配列番号を返します。見つからなければ -1 を返します。 */
+    int FindLayerIndexAt(const Vec2& pos, float depth, float tolerance = 0.20f) const;
+
     /** @brief 2点間の地形高低差と属性を見て、その移動を通してよいかを返します。 */
     bool CanTraverseGround(const Vec2& from, const Vec2& to, float depth) const;
 

@@ -1,5 +1,6 @@
 ﻿#include "SceneNarakuProto.h"
 
+#include "NarakuStageGenerator.h"
 #include "Defines.h"
 #include "DirectX.h"
 #include "Geometory.h"
@@ -1755,6 +1756,22 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
         ResetDebugPlayerParams();
     }
 
+    if (ImGui::Button(u8"小ステージ3x3生成"))
+    {
+        std::string error;
+        const wchar_t* generatedMapPath = L"Assets/Maps/generated_naraku_map.json";
+        if (NarakuStageGenerator::GenerateFixed3x3Map(generatedMapPath, &error))
+        {
+            NarakuMap::SetCurrentMapPath(generatedMapPath);
+            ResetRun();
+            AddMessage("generated 3x3 naraku map");
+        }
+        else
+        {
+            AddMessage(error.empty() ? "failed to generate 3x3 naraku map" : error);
+        }
+    }
+
     ClampDebugPlayerParams();
 
     // プレイテスト専用の調整ウィンドウを閉じます。
@@ -2183,7 +2200,7 @@ bool SceneNarakuProto::HasFloorAt(const Vec2& pos, float depth) const
 
 std::uint32_t SceneNarakuProto::GetCellAttributeFlagsAt(const Vec2& pos, float depth) const
 {
-    const int layerIndex = FindLayerIndexByDepth(depth);
+    const int layerIndex = FindLayerIndexAt(pos, depth);
     if (layerIndex < 0 || layerIndex >= static_cast<int>(m_runtimeMap.terrainLayers.size()))
     {
         return NarakuMap::CellAttributeNone;
@@ -2471,6 +2488,29 @@ int SceneNarakuProto::FindLayerIndexByDepth(float depth, float tolerance) const
     return -1;
 }
 
+int SceneNarakuProto::FindLayerIndexAt(const Vec2& pos, float depth, float tolerance) const
+{
+    for (int i = 0; i < static_cast<int>(m_runtimeMap.terrainLayers.size()); ++i)
+    {
+        const NarakuMap::TerrainLayer& layer = m_runtimeMap.terrainLayers[i];
+        if (std::fabs(layer.layerDepth - depth) > tolerance)
+        {
+            continue;
+        }
+
+        int cellX = -1;
+        int cellZ = -1;
+        float fracX = 0.0f;
+        float fracZ = 0.0f;
+        if (TryGetLayerCellAt(layer, pos, cellX, cellZ, fracX, fracZ))
+        {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 bool SceneNarakuProto::TryGetLayerCellAt(const NarakuMap::TerrainLayer& layer, const Vec2& pos, int& outCellX, int& outCellZ, float& outFracX, float& outFracZ) const
 {
     if (layer.gridWidth < 2 || layer.gridHeight < 2 || layer.cellSize <= 0.0f)
@@ -2498,7 +2538,7 @@ bool SceneNarakuProto::TryGetLayerCellAt(const NarakuMap::TerrainLayer& layer, c
 
 float SceneNarakuProto::SampleTerrainHeightOffsetAt(const Vec2& pos, float depth) const
 {
-    const int layerIndex = FindLayerIndexByDepth(depth);
+    const int layerIndex = FindLayerIndexAt(pos, depth);
     if (layerIndex < 0 || layerIndex >= static_cast<int>(m_runtimeMap.terrainLayers.size()))
     {
         return 0.0f;
