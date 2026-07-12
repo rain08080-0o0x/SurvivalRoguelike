@@ -1,0 +1,103 @@
+--- Start Naraku Map Generation (3x3) ---
+Designated Start Piece Location: (2, 1)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "north.json": West edge is not Blocked (required at left boundary)
+      - "piece_0001.json": North edge is not Blocked (required at top boundary)
+      - "sample.json": North edge is not Blocked (required at top boundary)
+      - "sample_center001.json": North edge is not Blocked (required at top boundary)
+      - "sample_center002.json": North edge is not Blocked (required at top boundary)
+      - "sample_center003.json": North edge is not Blocked (required at top boundary)
+      - "sample_center004.json": North edge is not Blocked (required at top boundary)
+      - "sample_east.json": North edge is not Blocked (required at top boundary)
+      - "sample_east_south.json": North edge is not Blocked (required at top boundary)
+      - "sample_north_east.json": West edge is not Blocked (required at left boundary)
+      - "sample_south.json": North edge is not Blocked (required at top boundary)
+      - "sample_west.json": North edge is not Blocked (required at top boundary)
+      - "sample_west_south.json": North edge is not Blocked (required at top boundary)
+      - "start_east.json": North edge is not Blocked (required at top boundary)
+      - "start_north.json": West edge is not Blocked (required at left boundary)
+      - "start_south.json": North edge is not Blocked (required at top boundary)
+      - "start_west.json": North edge is not Blocked (required at top boundary)
+      - "west_south.json": North edge is not Blocked (required at top boundary)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "piece_0001.json": North edge is not Blocked (required at top boundary)
+      - "sample.json": North edge is not Blocked (required at top boundary)
+      - "sample_center001.json": North edge is not Blocked (required at top boundary)
+      - "sample_center002.json": North edge is not Blocked (required at top boundary)
+      - "sample_center003.json": North edge is not Blocked (required at top boundary)
+      - "sample_center004.json": North edge is not Blocked (required at top boundary)
+      - "sample_east.json": North edge is not Blocked (required at top boundary)
+      - "sample_east_south.json": North edge is not Blocked (required at top boundary)
+      - "sample_north_east.json": East edge is Blocked (forbidden for inner connection)
+      - "sample_north_west.json": West edge is Blocked (forbidden for inner connection)
+      - "sample_south.json": North edge is not Blocked (required at top boundary)
+      - "sample_west.json": North edge is not Blocked (required at top boundary)
+      - "sample_west_south.json": North edge is not Blocked (required at top boundary)
+      - "start_east.json": North edge is not Blocked (required at top boundary)
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+      - "start_south.json": North edge is not Blocked (required at top boundary)
+      - "start_west.json": North edge is not Blocked (required at top boundary)
+      - "west_south.json": North edge is not Blocked (required at top boundary)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+      - "north.json": East edge is not Blocked (required at right boundary)
+      - "piece_0001.json": North edge is not Blocked (required at top boundary)
+      - "sample.json": North edge is not Blocked (required at top boundary)
+      - "sample_center001.json": North edge is not Blocked (required at top boundary)
+      - "sample_center002.json": North edge is not Blocked (required at top boundary)
+      - "sample_center003.json": North edge is not Blocked (required at top boundary)
+      - "sample_center004.json": North edge is not Blocked (required at top boundary)
+      - "sample_east.json": North edge is not Blocked (required at top boundary)
+      - "sample_east_south.json": North edge is not Blocked (required at top boundary)
+      - "sample_north_west.json": West edge is Blocked (forbidden for inner connection)
+      - "sample_south.json": North edge is not Blocked (required at top boundary)
+      - "sample_west.json": North edge is not Blocked (required at top boundary)
+      - "sample_west_south.json": North edge is not Blocked (required at top boundary)
+      - "start_east.json": North edge is not Blocked (required at top boundary)
+      - "start_north.json": East edge is not Blocked (required at right boundary)
+      - "start_south.json": North edge is not Blocked (required at top boundary)
+      - "start_west.json": North edge is not Blocked (required at top boundary)
+      - "west_south.json": North edge is not Blocked (required at top boundary)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "north.json": North edge is Blocked (forbidden for inner connection)
+      - "piece_0001.json": West edge is not Blocked (required at left boundary)
+      - "sample.json": South edge is Blocked (forbidden for inner connection)
+      - "sample_center001.json": West edge is not Blocked (required at left boundary)
+      - "sample_center002.json": West edge is not Blocked (required at left boundary)
+      - "sample_center003.json": West edge is not Blocked (required at left boundary)
+      - "sample_center004.json": West edge is not Blocked (required at left boundary)
+      - "sample_east.json": West edge is not Blocked (required at left boundary)
+      - "sample_east_south.json": South edge is Blocked (forbidden for inner connection)
+      - "sample_north_east.json": North edge is Blocked (forbidden for inner connection)
+      - "sample_north_west.json": North edge is Blocked (forbidden for inner connection)
+      - "sample_south.json": South edge is Blocked (forbidden for inner connection)
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "sample_west_south.json": South edge is Blocked (forbidden for inner connection)
+      - "start_east.json": West edge is not Blocked (required at left boundary)
+      - "start_north.json": North edge is Blocked (forbidden for inner connection)
+      - "start_south.json": South edge is Blocked (forbidden for inner connection)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+      - "west_south.json": West edge is not Blocked (required at left boundary)
+  -> FAILURE: No compatible pieces found under these constraints.

@@ -1,4 +1,4 @@
-﻿#include "NarakuMapData.h"
+#include "NarakuMapData.h"
 
 #include <Windows.h>
 #undef max
@@ -1188,6 +1188,14 @@ namespace NarakuMap
         out << ",\n";
         AppendIndent(out, 1);
         out << "\"autoFallStartHeight\": " << mapData.autoFallStartHeight << ",\n";
+        AppendIndent(out, 1);
+        out << "\"pieceNames\": [";
+        for (size_t i = 0; i < mapData.pieceNames.size(); ++i)
+        {
+            if (i > 0) out << ", ";
+            out << "\"" << mapData.pieceNames[i] << "\"";
+        }
+        out << "],\n";
 
         AppendIndent(out, 1);
         out << "\"layers\": [\n";
@@ -1421,6 +1429,18 @@ namespace NarakuMap
         if (GetNumber(rootValue, "autoFallStartHeight", autoFallStartHeight))
         {
             loadedMap.autoFallStartHeight = static_cast<float>(autoFallStartHeight);
+        }
+
+        const JsonValue* pieceNamesValue = nullptr;
+        if (GetObjectValue<JsonValue>(rootValue, "pieceNames", pieceNamesValue) && pieceNamesValue->type == JsonValue::TypeArray)
+        {
+            for (const JsonValue& val : pieceNamesValue->arrayValue)
+            {
+                if (val.type == JsonValue::TypeString)
+                {
+                    loadedMap.pieceNames.push_back(val.stringValue);
+                }
+            }
         }
 
         const JsonValue* ropesValue = nullptr;

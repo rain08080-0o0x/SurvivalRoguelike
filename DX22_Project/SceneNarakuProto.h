@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Scene.h"
 #include "NarakuMapData.h"
@@ -63,6 +63,9 @@ private:
 
         /** @brief 前フレームの深度です。上昇量を計算するために使います。 */
         float previousDepth = 0.0f;
+
+        /** @brief 前フレームの物理高さYです。高さベースの上昇量を計算するために使います。 */
+        float previousWorldY = 0.0f;
 
         /** @brief 体力です。0になると死亡リザルトへ移行します。 */
         float hp = 10.0f;
@@ -299,6 +302,7 @@ private:
      * 既存の固定定数を大きく崩さず、移動、攻撃力、スタミナ消費量だけを
      * ランタイム編集可能な値としてまとめています。
      */
+public:
     struct PlayerDebugParams
     {
         /** @brief 通常移動速度です。 */
@@ -336,7 +340,20 @@ private:
 
         /** @brief プレイヤー現在深度より上にある地形レイヤーの描画アルファ値です。 */
         float upperLayerAlpha = 0.06f;
+
+        /** @brief ミニマップの表示位置Xです。 */
+        float minimapPosX = 20.0f;
+
+        /** @brief ミニマップの表示位置Yです。 */
+        float minimapPosY = 20.0f;
+
+        /** @brief ミニマップのサイズです。 */
+        float minimapSize = 220.0f;
+
+        /** @brief ミニマップを表示するかどうかです。 */
+        float showMinimap = 1.0f;
     };
+private:
 
     /**
      * @brief プロトタイプシーン内の現在モードです。
@@ -431,8 +448,17 @@ private:
     /** @brief 所持品表示中に使う簡易地図とピン操作を描画します。 */
     void DrawMapControls();
 
+    /** @brief runtime map と同期した常時表示ミニマップを描画します。 */
+    void DrawMiniMap();
+
     /** @brief プレイテスト用のプレイヤー調整UIを描画します。 */
     void DrawDebugPlayerTuning();
+
+    /** @brief プレイヤーの現在位置、高さ、および現在いる小ステージ名を表示するデバッグウィンドウを描画します。 */
+    void DrawPlayerPositionDebug();
+
+    /** @brief 採掘中の進行度バーを画面中央にオーバーレイ表示します。 */
+    void DrawMiningProgressBar();
 
     /** @brief 現在の総重量を計算します。 */
     float GetCurrentWeight() const;
@@ -485,11 +511,33 @@ private:
     /** @brief 指定位置にピンを置くか、近くの既存ピンを削除します。 */
     void TogglePinAt(const Vec2& worldPos);
 
+    /**
+     * @brief マップ描画用のワールド範囲とキャンバス内配置をまとめた変換情報です。
+     * @details 実際の terrainLayers 全体をアスペクト比維持で収めるために使います。
+     */
+    struct MapCanvasTransform
+    {
+        Vec2 worldMin;
+        Vec2 worldMax;
+        Vec2 drawPos;
+        Vec2 drawSize;
+        bool valid = false;
+    };
+
+    /**
+     * @brief terrainLayers 全体が収まるキャンバス変換情報を計算します。
+     * @param canvasPos キャンバス左上のスクリーン座標です。
+     * @param canvasSize キャンバス全体のサイズです。
+     * @param padding キャンバス内側へ確保する余白量です。
+     * @return 有効な地形があれば変換情報を返し、なければ valid が false のまま返します。
+     */
+    MapCanvasTransform BuildMapCanvasTransform(const Vec2& canvasPos, const Vec2& canvasSize, float padding = 0.0f, float zoom = 1.0f) const;
+
     /** @brief ImGui上の座標をフィールド座標へ変換します。 */
-    Vec2 ScreenToWorld(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& mousePos) const;
+    Vec2 ScreenToWorld(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& mousePos, float zoom = 1.0f, const Vec2& focusPos = { 0.0f, 0.0f }) const;
 
     /** @brief フィールド座標を地図用の真上視点ImGui座標へ変換します。 */
-    Vec2 WorldToCanvas(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& worldPos) const;
+    Vec2 WorldToCanvas(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& worldPos, float zoom = 1.0f, const Vec2& focusPos = { 0.0f, 0.0f }) const;
 
     /** @brief フィールド座標をゲーム画面用の斜め見下ろしImGui座標へ変換します。 */
     Vec2 WorldToObliqueCanvas(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& worldPos, float depthOffset = 0.0f) const;
@@ -656,4 +704,13 @@ private:
 
     /** @brief プレイテスト中に編集するプレイヤー調整値です。 */
     PlayerDebugParams m_debugPlayerParams;
+
+    /** @brief 地面端の移動判定確認用に当たり判定線を表示するかどうかです。 */
+    bool m_showCollisionDebug = true;
+
+    /** @brief Tキー地図専用の表示倍率です。 */
+    float m_mapZoom = 3.0f;
+
+    /** @brief 潜行をまたいで維持される、採掘済み採掘ポイントの旧器名（識別名）一覧です。 */
+    std::vector<std::string> m_permanentlyMinedRelics;
 };

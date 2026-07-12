@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -196,6 +196,9 @@ namespace NarakuMap
 
         /** @brief 歩行中にこの下り落差以上を踏み越えたら落下状態へ移る閾値です。 */
         float autoFallStartHeight = 0.90f;
+
+        /** @brief 3x3マップなどに連結配置された小ステージ(ピース)の名前一覧です。 */
+        std::vector<std::string> pieceNames;
     };
 
     /** @brief プロジェクトルート基準の既定マップ JSON 相対パスを返します。 */

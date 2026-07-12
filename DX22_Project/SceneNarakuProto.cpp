@@ -1,4 +1,4 @@
-﻿#include "SceneNarakuProto.h"
+#include "SceneNarakuProto.h"
 
 #include "NarakuStageGenerator.h"
 #include "Defines.h"
@@ -67,7 +67,7 @@ namespace
     // つるはし攻撃の射程です。
     constexpr float kAttackRange = 1.15f;
     // ImGuiデバッグフィールドの半径です。
-    constexpr float kWorldHalfSize = 30.0f;
+    constexpr float kWorldHalfSize = 45.0f;
     // Shiftをこの秒数以上押し続けたら走り扱いにします。
     constexpr float kShiftRunThreshold = 0.18f;
     // 通常歩行で乗り越えられる上り段差です。
@@ -241,6 +241,13 @@ void SceneNarakuProto::ResetRun()
         runtimePoint.mined = false;
         runtimePoint.depth = getLayerDepthById(point.layerId);
         runtimePoint.relicName = point.relicName.empty() ? kRelicNames[fallbackRelicIndex % 8] : point.relicName;
+        
+        if (std::find(m_permanentlyMinedRelics.begin(), m_permanentlyMinedRelics.end(), runtimePoint.relicName) != m_permanentlyMinedRelics.end())
+        {
+            runtimePoint.mined = true;
+            runtimePoint.discovered = true;
+        }
+
         ++fallbackRelicIndex;
         m_miningPoints.push_back(runtimePoint);
     }
@@ -284,6 +291,13 @@ void SceneNarakuProto::ResetRun()
 
 void SceneNarakuProto::Update()
 {
+    // Cキーで当たり判定デバッグ表示を切り替えます。
+    if (IsKeyTrigger('C'))
+    {
+        m_showCollisionDebug = !m_showCollisionDebug;
+        AddMessage(m_showCollisionDebug ? "Collision Debug: ON" : "Collision Debug: OFF");
+    }
+
     // Tキーで探索と所持品表示を切り替えます。
     if (IsKeyTrigger('T'))
     {
@@ -738,6 +752,11 @@ void SceneNarakuProto::UpdateMining(float dt)
 
     // このポイントを採掘済みにします。
     point.mined = true;
+    point.discovered = true;
+    if (std::find(m_permanentlyMinedRelics.begin(), m_permanentlyMinedRelics.end(), point.relicName) == m_permanentlyMinedRelics.end())
+    {
+        m_permanentlyMinedRelics.push_back(point.relicName);
+    }
 
     // リザルト用の採掘数を増やします。
     ++m_result.minedCount;
@@ -1231,6 +1250,9 @@ void SceneNarakuProto::Draw()
     // プレイテスト中にプレイヤー性能を調整するデバッグUIを描画します。
     DrawDebugPlayerTuning();
 
+    // プレイヤーの位置・高さ・現在小ステージ名デバッグウィンドウを描画します。
+    DrawPlayerPositionDebug();
+
     // 所持品モードでは所持品と地図ピンUIを重ねます。
     if (m_mode == Mode::Inventory) { DrawInventory(); DrawMapControls(); }
 
@@ -1239,6 +1261,9 @@ void SceneNarakuProto::Draw()
 
     // 帰還または死亡後はリザルトを重ねます。
     else if (m_mode == Mode::ReturnResult || m_mode == Mode::DeathResult) DrawResult();
+
+    // 採掘（探窟）進行度バーを画面中央にオーバーレイ表示します。
+    DrawMiningProgressBar();
 }
 
 void SceneNarakuProto::Draw3DField()
@@ -1505,6 +1530,94 @@ void SceneNarakuProto::Draw3DField()
         Geometory::AddLine({ base.x, base.y, base.z }, { base.x, base.y + 1.6f, base.z }, pinColor);
     }
 
+    if (m_showCollisionDebug)
+    {
+        // 帰還範囲のデバッグ表示を追加
+        DrawDebugSphere3D({ returnBase.x, returnBase.y + 0.05f, returnBase.z }, kReturnRange);
+
+        // 未採掘の採掘ポイントのインタラクト範囲のデバッグ表示を追加
+        for (const MiningPoint& point : m_miningPoints)
+        {
+            if (!point.mined)
+            {
+                const XMFLOAT3 base = ToWorld3D(point.pos, point.depth, 0.15f);
+                DrawDebugSphere3D({ base.x, base.y + 0.05f, base.z }, kInteractRange);
+            }
+        }
+
+        // セルの通行不可（Blocked）、崖端（CliffEdge）、危険地形（Hazard）、削除セル（Removed）の3D境界線の描画を追加
+        const XMFLOAT4 blockedColor = { 1.00f, 0.28f, 0.28f, 1.00f };
+        const XMFLOAT4 cliffColor = { 0.95f, 0.82f, 0.22f, 0.95f };
+        const XMFLOAT4 hazardColor = { 0.80f, 0.25f, 0.90f, 1.00f };
+        const XMFLOAT4 removedColor = { 0.95f, 0.10f, 0.90f, 0.98f };
+
+        for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+        {
+            if (layer.gridWidth < 2 || layer.gridHeight < 2)
+            {
+                continue;
+            }
+
+            const XMFLOAT4 applyAlphaBlocked = applyGameplayLayerAlpha(layer, blockedColor);
+            const XMFLOAT4 applyAlphaCliff = applyGameplayLayerAlpha(layer, cliffColor);
+            const XMFLOAT4 applyAlphaHazard = applyGameplayLayerAlpha(layer, hazardColor);
+            const XMFLOAT4 applyAlphaRemoved = applyGameplayLayerAlpha(layer, removedColor);
+
+            for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
+            {
+                for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
+                {
+                    const std::uint32_t flags = NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ);
+                    if (flags == NarakuMap::CellAttributeNone)
+                    {
+                        continue;
+                    }
+
+                    XMFLOAT4 color = { 0.0f, 0.0f, 0.0f, 0.0f };
+                    bool drawDiagonal = false;
+
+                    if (flags & NarakuMap::CellAttributeRemoved)
+                    {
+                        color = applyAlphaRemoved;
+                        drawDiagonal = true;
+                    }
+                    else if (flags & NarakuMap::CellAttributeBlocked)
+                    {
+                        color = applyAlphaBlocked;
+                    }
+                    else if (flags & NarakuMap::CellAttributeCliffEdge)
+                    {
+                        color = applyAlphaCliff;
+                    }
+                    else if (flags & NarakuMap::CellAttributeHazard)
+                    {
+                        color = applyAlphaHazard;
+                    }
+                    else
+                    {
+                        continue;
+                    }
+
+                    const XMFLOAT3 a = GetTerrainVertexWorld3D(layer, cellX, cellZ, 0.04f);
+                    const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, 0.04f);
+                    const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, 0.04f);
+                    const XMFLOAT3 d = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ + 1, 0.04f);
+
+                    Geometory::AddLine(a, b, color);
+                    Geometory::AddLine(b, d, color);
+                    Geometory::AddLine(d, c, color);
+                    Geometory::AddLine(c, a, color);
+
+                    if (drawDiagonal)
+                    {
+                        Geometory::AddLine(a, d, color);
+                        Geometory::AddLine(b, c, color);
+                    }
+                }
+            }
+        }
+    }
+
     // ここまで積んだラインをまとめて描画します。
     Geometory::DrawLines();
 }
@@ -1627,6 +1740,33 @@ void SceneNarakuProto::DrawField()
 
     // 操作確認用の短い説明を表示します。
     ImGui::Text(u8"WASD 移動 / Shift短押し ステップ / Shift長押し 走り / Space ジャンプ / 左クリック 攻撃 / F 調べる / T 所持品 / ロープ中A/D 離脱");
+
+    // 採掘中ならメインウィンドウ（フィールド）の中央に進行度バーを描画します。
+    if (m_miningIndex >= 0)
+    {
+        float centerX = canvasPos.x + canvasSize.x * 0.5f;
+        float centerY = canvasPos.y + canvasSize.y * 0.5f;
+
+        float barWidth = 240.0f;
+        float barHeight = 18.0f;
+        float progress = std::max(0.0f, std::min(1.0f, 1.0f - (m_miningTimer / kMiningTime)));
+
+        std::string text = u8"採掘中...";
+        ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
+        ImVec2 textPos = { centerX - textSize.x * 0.5f, centerY - 25.0f };
+        draw->AddText(textPos, IM_COL32(255, 220, 60, 255), text.c_str());
+
+        ImVec2 bgMin = { centerX - barWidth * 0.5f, centerY };
+        ImVec2 bgMax = { centerX + barWidth * 0.5f, centerY + barHeight };
+        draw->AddRectFilled(bgMin, bgMax, IM_COL32(10, 15, 15, 200), 4.0f);
+        draw->AddRect(bgMin, bgMax, IM_COL32(130, 150, 140, 255), 4.0f, 0, 1.5f);
+
+        if (progress > 0.0f)
+        {
+            ImVec2 fgMax = { bgMin.x + barWidth * progress, bgMax.y };
+            draw->AddRectFilled(bgMin, fgMax, IM_COL32(240, 200, 50, 255), 4.0f);
+        }
+    }
 
     // フィールドウィンドウを閉じます。
     ImGui::End();
@@ -1939,14 +2079,32 @@ void SceneNarakuProto::DrawResult()
 
 void SceneNarakuProto::DrawMapControls()
 {
-    // マップピンウィンドウの初期位置を指定します。
+    // マップウィンドウの初期位置を指定します。
     ImGui::SetNextWindowPos(ImVec2(690.0f, 80.0f), ImGuiCond_FirstUseEver);
 
-    // マップピンウィンドウの初期サイズを指定します。
-    ImGui::SetNextWindowSize(ImVec2(360.0f, 360.0f), ImGuiCond_FirstUseEver);
+    // マップウィンドウの初期サイズを指定します。
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 380.0f), ImGuiCond_FirstUseEver);
 
-    // マップピンウィンドウを開始します。
-    ImGui::Begin(u8"地図ピン", nullptr, ImGuiWindowFlags_NoCollapse);
+    // マップウィンドウを開始します。
+    ImGui::Begin(u8"地図", nullptr, ImGuiWindowFlags_NoCollapse);
+
+    // 拡大縮小操作のUIを追加します。
+    if (ImGui::Button("-"))
+    {
+        m_mapZoom = std::max(0.5f, m_mapZoom - 0.25f);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("+"))
+    {
+        m_mapZoom = std::min(5.0f, m_mapZoom + 0.25f);
+    }
+    ImGui::SameLine();
+    ImGui::Text("Zoom %.2fx", m_mapZoom);
+    ImGui::SameLine();
+    if (ImGui::Button("Reset"))
+    {
+        m_mapZoom = 2.0f;
+    }
 
     // ミニマップ描画領域の左上座標を取得します。
     Vec2 canvasPos = { ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y };
@@ -1956,31 +2114,106 @@ void SceneNarakuProto::DrawMapControls()
 
     // ImGuiの直接描画リストを取得します。
     ImDrawList* draw = ImGui::GetWindowDrawList();
+    const Vec2 mapFocus = m_player.pos;
 
     // ミニマップ背景を塗ります。
     draw->AddRectFilled(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(24, 28, 28, 255));
 
-    // ミニマップ外枠を描きます。
-    draw->AddRect(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(130, 145, 145, 255));
+    // キャンバス外へのはみ出しを防ぐため、クリッピングを設定します。
+    draw->PushClipRect(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), true);
 
-    // プレイヤー位置をミニマップ座標へ変換します。
-    Vec2 player = WorldToCanvas(canvasPos, canvasSize, m_player.pos);
+    // 1. 地形セルの描画 (プレイヤー現在深度付近のレイヤーのみ)
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+    {
+        if (layer.gridWidth < 2 || layer.gridHeight < 2) continue;
+        if (std::fabs(layer.layerDepth - m_player.depth) > 0.5f) continue;
 
-    // プレイヤーを緑の点で描きます。
-    draw->AddCircleFilled(ImVec2(player.x, player.y), 5.0f, IM_COL32(90, 220, 150, 255));
+        const float halfWidth = (layer.gridWidth - 1) * layer.cellSize * 0.5f;
+        const float halfHeight = (layer.gridHeight - 1) * layer.cellSize * 0.5f;
+        const float minX = layer.center.x - halfWidth;
+        const float minZ = layer.center.z - halfHeight;
 
-    // 登録済みピンをミニマップに描きます。
+        for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
+        {
+            for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
+            {
+                const std::uint32_t flags = NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ);
+                if (flags & NarakuMap::CellAttributeRemoved) continue;
+
+                Vec2 c00 = { minX + cellX * layer.cellSize, minZ + cellZ * layer.cellSize };
+                Vec2 c11 = { c00.x + layer.cellSize, c00.y + layer.cellSize };
+
+                Vec2 p00 = WorldToCanvas(canvasPos, canvasSize, c00, m_mapZoom, mapFocus);
+                Vec2 p11 = WorldToCanvas(canvasPos, canvasSize, c11, m_mapZoom, mapFocus);
+
+                ImU32 color = IM_COL32(35, 55, 45, 200); // 通常歩行可能
+                if (flags & NarakuMap::CellAttributeBlocked)
+                {
+                    color = IM_COL32(95, 38, 38, 220); // 通行不可（赤系）
+                }
+                else if (flags & NarakuMap::CellAttributeCliffEdge)
+                {
+                    color = IM_COL32(85, 75, 40, 200); // 崖端（黄系）
+                }
+                else if (flags & NarakuMap::CellAttributeHazard)
+                {
+                    color = IM_COL32(100, 38, 100, 200); // 危険地形（紫系）
+                }
+
+                draw->AddRectFilled(ImVec2(p00.x, p00.y), ImVec2(p11.x, p11.y), color);
+                draw->AddRect(ImVec2(p00.x, p00.y), ImVec2(p11.x, p11.y), IM_COL32(30, 36, 36, 80));
+            }
+        }
+    }
+
+    // 2. 帰還地点の描画
+    Vec2 ret = WorldToCanvas(canvasPos, canvasSize, m_returnPoint, m_mapZoom, mapFocus);
+    draw->AddCircleFilled(ImVec2(ret.x, ret.y), 6.0f, IM_COL32(80, 180, 255, 255));
+
+    // 3. 採掘ポイントの描画 (採掘済み、または発見済みのみ)
+    for (const MiningPoint& point : m_miningPoints)
+    {
+        if (!(point.mined || point.discovered))
+        {
+            continue;
+        }
+
+        Vec2 p = WorldToCanvas(canvasPos, canvasSize, point.pos, m_mapZoom, mapFocus);
+        ImU32 color = point.mined ? IM_COL32(70, 70, 70, 255) : IM_COL32(185, 155, 90, 255);
+        draw->AddCircleFilled(ImVec2(p.x, p.y), 4.5f, color);
+    }
+
+    // 4. マップピンの描画
     for (const Vec2& pin : m_pins)
     {
-        // ピン座標をミニマップ座標へ変換します。
-        Vec2 p = WorldToCanvas(canvasPos, canvasSize, pin);
-
-        // ピンを赤い点で描きます。
+        Vec2 p = WorldToCanvas(canvasPos, canvasSize, pin, m_mapZoom, mapFocus);
         draw->AddCircleFilled(ImVec2(p.x, p.y), 4.0f, IM_COL32(230, 80, 90, 255));
     }
 
+    // 5. プレイヤー位置と向きの描画
+    Vec2 player = WorldToCanvas(canvasPos, canvasSize, m_player.pos, m_mapZoom, mapFocus);
+    draw->AddCircleFilled(ImVec2(player.x, player.y), 5.0f, IM_COL32(90, 220, 150, 255));
+    Vec2 faceEnd = WorldToCanvas(canvasPos, canvasSize, Add(m_player.pos, Mul(m_player.facing, 3.0f / m_mapZoom)), m_mapZoom, mapFocus);
+    draw->AddLine(ImVec2(player.x, player.y), ImVec2(faceEnd.x, faceEnd.y), IM_COL32(230, 250, 230, 255), 1.5f);
+
+    // クリッピングを終了します。
+    draw->PopClipRect();
+
+    // ミニマップ外枠を描きます。
+    draw->AddRect(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(130, 145, 145, 255));
+
     // マウスがミニマップ領域内にあるか調べます。
     bool hovered = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y));
+
+    // マウスホイールによるスクロール拡縮
+    if (hovered)
+    {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f)
+        {
+            m_mapZoom = std::max(0.5f, std::min(5.0f, m_mapZoom + wheel * 0.25f));
+        }
+    }
 
     // ミニマップ上で右クリックされたらピン設置/削除を行います。
     if (hovered && IsMouseRightTrigger())
@@ -1989,14 +2222,14 @@ void SceneNarakuProto::DrawMapControls()
         ImVec2 mouse = ImGui::GetIO().MousePos;
 
         // スクリーン座標をワールド座標へ変換してピン操作します。
-        TogglePinAt(ScreenToWorld(canvasPos, canvasSize, { mouse.x, mouse.y }));
+        TogglePinAt(ScreenToWorld(canvasPos, canvasSize, { mouse.x, mouse.y }, m_mapZoom, mapFocus));
     }
 
     // ミニマップ描画領域ぶんのImGuiレイアウト領域を確保します。
     ImGui::Dummy(ImVec2(canvasSize.x, canvasSize.y));
 
     // ピン操作説明を表示します。
-    ImGui::Text(u8"右クリック: ピン設置/削除");
+    ImGui::Text(u8"右クリック: ピン設置/削除   ホイール: 拡大縮小");
 
     // マップピンウィンドウを閉じます。
     ImGui::End();
@@ -2452,28 +2685,35 @@ void SceneNarakuProto::TogglePinAt(const Vec2& worldPos)
     AddMessage(u8"ピンを設置しました。");
 }
 
-SceneNarakuProto::Vec2 SceneNarakuProto::ScreenToWorld(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& mousePos) const
+SceneNarakuProto::Vec2 SceneNarakuProto::ScreenToWorld(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& mousePos, float zoom, const Vec2& focusPos) const
 {
-    // キャンバス内のX位置を0-1へ正規化します。
-    float nx = (mousePos.x - canvasPos.x) / canvasSize.x;
+    float scaleX = (canvasSize.x / (kWorldHalfSize * 2.0f)) * zoom;
+    float scaleY = (canvasSize.y / (kWorldHalfSize * 2.0f)) * zoom;
 
-    // キャンバス内のY位置を0-1へ正規化します。
-    float ny = (mousePos.y - canvasPos.y) / canvasSize.y;
+    if (std::fabs(scaleX) < 0.001f) scaleX = 1.0f;
+    if (std::fabs(scaleY) < 0.001f) scaleY = 1.0f;
 
-    // 正規化座標をワールド座標へ戻します。Yは画面上下とワールド上下が逆なので反転します。
-    return { (nx * 2.0f - 1.0f) * kWorldHalfSize, ((1.0f - ny) * 2.0f - 1.0f) * kWorldHalfSize };
+    float centerX = canvasPos.x + canvasSize.x * 0.5f;
+    float centerY = canvasPos.y + canvasSize.y * 0.5f;
+
+    float dx = (mousePos.x - centerX) / scaleX;
+    float dy = (centerY - mousePos.y) / scaleY;
+
+    return { focusPos.x + dx, focusPos.y + dy };
 }
 
-SceneNarakuProto::Vec2 SceneNarakuProto::WorldToCanvas(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& worldPos) const
+SceneNarakuProto::Vec2 SceneNarakuProto::WorldToCanvas(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& worldPos, float zoom, const Vec2& focusPos) const
 {
-    // ワールドX座標を0-1へ正規化します。
-    float nx = (worldPos.x / kWorldHalfSize + 1.0f) * 0.5f;
+    float scaleX = (canvasSize.x / (kWorldHalfSize * 2.0f)) * zoom;
+    float scaleY = (canvasSize.y / (kWorldHalfSize * 2.0f)) * zoom;
 
-    // ワールドY座標を0-1へ正規化します。画面Yは下向きなので反転します。
-    float ny = 1.0f - (worldPos.y / kWorldHalfSize + 1.0f) * 0.5f;
+    float centerX = canvasPos.x + canvasSize.x * 0.5f;
+    float centerY = canvasPos.y + canvasSize.y * 0.5f;
 
-    // 正規化座標をキャンバス上のスクリーン座標へ変換します。
-    return { canvasPos.x + nx * canvasSize.x, canvasPos.y + ny * canvasSize.y };
+    float dx = worldPos.x - focusPos.x;
+    float dy = worldPos.y - focusPos.y;
+
+    return { centerX + dx * scaleX, centerY - dy * scaleY };
 }
 
 int SceneNarakuProto::FindLayerIndexByDepth(float depth, float tolerance) const
@@ -2722,4 +2962,188 @@ SceneNarakuProto::Vec2 SceneNarakuProto::WorldToObliqueCanvas(const Vec2& canvas
 
     // 正規化座標をキャンバス上のスクリーン座標へ変換します。
     return { canvasPos.x + nx * canvasSize.x, canvasPos.y + ny * canvasSize.y };
+}
+
+void SceneNarakuProto::DrawMiniMap()
+{
+    if (m_debugPlayerParams.showMinimap < 0.5f) return;
+
+    float posX = m_debugPlayerParams.minimapPosX;
+    float posY = m_debugPlayerParams.minimapPosY;
+    float size = m_debugPlayerParams.minimapSize;
+
+    ImGui::SetNextWindowPos(ImVec2(posX, posY), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(size, size), ImGuiCond_Always);
+
+    ImGui::Begin("MiniMap#MiniMapWindow", nullptr,
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
+        ImGuiWindowFlags_NoSavedSettings);
+
+    Vec2 canvasPos = { ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y };
+    Vec2 canvasSize = { size, size };
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+
+    draw->AddRectFilled(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(20, 24, 24, 180));
+    draw->AddRect(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(100, 120, 110, 255), 0.0f, 0, 1.5f);
+
+    Vec2 ret = WorldToCanvas(canvasPos, canvasSize, m_returnPoint, m_mapZoom, m_player.pos);
+    draw->AddCircleFilled(ImVec2(ret.x, ret.y), 6.0f, IM_COL32(80, 180, 255, 255));
+
+    for (const RopePoint& rope : m_ropePoints)
+    {
+        Vec2 p = WorldToCanvas(canvasPos, canvasSize, rope.pos, m_mapZoom, m_player.pos);
+        draw->AddRectFilled(ImVec2(p.x - 2.0f, p.y - 2.0f), ImVec2(p.x + 2.0f, p.y + 2.0f), IM_COL32(170, 120, 70, 255));
+    }
+
+    for (const MiningPoint& point : m_miningPoints)
+    {
+        const bool visible = point.mined || point.discovered;
+        if (!visible) continue;
+
+        Vec2 p = WorldToCanvas(canvasPos, canvasSize, point.pos, m_mapZoom, m_player.pos);
+        ImU32 color = point.mined ? IM_COL32(70, 70, 70, 255) : IM_COL32(185, 155, 90, 255);
+        draw->AddCircleFilled(ImVec2(p.x, p.y), 4.0f, color);
+    }
+
+    for (const GroundRelic& relic : m_groundRelics)
+    {
+        if (!relic.active) continue;
+        Vec2 p = WorldToCanvas(canvasPos, canvasSize, relic.pos, m_mapZoom, m_player.pos);
+        draw->AddRectFilled(ImVec2(p.x - 2.0f, p.y - 2.0f), ImVec2(p.x + 2.0f, p.y + 2.0f), IM_COL32(240, 220, 130, 255));
+    }
+
+    for (const Vec2& pin : m_pins)
+    {
+        Vec2 p = WorldToCanvas(canvasPos, canvasSize, pin, m_mapZoom, m_player.pos);
+        draw->AddCircleFilled(ImVec2(p.x, p.y), 3.0f, IM_COL32(230, 80, 90, 255));
+    }
+
+    for (const EnemyState& enemy : m_enemies)
+    {
+        if (!enemy.alive) continue;
+        Vec2 p = WorldToCanvas(canvasPos, canvasSize, enemy.pos, m_mapZoom, m_player.pos);
+        ImU32 color = enemy.telegraphTimer > 0.0f ? IM_COL32(255, 200, 60, 255) : IM_COL32(210, 70, 70, 255);
+        if (enemy.chargeTimer > 0.0f) color = IM_COL32(255, 80, 40, 255);
+        draw->AddCircleFilled(ImVec2(p.x, p.y), 5.0f, color);
+    }
+
+    Vec2 player = WorldToCanvas(canvasPos, canvasSize, m_player.pos, m_mapZoom, m_player.pos);
+    draw->AddCircleFilled(ImVec2(player.x, player.y), 5.0f, IM_COL32(90, 220, 150, 255));
+
+    Vec2 faceEnd = WorldToCanvas(canvasPos, canvasSize, Add(m_player.pos, Mul(m_player.facing, 3.0f / m_mapZoom)), m_mapZoom, m_player.pos);
+    draw->AddLine(ImVec2(player.x, player.y), ImVec2(faceEnd.x, faceEnd.y), IM_COL32(230, 250, 230, 255), 1.5f);
+
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawPlayerPositionDebug()
+{
+    // デバッグウィンドウを表示します。
+    ImGui::SetNextWindowPos(ImVec2(20.0f, 400.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(360.0f, 220.0f), ImGuiCond_FirstUseEver);
+
+    if (ImGui::Begin(u8"プレイヤー位置デバッグ", nullptr))
+    {
+        // プレイヤーの現在位置と高さを表示
+        ImGui::Text(u8"現在位置 X: %.3f, Z: %.3f", m_player.pos.x, m_player.pos.y);
+        ImGui::Text(u8"現在高さ Y: %.3f (FeetWorldY: %.3f)", GetPlayerAirborneOffset() + GetGroundWorldY(m_player.pos, m_player.depth), m_player.feetWorldY);
+        ImGui::Text(u8"現在深度: %.2f", m_player.depth);
+        ImGui::Separator();
+
+        // プレイヤーのグリッド座標を計算
+        int gridX = -1;
+        if (m_player.pos.x >= -45.0f && m_player.pos.x < -15.0f) gridX = 0;
+        else if (m_player.pos.x >= -15.0f && m_player.pos.x < 15.0f) gridX = 1;
+        else if (m_player.pos.x >= 15.0f && m_player.pos.x <= 45.0f) gridX = 2;
+
+        int gridZ = -1;
+        if (m_player.pos.y >= -45.0f && m_player.pos.y < -15.0f) gridZ = 0;
+        else if (m_player.pos.y >= -15.0f && m_player.pos.y < 15.0f) gridZ = 1;
+        else if (m_player.pos.y >= 15.0f && m_player.pos.y <= 45.0f) gridZ = 2;
+
+        ImGui::Text(u8"グリッド座標: (%d, %d)", gridX, gridZ);
+
+        std::string pieceName = u8"不明";
+        if (m_runtimeMap.pieceNames.empty())
+        {
+            pieceName = u8"未生成(再生成してください)";
+        }
+        else if (gridX >= 0 && gridX < 3 && gridZ >= 0 && gridZ < 3)
+        {
+            size_t index = static_cast<size_t>(gridZ * 3 + gridX);
+            if (index < m_runtimeMap.pieceNames.size())
+            {
+                pieceName = m_runtimeMap.pieceNames[index];
+            }
+        }
+        ImGui::Text(u8"小ステージ名: %s", pieceName.c_str());
+        ImGui::Separator();
+
+        // デバッグの障害調査として、プレイヤーの現在位置のセル属性も表示
+        int currentLayerIndex = FindLayerIndexByDepth(m_player.depth);
+        if (currentLayerIndex >= 0 && currentLayerIndex < static_cast<int>(m_runtimeMap.terrainLayers.size()))
+        {
+            const NarakuMap::TerrainLayer& layer = m_runtimeMap.terrainLayers[currentLayerIndex];
+            float halfWidth = (layer.gridWidth - 1) * layer.cellSize * 0.5f;
+            float halfHeight = (layer.gridHeight - 1) * layer.cellSize * 0.5f;
+            float relativeX = m_player.pos.x - (layer.center.x - halfWidth);
+            float relativeZ = m_player.pos.y - (layer.center.z - halfHeight);
+            int cellX = static_cast<int>(std::floor(relativeX / layer.cellSize));
+            int cellZ = static_cast<int>(std::floor(relativeZ / layer.cellSize));
+
+            if (cellX >= 0 && cellX < layer.gridWidth - 1 && cellZ >= 0 && cellZ < layer.gridHeight - 1)
+            {
+                std::uint32_t flags = NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ);
+                std::string attr = "";
+                if (flags & NarakuMap::CellAttributeBlocked) attr += "Blocked ";
+                if (flags & NarakuMap::CellAttributeCliffEdge) attr += "CliffEdge ";
+                if (flags & NarakuMap::CellAttributeHazard) attr += "Hazard ";
+                if (flags & NarakuMap::CellAttributeRemoved) attr += "Removed ";
+                if (attr.empty()) attr = "None (Walkable)";
+                ImGui::Text(u8"現在セル(%d, %d) 属性: %s", cellX, cellZ, attr.c_str());
+            }
+            else
+            {
+                ImGui::Text(u8"現在セル: レイヤー範囲外 (%d, %d)", cellX, cellZ);
+            }
+        }
+        else
+        {
+            ImGui::Text(u8"現在レイヤー: 不明 (深度 %.2f)", m_player.depth);
+        }
+    }
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawMiningProgressBar()
+{
+    if (m_miningIndex < 0) return;
+
+    float screenW = static_cast<float>(SCREEN_WIDTH);
+    float screenH = static_cast<float>(SCREEN_HEIGHT);
+
+    float barWidth = 260.0f;
+    float barHeight = 45.0f;
+
+    ImGui::SetNextWindowPos(ImVec2((screenW - barWidth) * 0.5f, (screenH - barHeight) * 0.5f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(barWidth, barHeight), ImGuiCond_Always);
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
+                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs;
+
+    if (ImGui::Begin("MiningProgressOverlay##Overlay", nullptr, flags))
+    {
+        std::string text = u8"採掘中...";
+        float textWidth = ImGui::CalcTextSize(text.c_str()).x;
+        ImGui::SetCursorPosX((barWidth - textWidth) * 0.5f);
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), text.c_str());
+
+        float progress = std::max(0.0f, std::min(1.0f, 1.0f - (m_miningTimer / kMiningTime)));
+        ImGui::ProgressBar(progress, ImVec2(-1.0f, 18.0f), "");
+    }
+    ImGui::End();
 }
