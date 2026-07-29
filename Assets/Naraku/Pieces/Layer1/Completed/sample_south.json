@@ -2,7 +2,7 @@
   "version": 1,
   "id": "piece_0001",
   "displayName": "piece_0001",
-  "lastModified": "2026/07/11 12:33:33",
+  "lastModified": "2026/07/21 15:08:57",
   "abyssLayer": 1,
   "sizePreset": "16x16",
   "gridWidth": 16,
@@ -24,7 +24,7 @@
   },
   "heights": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6, -6],
   "cells": [
-    { "deleted": false, "walkable": false, "ropeAllowed": false, "miningAllowed": false, "enemySpawnAllowed": false, "groundTextureId": 0 },
+    { "deleted": false, "walkable": true, "ropeAllowed": true, "miningAllowed": true, "enemySpawnAllowed": true, "groundTextureId": 0 },
     { "deleted": false, "walkable": true, "ropeAllowed": true, "miningAllowed": true, "enemySpawnAllowed": true, "groundTextureId": 0 },
     { "deleted": false, "walkable": true, "ropeAllowed": true, "miningAllowed": true, "enemySpawnAllowed": true, "groundTextureId": 0 },
     { "deleted": false, "walkable": true, "ropeAllowed": true, "miningAllowed": true, "enemySpawnAllowed": true, "groundTextureId": 0 },
@@ -255,12 +255,27 @@
     "top": { "x": 0, "z": 0 },
     "bottom": { "x": 0, "z": 0 }
   },
+  "layerTransition": {
+    "role": "none",
+    "ropePointEnabled": false,
+    "ropePoint": { "x": 0, "z": 0 },
+    "loadPointEnabled": false,
+    "loadPoint": { "x": 0, "z": 0 }
+  },
   "miningPoints": [
     { "id": "mining_01", "cell": { "x": 10, "z": 3 }, "visualType": 0, "initiallyRecorded": true },
     { "id": "mining_02", "cell": { "x": 4, "z": 2 }, "visualType": 0, "initiallyRecorded": true },
     { "id": "mining_03", "cell": { "x": 12, "z": 5 }, "visualType": 0, "initiallyRecorded": false },
     { "id": "mining_04", "cell": { "x": 9, "z": 9 }, "visualType": 0, "initiallyRecorded": false },
     { "id": "mining_05", "cell": { "x": 7, "z": 6 }, "visualType": 0, "initiallyRecorded": false }
+  ],
+  "environmentObjects": [
+    { "modelId": "environment_model_1784614004_0", "cell": { "x": 2, "z": 3 }, "scale": { "x": 3, "y": 2.1, "z": 3 } },
+    { "modelId": "environment_model_1784613967_0", "cell": { "x": 5, "z": 7 }, "scale": { "x": 3, "y": 1.5, "z": 3 } },
+    { "modelId": "environment_model_1784613980_0", "cell": { "x": 9, "z": 3 }, "scale": { "x": 3, "y": 1.5, "z": 3 } },
+    { "modelId": "environment_model_1784613980_0", "cell": { "x": 12, "z": 9 }, "scale": { "x": 3, "y": 1.5, "z": 3 } },
+    { "modelId": "environment_model_1784613980_0", "cell": { "x": 13, "z": 1 }, "scale": { "x": 3, "y": 1.5, "z": 3 } },
+    { "modelId": "environment_model_1784613980_0", "cell": { "x": 1, "z": 10 }, "scale": { "x": 3, "y": 1.5, "z": 3 } }
   ],
   "startReturnCandidate": {
     "enabled": false,

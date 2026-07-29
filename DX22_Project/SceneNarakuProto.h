@@ -1,13 +1,19 @@
-#pragma once
+﻿#pragma once
 
 #include "Scene.h"
 #include "NarakuMapData.h"
 
 #include <DirectXMath.h>
+#include <array>
+#include <cstddef>
 #include <string>
 #include <vector>
 
 class Texture;
+class Model;
+class MeshBuffer;
+class VertexShader;
+class PixelShader;
 
 /**
  * @brief 奈落塔の第一層プロトタイプを動かす専用シーンです。
@@ -82,6 +88,9 @@ private:
         /** @brief 攻撃行動の残り時間です。0より大きい間は攻撃中です。 */
         float attackTimer = 0.0f;
 
+        /** @brief 横振り攻撃の向きです。攻撃を開始するたびに反転します。 */
+        bool attackSwingReverse = false;
+
         /** @brief ステップ行動の残り時間です。無敵時間と後硬直の合計を入れています。 */
         float stepTimer = 0.0f;
 
@@ -113,21 +122,53 @@ private:
         float landingRecoveryTimer = 0.0f;
     };
 
-    /**
-     * @brief 所持、地面置き、売却対象になる旧器アイテムです。
-     *
-     * プロトタイプでは4級旧器のみを扱うため、効果は持たず重量と売値だけを持ちます。
-     */
+    enum class RelicType
+    {
+        ArmamentUpgrade,
+        WeaponUpgrade,
+        ArmorUpgrade,
+        Offensive,
+        Survival,
+        Cash,
+        MentalRecovery,
+        Count
+    };
+
+    enum class ArmorTier
+    {
+        Leather,
+        Iron,
+        RelicCovered,
+        RelicHardened,
+        RelicEnhanced,
+        Relic,
+        Count
+    };
+
+    enum class WeaponTier
+    {
+        RustyPickaxe,
+        NormalPickaxe,
+        SturdyPickaxe,
+        SharpPickaxe,
+        RelicPickaxe,
+        Count
+    };
+
+    /** @brief 所持、地面置き、鑑定、売却対象になる遺物です。 */
     struct RelicItem
     {
-        /** @brief 旧器名です。現段階では英字で表示して文字コード問題を避けています。 */
+        /** @brief 採掘ポイント側で設定された発見物名です。 */
         std::string name;
 
-        /** @brief 旧器の重量です。4級旧器は固定で15にしています。 */
-        float weight = 15.0f;
+        /** @brief 採掘時に確定する遺物種類です。 */
+        RelicType type = RelicType::Cash;
 
-        /** @brief 売却価格です。4級旧器は固定で5にしています。 */
-        int value = 5;
+        /** @brief 遺物種類に応じた重量です。 */
+        float weight = 10.0f;
+
+        /** @brief 遺物種類に応じた売却価格です。 */
+        int value = 30;
     };
 
     /**
@@ -149,6 +190,22 @@ private:
         /** @brief 拾える状態かどうかです。false のものは描画や判定から外します。 */
         bool active = true;
     }; 
+
+    /** @brief 敵が落とし、フィールド上で拾える食料です。 */
+    struct GroundFood
+    {
+        Vec2 pos;
+        float depth = 0.0f;
+        bool active = true;
+    };
+
+    /** @brief プレイヤー攻撃が命中した位置で再生するビルボードエフェクトです。 */
+    struct AttackHitEffect
+    {
+        Vec2 pos;
+        float depth = 0.0f;
+        float remainingTime = 0.0f;
+    };
 
     /**
      * @brief 採掘ポイントの状態です。
@@ -225,6 +282,9 @@ private:
         /** @brief 1回の体当たりで複数回ヒットしないようにするフラグです。 */
         bool hasHitThisCharge = false;
 
+        /** @brief プレイヤーの現在の1攻撃で既に命中したかどうかです。 */
+        bool hitByPlayerAttack = false;
+
         /** @brief 着地直後の硬直残り時間です。0より大きい間は通常追跡と体当たり開始を止めます。 */
         float landingRecoveryTimer = 0.0f;
     };
@@ -256,18 +316,51 @@ private:
     /**
      * @brief 上層床と下層床をつなぐロープです。
      *
-     * pos はXZ平面上の位置で、topDepth と bottomDepth の間だけ昇降できます。
+     * 上端と下端は別々のXZ座標を持ち、両端の間を補間して昇降できます。
      */
     struct RopePoint
     {
-        /** @brief ロープの平面位置です。 */
-        Vec2 pos;
+        /** @brief ロープ上端の平面位置です。 */
+        Vec2 topPos;
+
+        /** @brief ロープ下端の平面位置です。 */
+        Vec2 bottomPos;
 
         /** @brief ロープ上端の深度です。 */
         float topDepth = 0.0f;
 
         /** @brief ロープ下端の深度です。 */
         float bottomDepth = 4.0f;
+    };
+
+    struct LayerGateState
+    {
+        bool isEntry = false;
+        Vec2 ropePos;
+        Vec2 loadPos;
+        float depth = 0.0f;
+        int destinationAreaIndex = -1;
+        int generationFailures = 0;
+        bool disabled = false;
+    };
+
+    struct AreaState
+    {
+        int depth = 1;
+        NarakuMap::MapData map;
+        std::vector<GroundRelic> groundRelics;
+        std::vector<GroundFood> groundFoods;
+        std::vector<MiningPoint> miningPoints;
+        std::vector<EnemyState> enemies;
+        std::vector<FloorRegion> floorRegions;
+        std::vector<RopePoint> ropePoints;
+        std::vector<LayerGateState> layerGates;
+        std::vector<Vec2> pins;
+        Vec2 startPoint;
+        float startDepth = 0.0f;
+        Vec2 returnPoint;
+        float returnDepth = 0.0f;
+        float worldHalfSize = 1.0f;
     };
 
     /**
@@ -294,6 +387,9 @@ private:
 
         /** @brief 帰還時に全売却した場合の合計金額です。 */
         int saleAmount = 0;
+
+        /** @brief 今回の帰還で初めて鑑定した遺物種類数です。 */
+        int identifiedRelics = 0;
     };
 
     /**
@@ -371,16 +467,34 @@ private:
         /** @brief 旧器発見時に拾うか置くかを選ばせる状態です。 */
         RelicPrompt,
 
-        /** @brief 生還後の売却リザルトを表示している状態です。 */
+        /** @brief 帰還地点で帰還するか確認している状態です。 */
+        ReturnConfirm,
+
+        /** @brief 生還後の鑑定結果と帰還先を表示している状態です。 */
         ReturnResult,
 
         /** @brief 死亡後のロストリザルトを表示している状態です。 */
-        DeathResult
+        DeathResult,
+
+        /** @brief 自宅で装備と次回持ち込み品を整える状態です。 */
+        Home,
+
+        /** @brief 食料、遺物の購入と遺物売却を行う状態です。 */
+        GeneralShop,
+
+        /** @brief 頭、胴装備とつるはしを購入する状態です。 */
+        Armory,
+
+        /** @brief 初回の層間口で接続先エリアを生成している状態です。 */
+        Loading,
+
+        /** @brief 2エリア間をロープで昇降している状態です。 */
+        LayerTransition
     };
 
 private:
-    /** @brief 1回の潜行を初期状態に戻します。所持金だけは維持します。 */
-    void ResetRun();
+    /** @brief 3x3マップを生成し、1回の潜行を初期状態に戻します。 */
+    bool ResetRun();
 
     /** @brief 探索モード中の全更新をまとめて呼び出します。 */
     void UpdateExplore(float dt);
@@ -400,6 +514,9 @@ private:
     /** @brief 深度差から上昇負荷ゲージを加算または回復します。 */
     void UpdateUpperLoad(float dt);
 
+    void UpdateLoading();
+    void UpdateLayerTransition(float dt);
+
     /** @brief Fキーで行う帰還、ロープ、旧器拾い、採掘開始を近い順に処理します。 */
     void TryInteract();
 
@@ -418,17 +535,61 @@ private:
     /** @brief 死亡リザルトへ移行し、所持旧器とピンを失わせます。 */
     void StartDeath(const char* reason);
 
-    /** @brief 帰還リザルトへ移行し、持ち帰り旧器と売却額を集計します。 */
+    /** @brief 帰還処理を確定し、持ち帰った遺物を鑑定して自宅在庫へ移します。 */
     void FinishReturn();
 
-    /** @brief 帰還リザルトの旧器を全売却し、次の潜行を開始します。 */
-    void SellAllAndRestart();
+    /** @brief 自宅で選択した持ち込み品を引き出し、新しい潜行を開始します。 */
+    void StartDive();
 
     /** @brief 死亡後に再挑戦用の新しい潜行を開始します。 */
     void RestartAfterDeath();
 
     /** @brief DirectXのデバッグ形状で3Dフィールドを描画します。 */
     void Draw3DField();
+    /** @brief 半透明床のバッチ描画に使うシェーダーを作成します。 */
+    void InitializeTerrainFloorBatch();
+    /** @brief 半透明床のバッチ描画資源を解放します。 */
+    void ReleaseTerrainFloorBatch();
+    /** @brief 現在エリアの最大床数に合わせて動的頂点バッファを再構築します。 */
+    void RebuildTerrainFloorBatch();
+    /** @brief 1枚の水平床を今フレームのバッチへ追加します。 */
+    void AppendTerrainFloorQuad(
+        const DirectX::XMFLOAT3& center,
+        const DirectX::XMFLOAT2& size,
+        const DirectX::XMFLOAT4& color);
+    /** @brief 今フレームに追加された半透明床を1回のドローで描画します。 */
+    void DrawTerrainFloorBatch(
+        const DirectX::XMFLOAT4X4& view,
+        const DirectX::XMFLOAT4X4& projection);
+    /** @brief 敵スプライトのビルボード描画に使う資源を作成します。 */
+    void InitializeEnemyBillboardBatch();
+    /** @brief 敵スプライトのビルボード描画資源を解放します。 */
+    void ReleaseEnemyBillboardBatch();
+    /** @brief 現在エリアの敵数に合わせて動的頂点バッファを再構築します。 */
+    void RebuildEnemyBillboardBatch();
+    /** @brief 生存中の敵スプライトをビルボードとして1回のドローで描画します。 */
+    void DrawEnemyBillboardBatch(
+        const DirectX::XMFLOAT4X4& view,
+        const DirectX::XMFLOAT4X4& projection);
+    /** @brief 環境モデル登録簿を読み込み、プロト描画用モデルを構築します。 */
+    void LoadEnvironmentModels();
+    /** @brief プロト描画用の環境モデルを解放します。 */
+    void ReleaseEnvironmentModels();
+    /** @brief 生成マップに配置された環境オブジェクトを描画します。 */
+    void DrawEnvironmentObjects(
+        const DirectX::XMFLOAT4X4& view,
+        const DirectX::XMFLOAT4X4& projection,
+        const DirectX::XMFLOAT3& cameraPosition);
+    /** @brief カメラ方向に追従する方位コンパスを画面右上へ描画します。 */
+    void DrawCompass() const;
+    /** @brief 探索中の右ドラッグ入力から軌道カメラの角度を更新します。 */
+    void UpdateCameraControls();
+    /** @brief 現在のカメラの水平前方向を返します。 */
+    Vec2 GetCameraForward() const;
+    /** @brief 現在のカメラの水平右方向を返します。 */
+    Vec2 GetCameraRight() const;
+    /** @brief カメラ距離とY方向オフセットを安全な範囲へ正規化します。 */
+    void NormalizeCameraSettings();
 
     /** @brief ImGui のトップダウンフィールドを描画します。現在は補助用で、通常描画からは呼びません。 */
     void DrawField();
@@ -445,6 +606,18 @@ private:
     /** @brief 帰還または死亡のリザルトウィンドウを描画します。 */
     void DrawResult();
 
+    /** @brief 帰還地点での確認ウィンドウを描画します。 */
+    void DrawReturnConfirm();
+
+    /** @brief 自宅の装備変更、持ち込み品選択、潜行開始UIを描画します。 */
+    void DrawHome();
+
+    /** @brief 商店の購入・売却UIを描画します。 */
+    void DrawGeneralShop();
+
+    /** @brief 武具屋の武具購入UIを描画します。 */
+    void DrawArmory();
+
     /** @brief 所持品表示中に使う簡易地図とピン操作を描画します。 */
     void DrawMapControls();
 
@@ -460,10 +633,60 @@ private:
     /** @brief 採掘中の進行度バーを画面中央にオーバーレイ表示します。 */
     void DrawMiningProgressBar();
 
+    void DrawLoadingScreen();
+
+    /** @brief 操作不能理由などの短い通知をメイン表示領域の中央に描画します。 */
+    void DrawCenterNotification();
+
     /** @brief 現在の総重量を計算します。 */
     float GetCurrentWeight() const;
 
-    /** @brief 最大重量100に対する現在重量の割合を返します。 */
+    /** @brief 現在の装備効果を反映した重量上限を返します。 */
+    float GetMaxWeight() const;
+
+    /** @brief 地面から取得できる重量の上限を返します。 */
+    float GetPickupWeightLimit() const;
+
+    /** @brief 装備中のつるはしによる採掘速度倍率を返します。 */
+    float GetMiningSpeedMultiplier() const;
+
+    /** @brief 遺物種類に対応する表示名を返します。 */
+    const char* GetRelicTypeName(RelicType type) const;
+
+    /** @brief 鑑定状態を考慮した遺物表示名を返します。 */
+    const char* GetRelicDisplayName(const RelicItem& item) const;
+
+    /** @brief 遺物種類に対応する重量を返します。 */
+    float GetRelicWeight(RelicType type) const;
+
+    /** @brief 遺物種類に対応する売却価格を返します。 */
+    int GetRelicSellValue(RelicType type) const;
+
+    /** @brief 指定種類の遺物アイテムを作成します。 */
+    RelicItem CreateRelic(RelicType type, const std::string& sourceName) const;
+
+    /** @brief 7種類から均等抽選した遺物を作成します。 */
+    RelicItem CreateRandomRelic(const std::string& sourceName) const;
+
+    /** @brief 食料を1個使い、体力を2回復します。 */
+    void UseFood();
+
+    /** @brief 装備名を返します。 */
+    const char* GetArmorName(ArmorTier tier) const;
+
+    /** @brief 頭と胴に遺物装備を揃えているか判定します。 */
+    bool HasRelicArmorSetEffect() const;
+
+    /** @brief 武器名を返します。 */
+    const char* GetWeaponName(WeaponTier tier) const;
+
+    /** @brief 所持金と素材を確認して装備を購入します。 */
+    bool TryBuyArmor(ArmorTier tier, bool headSlot, bool useMaterials);
+
+    /** @brief 所持金と素材を確認して武器を購入します。 */
+    bool TryBuyWeapon(WeaponTier tier, bool useMaterials);
+
+    /** @brief 現在の重量上限に対する現在重量の割合を返します。 */
     float GetWeightRate() const;
 
     /** @brief 重量70%以上の速度低下を反映した歩行速度を返します。 */
@@ -501,6 +724,17 @@ private:
 
     /** @brief HUDに表示する短いログを追加します。 */
     void AddMessage(const std::string& message);
+
+    /** @brief メイン表示領域中央へ一定時間表示する通知を設定します。 */
+    void ShowCenterNotification(const std::string& message);
+
+    void SaveCurrentAreaState();
+    void ActivateArea(int areaIndex, bool placeAtEntry);
+    void BuildCurrentAreaRuntime(bool placeAtStart);
+    void TryUseLayerGate(int gateIndex);
+    void BeginLayerTransition(int sourceGateIndex, int destinationAreaIndex);
+    bool LoadDebugPlayerParams();
+    bool SaveDebugPlayerParams() const;
 
     /** @brief プレイヤーの近くにある未発見採掘ポイントを発見済みにします。 */
     void DiscoverNearbyMiningPoints();
@@ -557,8 +791,11 @@ private:
     /** @brief 現在のプレイヤーのジャンプ高さを考慮した追加オフセットを返します。 */
     float GetPlayerAirborneOffset() const;
 
-    /** @brief ロープ番号と深度から、ロープ上の絶対ワールド高さを線形補間して返します。 */
-    float GetRopeWorldY(int ropeIndex, float depth) const;
+    /** @brief ロープ番号と補間率から、ロープ上の平面位置を返します。 */
+    Vec2 GetRopePosition(int ropeIndex, float progress) const;
+
+    /** @brief ロープ番号と補間率から、ロープ上の絶対ワールド高さを返します。 */
+    float GetRopeWorldY(int ropeIndex, float progress) const;
 
     /** @brief レイヤー頂点を地形高さ込みの3D座標へ変換します。 */
     DirectX::XMFLOAT3 GetTerrainVertexWorld3D(const NarakuMap::TerrainLayer& layer, int gridX, int gridZ, float heightOffset = 0.0f) const;
@@ -571,9 +808,6 @@ private:
 
     /** @brief 指定位置とサイズでデバッグ球を描画します。 */
     void DrawDebugSphere3D(const DirectX::XMFLOAT3& pos, float radius) const;
-
-    /** @brief 指定位置に半透明の水平床を描画します。 */
-    void DrawTransparentFloor3D(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT2& size, const DirectX::XMFLOAT4& color) const;
 
     /** @brief 指定座標が床矩形内に入っているかを返します。 */
     bool IsInsideFloor(const FloorRegion& floor, const Vec2& pos) const;
@@ -618,11 +852,17 @@ private:
     /** @brief フィールド上に置かれている旧器一覧です。 */
     std::vector<GroundRelic> m_groundRelics;
 
+    /** @brief 敵が落とした拾得可能な食料一覧です。 */
+    std::vector<GroundFood> m_groundFoods;
+
     /** @brief 第一層プロトタイプ用の採掘ポイント一覧です。 */
     std::vector<MiningPoint> m_miningPoints;
 
     /** @brief 第一層プロトタイプ用の敵一覧です。 */
     std::vector<EnemyState> m_enemies;
+
+    /** @brief 再生中のプレイヤー攻撃命中エフェクト一覧です。 */
+    std::vector<AttackHitEffect> m_attackHitEffects;
 
     /** @brief 実際の移動判定に使う床領域一覧です。 */
     NarakuMap::MapData m_runtimeMap;
@@ -645,14 +885,62 @@ private:
     /** @brief ロープの位置と接続深度の一覧です。 */
     std::vector<RopePoint> m_ropePoints;
 
+    /** @brief 現在のエリアに配置された層間口一覧です。 */
+    std::vector<LayerGateState> m_layerGates;
+
+    /** @brief 今回の潜行中に生成済みの全エリア状態です。 */
+    std::vector<AreaState> m_areas;
+
+    /** @brief 現在表示しているエリア番号です。 */
+    int m_currentAreaIndex = -1;
+
     /** @brief 現在つかまっているロープ番号です。未使用時は -1 です。 */
     int m_activeRope = -1;
+
+    /** @brief 現在つかまっているロープの上端0、下端1の補間率です。 */
+    float m_ropeProgress = 0.0f;
 
     /** @brief プレイヤーが置いた地図ピン一覧です。 */
     std::vector<Vec2> m_pins;
 
     /** @brief HUDに表示する短いログ一覧です。 */
     std::vector<std::string> m_messages;
+
+    /** @brief メイン表示領域中央へ表示する短い通知です。 */
+    std::string m_centerNotification;
+
+    /** @brief 中央通知の残り表示時間です。 */
+    float m_centerNotificationTimer = 0.0f;
+
+    /** @brief 初回接続先生成を要求した層間口番号です。 */
+    int m_loadingSourceGateIndex = -1;
+
+    /** @brief ロード画面を最低1フレーム表示するための処理段階です。 */
+    int m_loadingStep = 0;
+
+    /** @brief ロード画面へ表示する進捗率です。 */
+    float m_loadingProgress = 0.0f;
+
+    /** @brief 遷移元の層間口番号です。 */
+    int m_transitionSourceGateIndex = -1;
+
+    /** @brief 遷移先エリア番号です。 */
+    int m_transitionDestinationAreaIndex = -1;
+
+    /** @brief 遷移先で接続する層間口番号です。 */
+    int m_transitionDestinationGateIndex = -1;
+
+    /** @brief 層間ロープ移動の進行率です。 */
+    float m_layerTransitionProgress = 0.0f;
+
+    /** @brief 層間ロープ移動中の描画用高さです。 */
+    float m_layerTransitionVisualOffset = 0.0f;
+
+    /** @brief 現在の層間移動が上昇かどうかです。 */
+    bool m_layerTransitionAscending = false;
+
+    /** @brief 重量超過中の走行通知をキー押下ごとに一度だけ出すための状態です。 */
+    bool m_heavyRunNotificationShown = false;
 
     /** @brief 現在のシーン内モードです。 */
     Mode m_mode = Mode::Explore;
@@ -690,27 +978,134 @@ private:
     /** @brief 採掘完了までの残り時間です。 */
     float m_miningTimer = 0.0f;
 
+    /** @brief 現在装備中のつるはしを反映した今回の採掘所要時間です。 */
+    float m_miningDuration = 2.0f;
+
     /** @brief 採掘中の採掘ポイント番号です。-1なら採掘していません。 */
     int m_miningIndex = -1;
 
     /** @brief 地上で持っている所持金です。 */
     int m_money = 0;
 
+    /** @brief 潜行中に持っている食料数です。 */
+    int m_foodCount = 0;
+
+    /** @brief 自宅に保管している食料数です。 */
+    int m_storedFoodCount = 0;
+
+    /** @brief 次回潜行へ持ち込む食料数です。 */
+    int m_loadoutFoodCount = 0;
+
+    /** @brief 自宅に保管している鑑定済み遺物数です。 */
+    std::array<int, static_cast<std::size_t>(RelicType::Count)> m_storedRelics = {};
+
+    /** @brief 次回潜行へ持ち込む鑑定済み遺物数です。 */
+    std::array<int, static_cast<std::size_t>(RelicType::Count)> m_loadoutRelics = {};
+
+    /** @brief 一度でも鑑定して正体を記憶した遺物種類です。 */
+    std::array<bool, static_cast<std::size_t>(RelicType::Count)> m_identifiedRelics = {};
+
+    /** @brief 所有している頭装備です。 */
+    std::array<bool, static_cast<std::size_t>(ArmorTier::Count)> m_ownedHeadArmor = {};
+
+    /** @brief 所有している胴装備です。 */
+    std::array<bool, static_cast<std::size_t>(ArmorTier::Count)> m_ownedBodyArmor = {};
+
+    /** @brief 所有している武器です。 */
+    std::array<bool, static_cast<std::size_t>(WeaponTier::Count)> m_ownedWeapons = {};
+
+    /** @brief 現在装備中の頭装備です。 */
+    ArmorTier m_equippedHeadArmor = ArmorTier::Leather;
+
+    /** @brief 現在装備中の胴装備です。 */
+    ArmorTier m_equippedBodyArmor = ArmorTier::Leather;
+
+    /** @brief 現在装備中の武器です。 */
+    WeaponTier m_equippedWeapon = WeaponTier::RustyPickaxe;
+
     /** @brief 所持品UIで選択中の旧器番号です。-1なら未選択です。 */
     int m_selectedInventory = -1;
 
-    /** @brief 半透明床をSpriteで描くための1x1白テクスチャです。 */
-    Texture* m_debugWhiteTexture = nullptr;
+    /** @brief 半透明床バッチの1頂点です。現在の床色を維持するためRGBAを頂点へ持たせます。 */
+    struct TerrainFloorVertex
+    {
+        DirectX::XMFLOAT3 position = {};
+        DirectX::XMFLOAT4 color = {};
+    };
+
+    /** @brief 半透明床をまとめて送る動的頂点バッファです。 */
+    MeshBuffer* m_terrainFloorMesh = nullptr;
+    /** @brief 半透明床のワールド座標と頂点色を変換する頂点シェーダーです。 */
+    VertexShader* m_terrainFloorVS = nullptr;
+    /** @brief 半透明床の頂点色をそのまま出力するピクセルシェーダーです。 */
+    PixelShader* m_terrainFloorPS = nullptr;
+    /** @brief エリア内の最大床頂点数を確保し、フレーム間で再利用するCPU側配列です。 */
+    std::vector<TerrainFloorVertex> m_terrainFloorVertices;
+    /** @brief 今フレームに実際に描画する床頂点数です。 */
+    unsigned int m_terrainFloorVertexCount = 0;
+
+    /** @brief 敵ビルボードバッチの1頂点です。 */
+    struct EnemyBillboardVertex
+    {
+        DirectX::XMFLOAT3 position = {};
+        DirectX::XMFLOAT2 uv = {};
+    };
+
+    /** @brief 全敵ビルボードをまとめて送る動的頂点バッファです。 */
+    MeshBuffer* m_enemyBillboardMesh = nullptr;
+    /** @brief 敵ビルボードのワールド座標を変換する頂点シェーダーです。 */
+    VertexShader* m_enemyBillboardVS = nullptr;
+    /** @brief 敵画像を透過付きで描画するピクセルシェーダーです。 */
+    PixelShader* m_enemyBillboardPS = nullptr;
+    /** @brief 左上の緑スライムを含む敵スプライトシートです。 */
+    Texture* m_enemyTexture = nullptr;
+    /** @brief 現在エリアの最大敵数分を確保して再利用するCPU側配列です。 */
+    std::vector<EnemyBillboardVertex> m_enemyBillboardVertices;
+    /** @brief 今フレームに実際に描画する敵ビルボード頂点数です。 */
+    unsigned int m_enemyBillboardVertexCount = 0;
+
+    /** @brief プレイヤー攻撃命中時に再生する10コマのスプライトシートです。 */
+    Texture* m_attackHitTexture = nullptr;
+
+    /** @brief カメラ位置へ追従して描画するスカイスフィアです。 */
+    Model* m_skyModel = nullptr;
+
+    /** @brief 環境モデル登録簿から読み込んだモデル資源です。 */
+    struct EnvironmentModelResource
+    {
+        std::string id;
+        Model* model = nullptr;
+        DirectX::XMFLOAT3 placementAnchor = {};
+    };
+    std::vector<EnvironmentModelResource> m_environmentModels;
+
+    /** @brief 敵攻撃命中後にカメラを揺らす残り時間です。 */
+    float m_cameraShakeTimer = 0.0f;
 
     /** @brief プレイテスト中に編集するプレイヤー調整値です。 */
     PlayerDebugParams m_debugPlayerParams;
 
-    /** @brief 地面端の移動判定確認用に当たり判定線を表示するかどうかです。 */
+    /** @brief 帰還範囲と採掘範囲の当たり判定形状を表示するかどうかです。 */
     bool m_showCollisionDebug = true;
 
     /** @brief Tキー地図専用の表示倍率です。 */
     float m_mapZoom = 3.0f;
+    /** @brief 読み込んだマップ全体を収めるワールド半径です。 */
+    float m_worldHalfSize = 45.0f;
+    /** @brief 探索カメラの水平回転角（ラジアン）です。 */
+    float m_cameraYaw = DirectX::XMConvertToRadians(45.0f);
+    /** @brief 探索カメラの上下回転角（ラジアン）です。 */
+    float m_cameraPitch = DirectX::XMConvertToRadians(35.264f);
+    /** @brief 探索カメラとプレイヤーの距離です。 */
+    float m_cameraDistance = 13.8564f;
+    /** @brief 探索カメラのY方向オフセット下限です。 */
+    /** @brief 探索カメラの仰角下限です。仰角は真横を0度、真上を90度とします。 */
+    float m_cameraMinPitchDegrees = 10.0f;
+    /** @brief 探索カメラのY方向オフセット上限です。 */
+    /** @brief 探索カメラの仰角上限です。仰角は真横を0度、真上を90度とします。 */
+    float m_cameraMaxPitchDegrees = 60.0f;
 
-    /** @brief 潜行をまたいで維持される、採掘済み採掘ポイントの旧器名（識別名）一覧です。 */
-    std::vector<std::string> m_permanentlyMinedRelics;
+    /** @brief Tキー地図専用のスクロールオフセット（ワールド座標系）です。 */
+    Vec2 m_mapScrollOffset = { 0.0f, 0.0f };
+
 };

@@ -4,24 +4,29 @@
 #include "DirectX.h"
 #include "Geometory.h"
 #include "Input.h"
+#include "Model.h"
+#include "ShaderList.h"
 #include "Texture.h"
 #include "imgui.h"
 #include <commdlg.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cfloat>
 #include <cstdio>
 #include <ctime>
 #include <cstdint>
 #include <cwchar>
 #include <cwctype>
 #include <fstream>
+#include <iomanip>
 #include <sstream>
 
 using namespace DirectX;
 
 namespace
 {
+    constexpr const char* kEnvironmentModelCatalogPath = "Assets/Naraku/environment_models.cfg";
     /**
      * @brief ネイティブメニュー項目のチェック状態を更新します。
      * @param menuBar 更新対象のメニューバーです。
@@ -361,6 +366,7 @@ namespace
     {
         u8"地形編集",
         u8"ゲームオブジェクト配置",
+        u8"環境オブジェクト配置",
     };
 
     /**
@@ -381,6 +387,15 @@ namespace
         u8"ロープ上端",
         u8"ロープ下端",
         u8"開始・帰還地点",
+        u8"層間口ロープ端点",
+        u8"層間口ロード地点",
+    };
+
+    const char* const kLayerTransitionRoleLabels[] =
+    {
+        u8"なし",
+        u8"層入口",
+        u8"層出口",
     };
 
     /**
@@ -393,6 +408,21 @@ namespace
         u8"東",
         u8"西",
     };
+
+    /** @brief コンパス円の半径です。 */
+    constexpr float kCompassRadius = 30.0f;
+
+    /** @brief プレビュー画像端からコンパス円までの余白です。 */
+    constexpr float kCompassMargin = 12.0f;
+
+    /** @brief コンパスの方位線の太さです。 */
+    constexpr float kCompassLineThickness = 1.5f;
+
+    /** @brief コンパス円の内側で方位線を止める余白です。 */
+    constexpr float kCompassLinePadding = 2.0f;
+
+    /** @brief コンパス円の外側へ方位文字を離す距離です。 */
+    constexpr float kCompassLabelDistance = 8.0f;
 
     /**
      * @brief 浮動小数点値を指定した最小値と最大値の範囲に収めます。
@@ -652,6 +682,7 @@ SceneNarakuPieceEditor::SceneNarakuPieceEditor()
 {
     SyncSaveFileNameInput();
     ReloadPieceHierarchyEntries();
+    LoadEnvironmentModelCatalog();
     UpdateMainWindowTitle();
     ResetCamera();
     UpdateCameraMatrices();
@@ -660,6 +691,8 @@ SceneNarakuPieceEditor::SceneNarakuPieceEditor()
 
 SceneNarakuPieceEditor::~SceneNarakuPieceEditor()
 {
+    ReleaseEnvironmentModelPopupPreview();
+    ReleaseEnvironmentModels();
     ReleasePreviewRenderTarget();
 }
 
@@ -687,13 +720,27 @@ void SceneNarakuPieceEditor::Update()
         }
         UpdateHeightEditing();
     }
-    else
+    else if (m_editMode == EditMode::GridObject)
     {
         if (deleteTriggered)
         {
             DeleteSelectedGridObject();
         }
         UpdateGridObjectEditing();
+    }
+    else
+    {
+        if (deleteTriggered && m_selectedEnvironmentObjectIndex >= 0 &&
+            m_selectedEnvironmentObjectIndex < static_cast<int>(m_piece.environmentObjects.size()))
+        {
+            PushUndoSnapshot();
+            m_piece.environmentObjects.erase(
+                m_piece.environmentObjects.begin() + m_selectedEnvironmentObjectIndex);
+            m_selectedEnvironmentObjectIndex = -1;
+            MarkPieceDirty();
+            SetMessage(u8"環境オブジェクトを削除しました");
+        }
+        UpdateEnvironmentObjectEditing();
     }
     UpdateCameraMatrices();
 
@@ -725,9 +772,11 @@ void SceneNarakuPieceEditor::Draw()
     DrawPreviewWindow();
     DrawHeightGridWindow();
     DrawPieceHierarchyWindow();
+    DrawEnvironmentAssetsWindow();
     DrawNewPiecePopup();
     DrawSavePiecePopup();
     DrawRenamePiecePopup();
+    DrawEnvironmentModelPopup();
 }
 
 bool SceneNarakuPieceEditor::HandleNativeMenuCommand(unsigned int commandId)
@@ -809,6 +858,18 @@ bool SceneNarakuPieceEditor::HandleNativeMenuCommand(unsigned int commandId)
     case MenuTogglePieceHierarchyWindow:
         m_showPieceHierarchyWindow = !m_showPieceHierarchyWindow;
         return true;
+    case MenuNewEnvironmentModel:
+        OpenNewEnvironmentModelDialog();
+        return true;
+    case MenuDeleteEnvironmentModel:
+        DeleteSelectedEnvironmentModel();
+        return true;
+    case MenuEnvironmentModelSetting:
+        OpenEnvironmentModelSetting();
+        return true;
+    case MenuToggleEnvironmentAssetsWindow:
+        m_showEnvironmentAssetsWindow = !m_showEnvironmentAssetsWindow;
+        return true;
     default:
         return false;
     }
@@ -830,12 +891,585 @@ void SceneNarakuPieceEditor::SyncNativeMenuState(HMENU menuBar) const
     SetMenuCheckState(menuBar, MenuTogglePreviewWindow, m_showPreviewWindow);
     SetMenuCheckState(menuBar, MenuToggleHeightGridWindow, m_showHeightGridWindow);
     SetMenuCheckState(menuBar, MenuTogglePieceHierarchyWindow, m_showPieceHierarchyWindow);
+    SetMenuCheckState(menuBar, MenuToggleEnvironmentAssetsWindow, m_showEnvironmentAssetsWindow);
     SetMenuItemLabel(menuBar, MenuFileStatus, BuildEditingStatusLabel());
 
     if (HWND window = GetPreviewHostWindow())
     {
         DrawMenuBar(window);
     }
+}
+
+void SceneNarakuPieceEditor::ReleaseEnvironmentModels()
+{
+    for (EnvironmentModelAsset& asset : m_environmentModels)
+    {
+        SAFE_DELETE(asset.thumbnailDepthStencil);
+        SAFE_DELETE(asset.thumbnailRenderTarget);
+        SAFE_DELETE(asset.model);
+    }
+    m_environmentModels.clear();
+    m_selectedEnvironmentModelIndex = -1;
+}
+
+void SceneNarakuPieceEditor::UpdateEnvironmentModelBounds(EnvironmentModelAsset& asset)
+{
+    asset.hasBounds = false;
+    asset.boundsMin = { -0.5f, 0.0f, -0.5f };
+    asset.boundsMax = { 0.5f, 1.0f, 0.5f };
+    asset.previewAnchor = {};
+    if (asset.model == nullptr) return;
+
+    XMFLOAT3 minValue = { FLT_MAX, FLT_MAX, FLT_MAX };
+    XMFLOAT3 maxValue = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+    bool hasVertex = false;
+    for (unsigned int meshIndex = 0; meshIndex < asset.model->GetMeshNum(); ++meshIndex)
+    {
+        const Model::Mesh* mesh = asset.model->GetMesh(meshIndex);
+        if (mesh == nullptr) continue;
+        for (const Model::Vertex& vertex : mesh->vertices)
+        {
+            minValue.x = std::min(minValue.x, vertex.pos.x);
+            minValue.y = std::min(minValue.y, vertex.pos.y);
+            minValue.z = std::min(minValue.z, vertex.pos.z);
+            maxValue.x = std::max(maxValue.x, vertex.pos.x);
+            maxValue.y = std::max(maxValue.y, vertex.pos.y);
+            maxValue.z = std::max(maxValue.z, vertex.pos.z);
+            hasVertex = true;
+        }
+    }
+    if (!hasVertex) return;
+
+    asset.boundsMin = minValue;
+    asset.boundsMax = maxValue;
+    asset.previewAnchor = {
+        (minValue.x + maxValue.x) * 0.5f,
+        minValue.y,
+        (minValue.z + maxValue.z) * 0.5f };
+    asset.hasBounds = true;
+    asset.thumbnailDirty = true;
+}
+
+bool SceneNarakuPieceEditor::EnsureEnvironmentModelThumbnail(EnvironmentModelAsset& asset, unsigned int size)
+{
+    size = std::max(64U, size);
+    if (asset.thumbnailRenderTarget != nullptr && asset.thumbnailDepthStencil != nullptr && asset.thumbnailSize == size)
+    {
+        return true;
+    }
+
+    SAFE_DELETE(asset.thumbnailDepthStencil);
+    SAFE_DELETE(asset.thumbnailRenderTarget);
+    asset.thumbnailRenderTarget = new RenderTarget();
+    if (FAILED(asset.thumbnailRenderTarget->Create(DXGI_FORMAT_R8G8B8A8_UNORM, size, size)))
+    {
+        SAFE_DELETE(asset.thumbnailRenderTarget);
+        return false;
+    }
+    asset.thumbnailDepthStencil = new DepthStencil();
+    if (FAILED(asset.thumbnailDepthStencil->Create(size, size, false)))
+    {
+        SAFE_DELETE(asset.thumbnailDepthStencil);
+        SAFE_DELETE(asset.thumbnailRenderTarget);
+        return false;
+    }
+    asset.thumbnailSize = size;
+    asset.thumbnailDirty = true;
+    return true;
+}
+
+void SceneNarakuPieceEditor::RenderEnvironmentModelThumbnail(EnvironmentModelAsset& asset, unsigned int size)
+{
+    if (asset.model == nullptr || !EnsureEnvironmentModelThumbnail(asset, size)) return;
+    if (!asset.thumbnailDirty && asset.thumbnailRenderTarget->GetResource() != nullptr) return;
+
+    RenderTarget* targets[1] = { asset.thumbnailRenderTarget };
+    SetRenderTargets(1, targets, asset.thumbnailDepthStencil);
+    const float clearColor[4] = { 0.055f, 0.065f, 0.080f, 1.0f };
+    asset.thumbnailRenderTarget->Clear(clearColor);
+    asset.thumbnailDepthStencil->Clear();
+
+    const XMFLOAT3 modelSize = {
+        std::max(0.001f, (asset.boundsMax.x - asset.boundsMin.x) * asset.defaultScale.x),
+        std::max(0.001f, (asset.boundsMax.y - asset.boundsMin.y) * asset.defaultScale.y),
+        std::max(0.001f, (asset.boundsMax.z - asset.boundsMin.z) * asset.defaultScale.z) };
+    const float extent = std::max(0.25f, std::max(modelSize.x, std::max(modelSize.y, modelSize.z)));
+    const XMFLOAT3 eye = { extent * 1.45f, extent * 1.10f, -extent * 1.80f };
+    const XMFLOAT3 look = { 0.0f, modelSize.y * 0.45f, 0.0f };
+
+    XMFLOAT4X4 wvp[3] = {};
+    XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(
+        XMMatrixTranslation(-asset.previewAnchor.x, -asset.previewAnchor.y, -asset.previewAnchor.z) *
+        XMMatrixScaling(asset.defaultScale.x, asset.defaultScale.y, asset.defaultScale.z)));
+    XMStoreFloat4x4(&wvp[1], XMMatrixTranspose(XMMatrixLookAtLH(
+        XMLoadFloat3(&eye), XMLoadFloat3(&look), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f))));
+    XMStoreFloat4x4(&wvp[2], XMMatrixTranspose(XMMatrixPerspectiveFovLH(
+        XMConvertToRadians(35.0f), 1.0f, 0.01f, std::max(100.0f, extent * 12.0f))));
+    ShaderList::SetWVP(wvp);
+    ShaderList::SetCameraPos(eye);
+    asset.model->SetVertexShader(ShaderList::GetVS(ShaderList::VS_WORLD));
+    asset.model->SetPixelShader(ShaderList::GetPS(ShaderList::PS_LAMBERT));
+    for (unsigned int meshIndex = 0; meshIndex < asset.model->GetMeshNum(); ++meshIndex)
+    {
+        const Model::Mesh* mesh = asset.model->GetMesh(meshIndex);
+        if (mesh == nullptr) continue;
+        const Model::Material* sourceMaterial = asset.model->GetMaterial(mesh->materialID);
+        if (sourceMaterial != nullptr)
+        {
+            Model::Material material = *sourceMaterial;
+            material.ambient = { 0.72f, 0.72f, 0.72f, 1.0f };
+            ShaderList::SetMaterial(material);
+        }
+        asset.model->Draw(static_cast<int>(meshIndex));
+    }
+
+    RenderTarget* defaultTarget[1] = { GetDefaultRTV() };
+    SetRenderTargets(1, defaultTarget, GetDefaultDSV());
+    asset.thumbnailDirty = false;
+}
+
+void* SceneNarakuPieceEditor::GetEnvironmentModelThumbnailTextureId(int index, unsigned int size)
+{
+    if (index < 0 || index >= static_cast<int>(m_environmentModels.size())) return nullptr;
+    EnvironmentModelAsset& asset = m_environmentModels[static_cast<size_t>(index)];
+    RenderEnvironmentModelThumbnail(asset, size);
+    return asset.thumbnailRenderTarget != nullptr
+        ? reinterpret_cast<void*>(asset.thumbnailRenderTarget->GetResource())
+        : nullptr;
+}
+
+bool SceneNarakuPieceEditor::EnsureEnvironmentModelPopupPreview(unsigned int size)
+{
+    size = std::max(128U, size);
+    if (m_environmentModelPopupRenderTarget != nullptr &&
+        m_environmentModelPopupDepthStencil != nullptr &&
+        m_environmentModelPopupPreviewSize == size)
+    {
+        return true;
+    }
+
+    SAFE_DELETE(m_environmentModelPopupDepthStencil);
+    SAFE_DELETE(m_environmentModelPopupRenderTarget);
+    m_environmentModelPopupRenderTarget = new RenderTarget();
+    if (FAILED(m_environmentModelPopupRenderTarget->Create(DXGI_FORMAT_R8G8B8A8_UNORM, size, size)))
+    {
+        SAFE_DELETE(m_environmentModelPopupRenderTarget);
+        return false;
+    }
+    m_environmentModelPopupDepthStencil = new DepthStencil();
+    if (FAILED(m_environmentModelPopupDepthStencil->Create(size, size, false)))
+    {
+        SAFE_DELETE(m_environmentModelPopupDepthStencil);
+        SAFE_DELETE(m_environmentModelPopupRenderTarget);
+        return false;
+    }
+    m_environmentModelPopupPreviewSize = size;
+    return true;
+}
+
+void SceneNarakuPieceEditor::RenderEnvironmentModelPopupPreview(unsigned int size)
+{
+    Model* model = nullptr;
+    XMFLOAT3 boundsMin = m_environmentModelPopupBoundsMin;
+    XMFLOAT3 boundsMax = m_environmentModelPopupBoundsMax;
+    XMFLOAT3 anchor = m_environmentModelPopupPreviewAnchor;
+    if (m_environmentModelPopupIsNew)
+    {
+        model = m_environmentModelPopupPreviewModel;
+    }
+    else if (m_selectedEnvironmentModelIndex >= 0 &&
+        m_selectedEnvironmentModelIndex < static_cast<int>(m_environmentModels.size()))
+    {
+        const EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
+        model = asset.model;
+        boundsMin = asset.boundsMin;
+        boundsMax = asset.boundsMax;
+        anchor = asset.previewAnchor;
+    }
+    if (model == nullptr || !EnsureEnvironmentModelPopupPreview(size)) return;
+
+    RenderTarget* targets[1] = { m_environmentModelPopupRenderTarget };
+    SetRenderTargets(1, targets, m_environmentModelPopupDepthStencil);
+    const float clearColor[4] = { 0.055f, 0.065f, 0.080f, 1.0f };
+    m_environmentModelPopupRenderTarget->Clear(clearColor);
+    m_environmentModelPopupDepthStencil->Clear();
+
+    const XMFLOAT3 scale = {
+        std::max(0.01f, m_environmentModelScaleInput.x),
+        std::max(0.01f, m_environmentModelScaleInput.y),
+        std::max(0.01f, m_environmentModelScaleInput.z) };
+    const XMFLOAT3 modelSize = {
+        std::max(0.001f, (boundsMax.x - boundsMin.x) * scale.x),
+        std::max(0.001f, (boundsMax.y - boundsMin.y) * scale.y),
+        std::max(0.001f, (boundsMax.z - boundsMin.z) * scale.z) };
+    const float cellSize = std::max(0.1f, m_piece.cellSize);
+    const float extent = std::max(
+        cellSize * 2.25f,
+        std::max(modelSize.y, std::max(modelSize.x, modelSize.z)));
+    const XMFLOAT3 eye = { extent * 1.45f, extent * 1.10f, -extent * 1.80f };
+    const XMFLOAT3 look = { 0.0f, modelSize.y * 0.35f, 0.0f };
+    const XMMATRIX view = XMMatrixLookAtLH(
+        XMLoadFloat3(&eye), XMLoadFloat3(&look), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+    const XMMATRIX projection = XMMatrixPerspectiveFovLH(
+        XMConvertToRadians(35.0f), 1.0f, 0.01f, std::max(100.0f, extent * 12.0f));
+
+    XMFLOAT4X4 wvp[3] = {};
+    XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(XMMatrixIdentity()));
+    XMStoreFloat4x4(&wvp[1], XMMatrixTranspose(view));
+    XMStoreFloat4x4(&wvp[2], XMMatrixTranspose(projection));
+    ShaderList::SetWVP(wvp);
+    const float gridExtent = cellSize * 2.0f;
+    for (int line = -2; line <= 2; ++line)
+    {
+        const float offset = static_cast<float>(line) * cellSize;
+        const XMFLOAT4 color = line == 0
+            ? XMFLOAT4{ 0.45f, 0.65f, 0.85f, 1.0f }
+            : XMFLOAT4{ 0.30f, 0.34f, 0.40f, 1.0f };
+        Geometory::AddLine({ offset, 0.0f, -gridExtent }, { offset, 0.0f, gridExtent }, color);
+        Geometory::AddLine({ -gridExtent, 0.0f, offset }, { gridExtent, 0.0f, offset }, color);
+    }
+    Geometory::DrawLines();
+
+    XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(
+        XMMatrixTranslation(-anchor.x, -anchor.y, -anchor.z) *
+        XMMatrixScaling(scale.x, scale.y, scale.z)));
+    ShaderList::SetWVP(wvp);
+    ShaderList::SetCameraPos(eye);
+    model->SetVertexShader(ShaderList::GetVS(ShaderList::VS_WORLD));
+    model->SetPixelShader(ShaderList::GetPS(ShaderList::PS_LAMBERT));
+    for (unsigned int meshIndex = 0; meshIndex < model->GetMeshNum(); ++meshIndex)
+    {
+        const Model::Mesh* mesh = model->GetMesh(meshIndex);
+        if (mesh == nullptr) continue;
+        const Model::Material* sourceMaterial = model->GetMaterial(mesh->materialID);
+        if (sourceMaterial != nullptr)
+        {
+            Model::Material material = *sourceMaterial;
+            material.ambient = { 0.72f, 0.72f, 0.72f, 1.0f };
+            ShaderList::SetMaterial(material);
+        }
+        model->Draw(static_cast<int>(meshIndex));
+    }
+
+    RenderTarget* defaultTarget[1] = { GetDefaultRTV() };
+    SetRenderTargets(1, defaultTarget, GetDefaultDSV());
+}
+
+void* SceneNarakuPieceEditor::GetEnvironmentModelPopupPreviewTextureId(unsigned int size)
+{
+    RenderEnvironmentModelPopupPreview(size);
+    return m_environmentModelPopupRenderTarget != nullptr
+        ? reinterpret_cast<void*>(m_environmentModelPopupRenderTarget->GetResource())
+        : nullptr;
+}
+
+void SceneNarakuPieceEditor::ReleaseEnvironmentModelPopupPreview()
+{
+    SAFE_DELETE(m_environmentModelPopupPreviewModel);
+    SAFE_DELETE(m_environmentModelPopupDepthStencil);
+    SAFE_DELETE(m_environmentModelPopupRenderTarget);
+    m_environmentModelPopupPreviewSize = 0;
+    m_environmentModelPopupBoundsMin = { -0.5f, 0.0f, -0.5f };
+    m_environmentModelPopupBoundsMax = { 0.5f, 1.0f, 0.5f };
+    m_environmentModelPopupPreviewAnchor = {};
+}
+
+void SceneNarakuPieceEditor::LoadEnvironmentModelCatalog()
+{
+    ReleaseEnvironmentModels();
+    const std::wstring catalogPath = ResolvePieceHierarchyPath(Utf8ToWide(kEnvironmentModelCatalogPath));
+    std::ifstream input(catalogPath, std::ios::binary);
+    if (!input)
+    {
+        SetMessage(u8"環境モデルは未登録です");
+        return;
+    }
+
+    std::string line;
+    while (std::getline(input, line))
+    {
+        if (line.empty() || line[0] == '#') continue;
+        std::istringstream row(line);
+        EnvironmentModelAsset asset;
+        if (!(row >> std::quoted(asset.id) >> std::quoted(asset.name) >> std::quoted(asset.path)
+            >> asset.defaultScale.x >> asset.defaultScale.y >> asset.defaultScale.z))
+        {
+            continue;
+        }
+        const std::wstring modelPath = ResolvePieceHierarchyPath(Utf8ToWide(asset.path));
+        const std::string modelPathUtf8 = WideToUtf8(modelPath);
+        asset.model = new Model();
+        if (!asset.model->Load(modelPathUtf8.c_str(), 1.0f, Model::ZFlip))
+        {
+            SAFE_DELETE(asset.model);
+            continue;
+        }
+        UpdateEnvironmentModelBounds(asset);
+        m_environmentModels.push_back(asset);
+    }
+    if (!m_environmentModels.empty()) m_selectedEnvironmentModelIndex = 0;
+}
+
+bool SceneNarakuPieceEditor::SaveEnvironmentModelCatalog()
+{
+    const std::wstring catalogPath = ResolvePieceHierarchyPath(Utf8ToWide(kEnvironmentModelCatalogPath));
+    if (!EnsureDirectoryExists(GetDirectoryPart(catalogPath)))
+    {
+        SetMessage(u8"環境モデル登録簿の保存先を作成できませんでした");
+        return false;
+    }
+    std::ofstream output(catalogPath, std::ios::binary | std::ios::trunc);
+    if (!output)
+    {
+        SetMessage(u8"環境モデル登録簿を保存できませんでした");
+        return false;
+    }
+    output << "# id name path scaleX scaleY scaleZ\n";
+    for (const EnvironmentModelAsset& asset : m_environmentModels)
+    {
+        output << std::quoted(asset.id) << ' '
+            << std::quoted(asset.name) << ' '
+            << std::quoted(asset.path) << ' '
+            << asset.defaultScale.x << ' '
+            << asset.defaultScale.y << ' '
+            << asset.defaultScale.z << '\n';
+    }
+    if (!output.good())
+    {
+        SetMessage(u8"環境モデル登録簿を書き込めませんでした");
+        return false;
+    }
+    return true;
+}
+
+int SceneNarakuPieceEditor::FindEnvironmentModelIndexById(const std::string& modelId) const
+{
+    for (size_t index = 0; index < m_environmentModels.size(); ++index)
+    {
+        if (m_environmentModels[index].id == modelId) return static_cast<int>(index);
+    }
+    return -1;
+}
+
+int SceneNarakuPieceEditor::FindEnvironmentObjectIndexByCell(int cellX, int cellZ) const
+{
+    for (size_t index = 0; index < m_piece.environmentObjects.size(); ++index)
+    {
+        const NarakuPiece::EnvironmentObjectData& object = m_piece.environmentObjects[index];
+        if (object.cell.x == cellX && object.cell.z == cellZ) return static_cast<int>(index);
+    }
+    return -1;
+}
+
+bool SceneNarakuPieceEditor::HasEnvironmentObjectAt(int cellX, int cellZ) const
+{
+    return FindEnvironmentObjectIndexByCell(cellX, cellZ) >= 0;
+}
+
+bool SceneNarakuPieceEditor::CanPlaceEnvironmentObject(int cellX, int cellZ, std::string& outMessage) const
+{
+    const NarakuPiece::CellData* cell = GetCellData(cellX, cellZ);
+    if (cell == nullptr || cell->deleted)
+    {
+        outMessage = u8"削除セルまたは範囲外には配置できません";
+        return false;
+    }
+    if (HasEnvironmentObjectAt(cellX, cellZ))
+    {
+        outMessage = u8"このセルには環境オブジェクトが配置済みです";
+        return false;
+    }
+    if (FindMiningPointIndexByCell(cellX, cellZ) >= 0 ||
+        (m_piece.startReturnCandidate.enabled && m_piece.startReturnCandidate.cell.x == cellX && m_piece.startReturnCandidate.cell.z == cellZ) ||
+        (m_piece.layerTransition.loadPointEnabled && m_piece.layerTransition.loadPoint.x == cellX && m_piece.layerTransition.loadPoint.z == cellZ))
+    {
+        outMessage = u8"ロープ以外のゲームオブジェクトと同じセルには配置できません";
+        return false;
+    }
+    return true;
+}
+
+void SceneNarakuPieceEditor::OpenNewEnvironmentModelDialog()
+{
+    wchar_t filePath[MAX_PATH] = {};
+    OPENFILENAMEW dialog = {};
+    dialog.lStructSize = sizeof(dialog);
+    dialog.hwndOwner = GetPreviewHostWindow();
+    dialog.lpstrFile = filePath;
+    dialog.nMaxFile = MAX_PATH;
+    dialog.lpstrFilter = L"3D Model Files\0*.fbx;*.obj;*.gltf;*.glb;*.pmx;*.pmd\0All Files\0*.*\0";
+    dialog.nFilterIndex = 1;
+    dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    if (!GetOpenFileNameW(&dialog)) return;
+
+    const std::wstring normalizedPath = NormalizePieceHierarchyPath(filePath);
+    const std::string path = WideToUtf8(normalizedPath);
+    std::string name = path;
+    const size_t slash = name.find_last_of('/');
+    if (slash != std::string::npos) name = name.substr(slash + 1);
+    const size_t dot = name.find_last_of('.');
+    if (dot != std::string::npos) name.resize(dot);
+
+    ReleaseEnvironmentModelPopupPreview();
+    const std::string resolvedPath = WideToUtf8(ResolvePieceHierarchyPath(normalizedPath));
+    m_environmentModelPopupPreviewModel = new Model();
+    if (!m_environmentModelPopupPreviewModel->Load(resolvedPath.c_str(), 1.0f, Model::ZFlip))
+    {
+        SAFE_DELETE(m_environmentModelPopupPreviewModel);
+    }
+    else
+    {
+        EnvironmentModelAsset previewAsset;
+        previewAsset.model = m_environmentModelPopupPreviewModel;
+        UpdateEnvironmentModelBounds(previewAsset);
+        m_environmentModelPopupBoundsMin = previewAsset.boundsMin;
+        m_environmentModelPopupBoundsMax = previewAsset.boundsMax;
+        m_environmentModelPopupPreviewAnchor = previewAsset.previewAnchor;
+    }
+
+    std::snprintf(m_environmentModelNameInput.data(), m_environmentModelNameInput.size(), "%s", name.c_str());
+    std::snprintf(m_environmentModelPathInput.data(), m_environmentModelPathInput.size(), "%s", path.c_str());
+    m_environmentModelScaleInput = { 1.0f, 1.0f, 1.0f };
+    m_environmentModelPopupIsNew = true;
+    m_requestOpenEnvironmentModelPopup = true;
+}
+
+void SceneNarakuPieceEditor::OpenEnvironmentModelSetting()
+{
+    if (m_selectedEnvironmentModelIndex < 0 || m_selectedEnvironmentModelIndex >= static_cast<int>(m_environmentModels.size()))
+    {
+        SetMessage(u8"設定するモデルをAssetsから選択してください");
+        return;
+    }
+    ReleaseEnvironmentModelPopupPreview();
+    const EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
+    std::snprintf(m_environmentModelNameInput.data(), m_environmentModelNameInput.size(), "%s", asset.name.c_str());
+    std::snprintf(m_environmentModelPathInput.data(), m_environmentModelPathInput.size(), "%s", asset.path.c_str());
+    m_environmentModelScaleInput = asset.defaultScale;
+    m_environmentModelPopupIsNew = false;
+    m_requestOpenEnvironmentModelPopup = true;
+}
+
+void SceneNarakuPieceEditor::DeleteSelectedEnvironmentModel()
+{
+    if (m_selectedEnvironmentModelIndex < 0 || m_selectedEnvironmentModelIndex >= static_cast<int>(m_environmentModels.size()))
+    {
+        SetMessage(u8"削除するモデルをAssetsから選択してください");
+        return;
+    }
+    const std::string modelId = m_environmentModels[m_selectedEnvironmentModelIndex].id;
+    const bool inUse = std::any_of(m_piece.environmentObjects.begin(), m_piece.environmentObjects.end(),
+        [&](const NarakuPiece::EnvironmentObjectData& object) { return object.modelId == modelId; });
+    if (inUse)
+    {
+        SetMessage(u8"現在の小ステージで使用中のモデルは削除できません");
+        return;
+    }
+    const int removedIndex = m_selectedEnvironmentModelIndex;
+    EnvironmentModelAsset removedAsset = m_environmentModels[removedIndex];
+    m_environmentModels.erase(m_environmentModels.begin() + removedIndex);
+    m_selectedEnvironmentModelIndex = m_environmentModels.empty()
+        ? -1 : std::min(removedIndex, static_cast<int>(m_environmentModels.size()) - 1);
+    if (!SaveEnvironmentModelCatalog())
+    {
+        m_environmentModels.insert(m_environmentModels.begin() + removedIndex, removedAsset);
+        m_selectedEnvironmentModelIndex = removedIndex;
+        return;
+    }
+    SAFE_DELETE(removedAsset.model);
+    SAFE_DELETE(removedAsset.thumbnailDepthStencil);
+    SAFE_DELETE(removedAsset.thumbnailRenderTarget);
+    SetMessage(u8"環境モデルの登録を削除しました");
+}
+
+void SceneNarakuPieceEditor::ApplyEnvironmentModelPopup()
+{
+    const std::string name = m_environmentModelNameInput.data();
+    const std::string path = m_environmentModelPathInput.data();
+    if (name.empty() || path.empty() || m_environmentModelScaleInput.x <= 0.0f ||
+        m_environmentModelScaleInput.y <= 0.0f || m_environmentModelScaleInput.z <= 0.0f)
+    {
+        SetMessage(u8"モデル名、パス、0より大きいサイズが必要です");
+        return;
+    }
+
+    const int previousSelectedIndex = m_selectedEnvironmentModelIndex;
+    std::string previousName;
+    XMFLOAT3 previousScale = {};
+    bool previousThumbnailDirty = false;
+    if (m_environmentModelPopupIsNew)
+    {
+        Model* model = m_environmentModelPopupPreviewModel;
+        if (model == nullptr)
+        {
+            const std::string resolvedPath = WideToUtf8(ResolvePieceHierarchyPath(Utf8ToWide(path)));
+            model = new Model();
+            if (!model->Load(resolvedPath.c_str(), 1.0f, Model::ZFlip))
+            {
+                SAFE_DELETE(model);
+                SetMessage(u8"モデルを読み込めませんでした");
+                return;
+            }
+        }
+        unsigned int suffix = 0;
+        std::string id;
+        do
+        {
+            char buffer[64] = {};
+            std::snprintf(
+                buffer,
+                sizeof(buffer),
+                "environment_model_%lld_%u",
+                static_cast<long long>(std::time(nullptr)),
+                suffix++);
+            id = buffer;
+        } while (FindEnvironmentModelIndexById(id) >= 0);
+
+        EnvironmentModelAsset asset;
+        asset.id = id;
+        asset.name = name;
+        asset.path = path;
+        asset.defaultScale = m_environmentModelScaleInput;
+        asset.model = model;
+        UpdateEnvironmentModelBounds(asset);
+        m_environmentModels.push_back(asset);
+        m_environmentModelPopupPreviewModel = nullptr;
+        m_selectedEnvironmentModelIndex = static_cast<int>(m_environmentModels.size()) - 1;
+    }
+    else
+    {
+        if (m_selectedEnvironmentModelIndex < 0 || m_selectedEnvironmentModelIndex >= static_cast<int>(m_environmentModels.size())) return;
+        EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
+        previousName = asset.name;
+        previousScale = asset.defaultScale;
+        previousThumbnailDirty = asset.thumbnailDirty;
+        asset.name = name;
+        asset.defaultScale = m_environmentModelScaleInput;
+        asset.thumbnailDirty = true;
+    }
+    if (!SaveEnvironmentModelCatalog())
+    {
+        if (m_environmentModelPopupIsNew)
+        {
+            EnvironmentModelAsset& addedAsset = m_environmentModels.back();
+            m_environmentModelPopupPreviewModel = addedAsset.model;
+            addedAsset.model = nullptr;
+            SAFE_DELETE(addedAsset.thumbnailDepthStencil);
+            SAFE_DELETE(addedAsset.thumbnailRenderTarget);
+            m_environmentModels.pop_back();
+            m_selectedEnvironmentModelIndex = previousSelectedIndex;
+        }
+        else
+        {
+            EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
+            asset.name = previousName;
+            asset.defaultScale = previousScale;
+            asset.thumbnailDirty = previousThumbnailDirty;
+        }
+        return;
+    }
+    ImGui::CloseCurrentPopup();
+    SetMessage(m_environmentModelPopupIsNew ? u8"環境モデルを登録しました" : u8"モデル設定を更新しました");
 }
 
 int SceneNarakuPieceEditor::GetHeightIndex(int x, int z) const
@@ -1040,6 +1674,15 @@ bool SceneNarakuPieceEditor::CanPlaceGridObject(GridObjectTool tool, int cellX, 
         return false;
     }
 
+    const bool ropeTool = tool == GridObjectTool::RopeTop ||
+        tool == GridObjectTool::RopeBottom ||
+        tool == GridObjectTool::LayerRopePoint;
+    if (!ropeTool && HasEnvironmentObjectAt(cellX, cellZ))
+    {
+        outMessage = u8"環境オブジェクトと同じセルにはロープ以外を配置できません";
+        return false;
+    }
+
     switch (tool)
     {
     case GridObjectTool::MiningPoint:
@@ -1063,6 +1706,32 @@ bool SceneNarakuPieceEditor::CanPlaceGridObject(GridObjectTool tool, int cellX, 
         if (!cellData->walkable)
         {
             outMessage = u8"このセルには開始・帰還地点を配置できません";
+            return false;
+        }
+        return true;
+
+    case GridObjectTool::LayerRopePoint:
+        if (m_piece.layerTransition.role == NarakuPiece::LayerTransitionRole::None)
+        {
+            outMessage = u8"先に層間口役割を設定してください";
+            return false;
+        }
+        if (!cellData->ropeAllowed)
+        {
+            outMessage = u8"このセルには層間口ロープを配置できません";
+            return false;
+        }
+        return true;
+
+    case GridObjectTool::LayerLoadPoint:
+        if (m_piece.layerTransition.role != NarakuPiece::LayerTransitionRole::Exit)
+        {
+            outMessage = u8"ロード地点は層出口にだけ配置できます";
+            return false;
+        }
+        if (!cellData->walkable)
+        {
+            outMessage = u8"歩行不可セルにはロード地点を配置できません";
             return false;
         }
         return true;
@@ -1109,6 +1778,24 @@ bool SceneNarakuPieceEditor::DeleteSelectedGridObject()
         m_piece.startReturnCandidate.enabled = false;
         MarkPieceDirty();
         SetMessage(u8"開始・帰還地点を削除しました");
+        return true;
+
+    case GridObjectKind::LayerRopePoint:
+        if (!m_piece.layerTransition.ropePointEnabled) return false;
+        PushUndoSnapshot();
+        m_piece.layerTransition.ropePointEnabled = false;
+        ClearGridObjectSelection();
+        MarkPieceDirty();
+        SetMessage(u8"層間口ロープ端点を削除しました");
+        return true;
+
+    case GridObjectKind::LayerLoadPoint:
+        if (!m_piece.layerTransition.loadPointEnabled) return false;
+        PushUndoSnapshot();
+        m_piece.layerTransition.loadPointEnabled = false;
+        ClearGridObjectSelection();
+        MarkPieceDirty();
+        SetMessage(u8"層間口ロード地点を削除しました");
         return true;
 
     case GridObjectKind::None:
@@ -1221,7 +1908,93 @@ void SceneNarakuPieceEditor::DrawPreviewWindow()
     };
 
     DrawSelectionRectangle();
+    DrawPreviewCompass();
     ImGui::End();
+}
+
+DirectX::XMFLOAT2 SceneNarakuPieceEditor::GetCompassScreenDirection(const XMFLOAT3& worldDirection) const
+{
+    const XMVECTOR viewDirection = XMVector3TransformNormal(
+        XMVectorSet(worldDirection.x, worldDirection.y, worldDirection.z, 0.0f),
+        XMLoadFloat4x4(&m_viewMatrix));
+
+    XMFLOAT3 viewSpaceDirection = {};
+    XMStoreFloat3(&viewSpaceDirection, viewDirection);
+    const float length = std::sqrt(
+        viewSpaceDirection.x * viewSpaceDirection.x +
+        viewSpaceDirection.y * viewSpaceDirection.y);
+    if (length <= 0.0001f)
+    {
+        return {};
+    }
+
+    return
+    {
+        viewSpaceDirection.x / length,
+        -viewSpaceDirection.y / length
+    };
+}
+
+void SceneNarakuPieceEditor::DrawPreviewCompass() const
+{
+    const float minimumCompassSize =
+        kCompassRadius * 2.0f + kCompassMargin * 2.0f + kCompassLabelDistance * 2.0f;
+    if (m_previewImageSize.x < minimumCompassSize ||
+        m_previewImageSize.y < minimumCompassSize)
+    {
+        return;
+    }
+
+    const ImVec2 imageMin(m_previewImageScreenTopLeft.x, m_previewImageScreenTopLeft.y);
+    const ImVec2 imageMax(
+        imageMin.x + m_previewImageSize.x,
+        imageMin.y + m_previewImageSize.y);
+    const ImVec2 center(
+        imageMax.x - kCompassMargin - kCompassRadius,
+        imageMin.y + kCompassMargin + kCompassRadius);
+    ImDrawList* const drawList = ImGui::GetWindowDrawList();
+    drawList->PushClipRect(imageMin, imageMax, true);
+
+    drawList->AddCircle(center, kCompassRadius, IM_COL32(220, 230, 240, 220), 32, kCompassLineThickness);
+    drawList->AddCircleFilled(center, 2.5f, IM_COL32(220, 230, 240, 230));
+
+    const XMFLOAT3 worldDirections[] =
+    {
+        { 0.0f, 0.0f, -1.0f },
+        { 0.0f, 0.0f, 1.0f },
+        { 1.0f, 0.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f },
+    };
+
+    for (int index = 0; index < static_cast<int>(std::size(worldDirections)); ++index)
+    {
+        const XMFLOAT2 direction = GetCompassScreenDirection(worldDirections[index]);
+        if (direction.x == 0.0f && direction.y == 0.0f)
+        {
+            continue;
+        }
+
+        const ImVec2 endpoint(
+            center.x + direction.x * (kCompassRadius - kCompassLinePadding),
+            center.y + direction.y * (kCompassRadius - kCompassLinePadding));
+        const ImU32 lineColor = (index == 0) ? IM_COL32(245, 95, 95, 230) : IM_COL32(220, 230, 240, 220);
+        drawList->AddLine(center, endpoint, lineColor, kCompassLineThickness);
+
+        const ImVec2 textSize = ImGui::CalcTextSize(kDirectionLabels[index]);
+        const ImVec2 labelCenter(
+            center.x + direction.x * (kCompassRadius + kCompassLabelDistance),
+            center.y + direction.y * (kCompassRadius + kCompassLabelDistance));
+        ImVec2 textPosition(
+            labelCenter.x - textSize.x * 0.5f,
+            labelCenter.y - textSize.y * 0.5f);
+        const float maxTextX = std::max(imageMin.x, imageMax.x - textSize.x);
+        const float maxTextY = std::max(imageMin.y, imageMax.y - textSize.y);
+        textPosition.x = ClampFloat(textPosition.x, imageMin.x, maxTextX);
+        textPosition.y = ClampFloat(textPosition.y, imageMin.y, maxTextY);
+        drawList->AddText(textPosition, lineColor, kDirectionLabels[index]);
+    }
+
+    drawList->PopClipRect();
 }
 
 void SceneNarakuPieceEditor::RenderTerrainPreviewToTexture()
@@ -1450,6 +2223,18 @@ void SceneNarakuPieceEditor::DrawPieceBasicWindow()
         MarkPieceDirty();
     }
 
+    int layerTransitionRole = static_cast<int>(m_piece.layerTransition.role);
+    if (ImGui::Combo(u8"層間口役割", &layerTransitionRole, kLayerTransitionRoleLabels, IM_ARRAYSIZE(kLayerTransitionRoleLabels)))
+    {
+        PushUndoSnapshot();
+        m_piece.layerTransition.role = static_cast<NarakuPiece::LayerTransitionRole>(layerTransitionRole);
+        if (m_piece.layerTransition.role != NarakuPiece::LayerTransitionRole::Exit)
+        {
+            m_piece.layerTransition.loadPointEnabled = false;
+        }
+        MarkPieceDirty();
+    }
+
     ImGui::Text("%s %s", u8"サイズプリセット:", NarakuPiece::ToString(m_piece.sizePreset));
     ImGui::Text("%s %dx%d", u8"グリッド:", m_piece.gridWidth, m_piece.gridDepth);
 
@@ -1459,6 +2244,7 @@ void SceneNarakuPieceEditor::DrawPieceBasicWindow()
         m_editMode = static_cast<EditMode>(editModeIndex);
         ClearTerrainSelection();
         ClearGridObjectSelection();
+        m_selectedEnvironmentObjectIndex = -1;
         m_hoverCellX = -1;
         m_hoverCellZ = -1;
     }
@@ -1923,6 +2709,16 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
         break;
     }
 
+    case GridObjectKind::LayerRopePoint:
+        ImGui::Text("%s (%d, %d)", u8"層間口ロープ端点", m_piece.layerTransition.ropePoint.x, m_piece.layerTransition.ropePoint.z);
+        if (ImGui::Button(u8"層間口ロープ端点を削除")) DeleteSelectedGridObject();
+        break;
+
+    case GridObjectKind::LayerLoadPoint:
+        ImGui::Text("%s (%d, %d)", u8"層間口ロード地点", m_piece.layerTransition.loadPoint.x, m_piece.layerTransition.loadPoint.z);
+        if (ImGui::Button(u8"層間口ロード地点を削除")) DeleteSelectedGridObject();
+        break;
+
     case GridObjectKind::None:
     default:
         ImGui::TextUnformatted(u8"ゲームオブジェクトが未選択です");
@@ -1930,6 +2726,169 @@ void SceneNarakuPieceEditor::DrawGridObjectSelectionWindow()
     }
 
     ImGui::End();
+}
+
+void SceneNarakuPieceEditor::DrawEnvironmentAssetsWindow()
+{
+    if (!m_showEnvironmentAssetsWindow) return;
+
+    ImGui::SetNextWindowPos(ImVec2(768.0f, 668.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(460.0f, 330.0f), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("Assets", &m_showEnvironmentAssetsWindow))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::SetNextItemWidth(160.0f);
+    ImGui::SliderFloat(u8"表示サイズ", &m_environmentAssetTileSize, 72.0f, 160.0f, "%.0f px");
+    ImGui::Separator();
+
+    if (m_environmentModels.empty())
+    {
+        ImGui::TextUnformatted(u8"登録モデルなし");
+    }
+    else
+    {
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const float availableWidth = ImGui::GetContentRegionAvail().x;
+        const float tileSize = std::max(48.0f, std::min(m_environmentAssetTileSize, availableWidth));
+        const int columnCount = std::max(1, static_cast<int>((availableWidth + spacing) / (tileSize + spacing)));
+        const float padding = 5.0f;
+        if (ImGui::BeginTable("EnvironmentAssetTiles", columnCount, ImGuiTableFlags_SizingStretchSame))
+        {
+            for (size_t index = 0; index < m_environmentModels.size(); ++index)
+            {
+                ImGui::TableNextColumn();
+                ImGui::PushID(static_cast<int>(index));
+                const bool selected = m_selectedEnvironmentModelIndex == static_cast<int>(index);
+                const ImVec2 tileMin = ImGui::GetCursorScreenPos();
+                ImGui::InvisibleButton("##EnvironmentAssetTile", ImVec2(tileSize, tileSize));
+                const bool hovered = ImGui::IsItemHovered();
+                const bool clicked = ImGui::IsItemClicked();
+                ImDrawList* drawList = ImGui::GetWindowDrawList();
+                const ImVec2 tileMax(tileMin.x + tileSize, tileMin.y + tileSize);
+                const ImU32 backgroundColor = selected
+                    ? IM_COL32(48, 102, 156, 255)
+                    : hovered ? IM_COL32(47, 55, 67, 255) : IM_COL32(31, 36, 45, 255);
+                const ImU32 borderColor = selected ? IM_COL32(125, 200, 255, 255) : IM_COL32(76, 85, 101, 255);
+                drawList->AddRectFilled(tileMin, tileMax, backgroundColor, 6.0f);
+                drawList->AddRect(tileMin, tileMax, borderColor, 6.0f, 0, selected ? 2.0f : 1.0f);
+
+                const ImVec2 imageMin(tileMin.x + padding, tileMin.y + padding);
+                const ImVec2 imageMax(tileMax.x - padding, tileMax.y - 25.0f);
+                void* textureId = GetEnvironmentModelThumbnailTextureId(static_cast<int>(index), 128U);
+                if (textureId != nullptr)
+                {
+                    drawList->AddImage(textureId, imageMin, imageMax);
+                }
+                else
+                {
+                    drawList->AddRectFilled(imageMin, imageMax, IM_COL32(22, 26, 33, 255), 4.0f);
+                }
+
+                const std::string& name = m_environmentModels[index].name;
+                const ImVec2 textSize = ImGui::CalcTextSize(name.c_str());
+                const float textX = textSize.x <= tileSize - padding * 2.0f
+                    ? tileMin.x + (tileSize - textSize.x) * 0.5f
+                    : tileMin.x + padding;
+                drawList->PushClipRect(
+                    ImVec2(tileMin.x + padding, tileMax.y - 23.0f),
+                    ImVec2(tileMax.x - padding, tileMax.y - 3.0f),
+                    true);
+                drawList->AddText(ImVec2(textX, tileMax.y - 20.0f), IM_COL32(235, 239, 245, 255), name.c_str());
+                drawList->PopClipRect();
+
+                if (hovered) ImGui::SetTooltip("%s", name.c_str());
+                if (clicked)
+                {
+                    m_selectedEnvironmentModelIndex = static_cast<int>(index);
+                    m_editMode = EditMode::EnvironmentObject;
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    if (m_selectedEnvironmentModelIndex >= 0 && m_selectedEnvironmentModelIndex < static_cast<int>(m_environmentModels.size()))
+    {
+        const EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
+        ImGui::SeparatorText(u8"選択モデル");
+        ImGui::TextUnformatted(asset.name.c_str());
+        ImGui::TextWrapped("%s", asset.path.c_str());
+        ImGui::Text("%s %.3f, %.3f, %.3f", u8"既定サイズ", asset.defaultScale.x, asset.defaultScale.y, asset.defaultScale.z);
+    }
+
+    ImGui::SeparatorText(u8"配置オブジェクト");
+    if (m_selectedEnvironmentObjectIndex >= 0 &&
+        m_selectedEnvironmentObjectIndex < static_cast<int>(m_piece.environmentObjects.size()))
+    {
+        NarakuPiece::EnvironmentObjectData& object = m_piece.environmentObjects[m_selectedEnvironmentObjectIndex];
+        const int assetIndex = FindEnvironmentModelIndexById(object.modelId);
+        const char* modelName = assetIndex >= 0 ? m_environmentModels[assetIndex].name.c_str() : object.modelId.c_str();
+        ImGui::Text("%s: %s", u8"モデル", modelName);
+        ImGui::Text("%s: (%d, %d)", u8"セル", object.cell.x, object.cell.z);
+        float scale[3] = { object.scaleX, object.scaleY, object.scaleZ };
+        const bool scaleChanged = ImGui::DragFloat3(u8"サイズ", scale, 0.01f, 0.01f, 100.0f, "%.3f");
+        if (ImGui::IsItemActivated()) PushUndoSnapshot();
+        if (scaleChanged)
+        {
+            object.scaleX = std::max(0.01f, scale[0]);
+            object.scaleY = std::max(0.01f, scale[1]);
+            object.scaleZ = std::max(0.01f, scale[2]);
+            MarkPieceDirty();
+        }
+        if (ImGui::Button(u8"環境オブジェクトを削除"))
+        {
+            PushUndoSnapshot();
+            m_piece.environmentObjects.erase(m_piece.environmentObjects.begin() + m_selectedEnvironmentObjectIndex);
+            m_selectedEnvironmentObjectIndex = -1;
+            MarkPieceDirty();
+            SetMessage(u8"環境オブジェクトを削除しました");
+        }
+    }
+    else
+    {
+        ImGui::TextUnformatted(u8"配置オブジェクトが未選択です");
+    }
+    ImGui::End();
+}
+
+void SceneNarakuPieceEditor::DrawEnvironmentModelPopup()
+{
+    if (m_requestOpenEnvironmentModelPopup)
+    {
+        ImGui::OpenPopup(u8"環境モデル設定");
+        m_requestOpenEnvironmentModelPopup = false;
+    }
+    if (!ImGui::BeginPopupModal(u8"環境モデル設定", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        ReleaseEnvironmentModelPopupPreview();
+        return;
+    }
+
+    ImGui::InputText(u8"モデル名", m_environmentModelNameInput.data(), m_environmentModelNameInput.size());
+    ImGui::InputText(u8"モデルパス", m_environmentModelPathInput.data(), m_environmentModelPathInput.size(), ImGuiInputTextFlags_ReadOnly);
+    ImGui::DragFloat3(u8"既定サイズ", &m_environmentModelScaleInput.x, 0.01f, 0.01f, 100.0f, "%.3f");
+    ImGui::SeparatorText(u8"サイズプレビュー");
+    constexpr unsigned int previewSize = 320U;
+    if (void* textureId = GetEnvironmentModelPopupPreviewTextureId(previewSize))
+    {
+        ImGui::Image(textureId, ImVec2(static_cast<float>(previewSize), static_cast<float>(previewSize)));
+    }
+    else
+    {
+        ImGui::Dummy(ImVec2(static_cast<float>(previewSize), 1.0f));
+        ImGui::TextUnformatted(u8"モデルを表示できません");
+    }
+    if (ImGui::Button(m_environmentModelPopupIsNew ? u8"追加" : u8"更新"))
+    {
+        ApplyEnvironmentModelPopup();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"キャンセル")) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
 }
 
 void SceneNarakuPieceEditor::DrawPieceFileAndValidationWindow()
@@ -2297,6 +3256,7 @@ void SceneNarakuPieceEditor::ApplyLoadedPiece(const NarakuPiece::PieceData& load
     EnsureSelectionNotEmpty();
     EnsureCellSelectionValid();
     ClearGridObjectSelection();
+    m_selectedEnvironmentObjectIndex = -1;
     m_undoStack.clear();
     m_redoStack.clear();
     m_hoverCellX = -1;
@@ -2326,6 +3286,7 @@ void SceneNarakuPieceEditor::CreateNewPiece(const std::wstring& fileName)
     m_gridObjectTool = GridObjectTool::MiningPoint;
     m_selectedGridObjectKind = GridObjectKind::None;
     m_selectedMiningPointIndex = -1;
+    m_selectedEnvironmentObjectIndex = -1;
     m_hoverCellX = -1;
     m_hoverCellZ = -1;
     m_newMiningVisualType = 0;
@@ -2432,6 +3393,7 @@ bool SceneNarakuPieceEditor::RenameCurrentPiece()
     {
         MarkPieceDirty();
     }
+
     SetMessage(u8"ピース名を変更しました");
     return true;
 }
@@ -3133,7 +4095,28 @@ void SceneNarakuPieceEditor::DrawTerrainPreview3D() const
         Geometory::AddLine({ center.x, center.y + 0.1f, center.z - 0.5f }, { center.x, center.y + 0.1f, center.z + 0.5f }, startColor);
     }
 
-    if (m_editMode == EditMode::GridObject && IsValidCell(m_hoverCellX, m_hoverCellZ))
+    if (m_piece.layerTransition.ropePointEnabled &&
+        IsValidCell(m_piece.layerTransition.ropePoint.x, m_piece.layerTransition.ropePoint.z))
+    {
+        const XMFLOAT3 center = GetCellWorldPosition(m_piece.layerTransition.ropePoint.x, m_piece.layerTransition.ropePoint.z);
+        const XMFLOAT4 color = (m_selectedGridObjectKind == GridObjectKind::LayerRopePoint)
+            ? XMFLOAT4{ 1.0f, 0.85f, 0.25f, 1.0f }
+            : XMFLOAT4{ 0.95f, 0.65f, 0.15f, 1.0f };
+        DrawDebugWireBox3D({ center.x, center.y + 0.55f, center.z }, { 0.65f, 1.10f, 0.65f }, color);
+    }
+
+    if (m_piece.layerTransition.loadPointEnabled &&
+        IsValidCell(m_piece.layerTransition.loadPoint.x, m_piece.layerTransition.loadPoint.z))
+    {
+        const XMFLOAT3 center = GetCellWorldPosition(m_piece.layerTransition.loadPoint.x, m_piece.layerTransition.loadPoint.z);
+        const XMFLOAT4 color = (m_selectedGridObjectKind == GridObjectKind::LayerLoadPoint)
+            ? XMFLOAT4{ 0.35f, 0.95f, 1.0f, 1.0f }
+            : XMFLOAT4{ 0.20f, 0.70f, 0.95f, 1.0f };
+        DrawDebugWireBox3D({ center.x, center.y + 0.20f, center.z }, { 1.0f, 0.35f, 1.0f }, color);
+    }
+
+    if ((m_editMode == EditMode::GridObject || m_editMode == EditMode::EnvironmentObject) &&
+        IsValidCell(m_hoverCellX, m_hoverCellZ))
     {
         const XMFLOAT4 hoverColor = { 1.0f, 1.0f, 1.0f, 0.95f };
         const XMFLOAT3 p00 = GetVertexWorldPosition(m_hoverCellX, m_hoverCellZ);
@@ -3146,7 +4129,61 @@ void SceneNarakuPieceEditor::DrawTerrainPreview3D() const
         Geometory::AddLine(p01, p00, hoverColor);
     }
 
+    DrawEnvironmentObjects3D();
     Geometory::DrawLines();
+}
+
+void SceneNarakuPieceEditor::DrawEnvironmentObjects3D() const
+{
+    const float cosPitch = std::cos(m_cameraPitch);
+    const XMFLOAT3 eye =
+    {
+        m_cameraTarget.x + std::cos(m_cameraYaw) * cosPitch * m_cameraDistance,
+        m_cameraTarget.y + std::sin(m_cameraPitch) * m_cameraDistance,
+        m_cameraTarget.z + std::sin(m_cameraYaw) * cosPitch * m_cameraDistance
+    };
+
+    for (size_t index = 0; index < m_piece.environmentObjects.size(); ++index)
+    {
+        const NarakuPiece::EnvironmentObjectData& object = m_piece.environmentObjects[index];
+        const int assetIndex = FindEnvironmentModelIndexById(object.modelId);
+        if (assetIndex < 0 || !IsValidCell(object.cell.x, object.cell.z)) continue;
+        const EnvironmentModelAsset& asset = m_environmentModels[assetIndex];
+        if (asset.model == nullptr) continue;
+
+        const XMFLOAT3 center = GetCellWorldPosition(object.cell.x, object.cell.z);
+        XMFLOAT4X4 wvp[3] = {};
+        XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(
+            XMMatrixTranslation(-asset.previewAnchor.x, -asset.previewAnchor.y, -asset.previewAnchor.z) *
+            XMMatrixScaling(object.scaleX, object.scaleY, object.scaleZ) *
+            XMMatrixTranslation(center.x, center.y, center.z)));
+        XMStoreFloat4x4(&wvp[1], XMMatrixTranspose(XMLoadFloat4x4(&m_viewMatrix)));
+        XMStoreFloat4x4(&wvp[2], XMMatrixTranspose(XMLoadFloat4x4(&m_projectionMatrix)));
+        ShaderList::SetWVP(wvp);
+        ShaderList::SetCameraPos(eye);
+        asset.model->SetVertexShader(ShaderList::GetVS(ShaderList::VS_WORLD));
+        asset.model->SetPixelShader(ShaderList::GetPS(ShaderList::PS_LAMBERT));
+        for (unsigned int meshIndex = 0; meshIndex < asset.model->GetMeshNum(); ++meshIndex)
+        {
+            const Model::Mesh* mesh = asset.model->GetMesh(meshIndex);
+            if (mesh == nullptr) continue;
+            const Model::Material* sourceMaterial = asset.model->GetMaterial(mesh->materialID);
+            if (sourceMaterial != nullptr)
+            {
+                Model::Material material = *sourceMaterial;
+                ShaderList::SetMaterial(material);
+            }
+            asset.model->Draw(static_cast<int>(meshIndex));
+        }
+
+        if (m_selectedEnvironmentObjectIndex == static_cast<int>(index))
+        {
+            DrawDebugWireBox3D(
+                { center.x, center.y + 0.5f * object.scaleY, center.z },
+                { std::max(0.5f, object.scaleX), std::max(0.5f, object.scaleY), std::max(0.5f, object.scaleZ) },
+                { 0.25f, 0.85f, 1.0f, 1.0f });
+        }
+    }
 }
 
 bool SceneNarakuPieceEditor::IsVertexSelected(int x, int z) const
@@ -3621,6 +4658,7 @@ SceneNarakuPieceEditor::EditorSnapshot SceneNarakuPieceEditor::CreateEditorSnaps
     snapshot.gridObjectTool = m_gridObjectTool;
     snapshot.selectedGridObjectKind = m_selectedGridObjectKind;
     snapshot.selectedMiningPointIndex = m_selectedMiningPointIndex;
+    snapshot.selectedEnvironmentObjectIndex = m_selectedEnvironmentObjectIndex;
     return snapshot;
 }
 
@@ -3656,12 +4694,18 @@ void SceneNarakuPieceEditor::RestoreEditorSnapshot(const EditorSnapshot& snapsho
     m_gridObjectTool = snapshot.gridObjectTool;
     m_selectedGridObjectKind = snapshot.selectedGridObjectKind;
     m_selectedMiningPointIndex = snapshot.selectedMiningPointIndex;
+    m_selectedEnvironmentObjectIndex = snapshot.selectedEnvironmentObjectIndex;
     EnsureSelectionNotEmpty();
     EnsureCellSelectionValid();
     if (m_selectedGridObjectKind == GridObjectKind::MiningPoint &&
         (m_selectedMiningPointIndex < 0 || m_selectedMiningPointIndex >= static_cast<int>(m_piece.miningPoints.size())))
     {
         ClearGridObjectSelection();
+    }
+    if (m_selectedEnvironmentObjectIndex < 0 ||
+        m_selectedEnvironmentObjectIndex >= static_cast<int>(m_piece.environmentObjects.size()))
+    {
+        m_selectedEnvironmentObjectIndex = -1;
     }
     MarkPieceDirty();
     m_heightDragFloatEditing = false;
@@ -4091,9 +5135,90 @@ void SceneNarakuPieceEditor::UpdateGridObjectEditing()
         SetMessage(u8"開始・帰還地点を設定しました");
         return;
 
+    case GridObjectTool::LayerRopePoint:
+        PushUndoSnapshot();
+        m_piece.layerTransition.ropePointEnabled = true;
+        m_piece.layerTransition.ropePoint = { cellX, cellZ };
+        m_selectedGridObjectKind = GridObjectKind::LayerRopePoint;
+        m_selectedMiningPointIndex = -1;
+        MarkPieceDirty();
+        SetMessage(u8"層間口ロープ端点を設定しました");
+        return;
+
+    case GridObjectTool::LayerLoadPoint:
+        PushUndoSnapshot();
+        m_piece.layerTransition.loadPointEnabled = true;
+        m_piece.layerTransition.loadPoint = { cellX, cellZ };
+        m_selectedGridObjectKind = GridObjectKind::LayerLoadPoint;
+        m_selectedMiningPointIndex = -1;
+        MarkPieceDirty();
+        SetMessage(u8"層間口ロード地点を設定しました");
+        return;
+
     default:
         return;
     }
+}
+
+void SceneNarakuPieceEditor::UpdateEnvironmentObjectEditing()
+{
+    ImGuiIO& io = ImGui::GetIO();
+    const bool altPressed = IsEditorAltPressed(io);
+    const POINT mousePos = GetMousePosition();
+    const bool allowPreviewInput = IsMouseInsidePreviewImage() || m_previewImageHovered;
+
+    if (allowPreviewInput && PickTerrainCell(mousePos, m_hoverCellX, m_hoverCellZ))
+    {
+    }
+    else
+    {
+        m_hoverCellX = -1;
+        m_hoverCellZ = -1;
+    }
+    if (!allowPreviewInput || (io.WantCaptureMouse && !m_previewImageHovered) || altPressed || !IsMouseLeftTrigger()) return;
+
+    int cellX = -1;
+    int cellZ = -1;
+    if (!PickTerrainCell(mousePos, cellX, cellZ))
+    {
+        m_selectedEnvironmentObjectIndex = -1;
+        return;
+    }
+
+    const int existingIndex = FindEnvironmentObjectIndexByCell(cellX, cellZ);
+    if (existingIndex >= 0)
+    {
+        m_selectedEnvironmentObjectIndex = existingIndex;
+        const int modelIndex = FindEnvironmentModelIndexById(m_piece.environmentObjects[existingIndex].modelId);
+        if (modelIndex >= 0) m_selectedEnvironmentModelIndex = modelIndex;
+        SetMessage(u8"環境オブジェクトを選択しました");
+        return;
+    }
+    if (m_selectedEnvironmentModelIndex < 0 || m_selectedEnvironmentModelIndex >= static_cast<int>(m_environmentModels.size()))
+    {
+        SetMessage(u8"Assetsから配置するモデルを選択してください");
+        return;
+    }
+
+    std::string placeError;
+    if (!CanPlaceEnvironmentObject(cellX, cellZ, placeError))
+    {
+        SetMessage(placeError);
+        return;
+    }
+
+    const EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
+    PushUndoSnapshot();
+    NarakuPiece::EnvironmentObjectData object;
+    object.modelId = asset.id;
+    object.cell = { cellX, cellZ };
+    object.scaleX = asset.defaultScale.x;
+    object.scaleY = asset.defaultScale.y;
+    object.scaleZ = asset.defaultScale.z;
+    m_piece.environmentObjects.push_back(object);
+    m_selectedEnvironmentObjectIndex = static_cast<int>(m_piece.environmentObjects.size()) - 1;
+    MarkPieceDirty();
+    SetMessage(u8"環境オブジェクトを配置しました");
 }
 
 void SceneNarakuPieceEditor::UpdateCameraMatrices()
@@ -4269,6 +5394,16 @@ void SceneNarakuPieceEditor::DrawDebugWireBox3D(const XMFLOAT3& pos, const XMFLO
 void SceneNarakuPieceEditor::RefreshValidationIssues()
 {
     m_validationIssues = NarakuPiece::ValidatePieceData(m_piece);
+    for (const NarakuPiece::EnvironmentObjectData& object : m_piece.environmentObjects)
+    {
+        if (FindEnvironmentModelIndexById(object.modelId) < 0)
+        {
+            NarakuPiece::ValidationIssue issue;
+            issue.severity = NarakuPiece::ValidationIssue::Severity::Error;
+            issue.message = "environmentObject が未登録モデルを参照しています: " + object.modelId;
+            m_validationIssues.push_back(issue);
+        }
+    }
     m_validationDirty = false;
 }
 

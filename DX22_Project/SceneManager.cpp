@@ -20,8 +20,8 @@ bool SceneManager::m_isChanging = false;
 
 void SceneManager::Init()
 {
-    m_current = SCENE_NARAKU_PIECE_EDITOR;
-    m_next = SCENE_NARAKU_PIECE_EDITOR;
+    m_current = SCENE_NARAKU_PROTO;
+    m_next = SCENE_NARAKU_PROTO;
     m_isChanging = false;
     m_result = None;
     CreateScene(m_current);

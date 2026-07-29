@@ -1,4 +1,4 @@
-#include "NarakuMapData.h"
+﻿#include "NarakuMapData.h"
 
 #include <Windows.h>
 #undef max
@@ -830,11 +830,11 @@ namespace NarakuMap
             int bottomLayerIndex = -1;
             int bottomCellX = -1;
             int bottomCellZ = -1;
-            if (!TryGetLayerAndCell(mapData, rope.topLayerId, rope.xz, topLayerIndex, topCellX, topCellZ))
+            if (!TryGetLayerAndCell(mapData, rope.topLayerId, rope.topXZ, topLayerIndex, topCellX, topCellZ))
             {
                 continue;
             }
-            if (!TryGetLayerAndCell(mapData, rope.bottomLayerId, rope.xz, bottomLayerIndex, bottomCellX, bottomCellZ))
+            if (!TryGetLayerAndCell(mapData, rope.bottomLayerId, rope.bottomXZ, bottomLayerIndex, bottomCellX, bottomCellZ))
             {
                 continue;
             }
@@ -998,8 +998,8 @@ namespace NarakuMap
             int bottomLayerIndex = -1;
             int bottomCellX = -1;
             int bottomCellZ = -1;
-            if (!TryGetLayerAndCell(mapData, rope.topLayerId, rope.xz, topLayerIndex, topCellX, topCellZ) ||
-                !TryGetLayerAndCell(mapData, rope.bottomLayerId, rope.xz, bottomLayerIndex, bottomCellX, bottomCellZ))
+            if (!TryGetLayerAndCell(mapData, rope.topLayerId, rope.topXZ, topLayerIndex, topCellX, topCellZ) ||
+                !TryGetLayerAndCell(mapData, rope.bottomLayerId, rope.bottomXZ, bottomLayerIndex, bottomCellX, bottomCellZ))
             {
                 issues.push_back({ ValidationIssue::Error, u8"ロープの接続位置がレイヤー範囲外です。" });
                 continue;
@@ -1007,11 +1007,7 @@ namespace NarakuMap
 
             const TerrainLayer& topLayer = mapData.terrainLayers[topLayerIndex];
             const TerrainLayer& bottomLayer = mapData.terrainLayers[bottomLayerIndex];
-            if (rope.topLayerId == rope.bottomLayerId)
-            {
-                issues.push_back({ ValidationIssue::Warning, u8"同じレイヤー同士を接続するロープがあります。" });
-            }
-            if (topLayer.layerDepth >= bottomLayer.layerDepth)
+            if (rope.topLayerId != rope.bottomLayerId && topLayer.layerDepth >= bottomLayer.layerDepth)
             {
                 issues.push_back({ ValidationIssue::Warning, u8"ロープの上層 / 下層深度関係が不自然です。" });
             }
@@ -1022,6 +1018,58 @@ namespace NarakuMap
             if (!IsRopeAnchorCell(topLayer, topCellX, topCellZ) || !IsRopeAnchorCell(bottomLayer, bottomCellX, bottomCellZ))
             {
                 issues.push_back({ ValidationIssue::Warning, u8"ロープ接続先にロープアンカー属性が付いていません。" });
+            }
+        }
+
+        for (const LayerGatePoint& gate : mapData.layerGates)
+        {
+            int ropeLayerIndex = -1;
+            int ropeCellX = -1;
+            int ropeCellZ = -1;
+            if (!TryGetLayerAndCell(mapData, gate.layerId, gate.ropeXZ, ropeLayerIndex, ropeCellX, ropeCellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"層間口のロープ端点がレイヤー範囲外です。" });
+                continue;
+            }
+            const TerrainLayer& layer = mapData.terrainLayers[ropeLayerIndex];
+            if (IsBlockedCell(layer, ropeCellX, ropeCellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"層間口のロープ端点が歩行不可セル上にあります。" });
+            }
+
+            if (!gate.isEntry)
+            {
+                int loadLayerIndex = -1;
+                int loadCellX = -1;
+                int loadCellZ = -1;
+                if (!TryGetLayerAndCell(mapData, gate.layerId, gate.loadXZ, loadLayerIndex, loadCellX, loadCellZ))
+                {
+                    issues.push_back({ ValidationIssue::Error, u8"層出口のロード地点がレイヤー範囲外です。" });
+                    continue;
+                }
+                if (IsBlockedCell(mapData.terrainLayers[loadLayerIndex], loadCellX, loadCellZ))
+                {
+                    issues.push_back({ ValidationIssue::Error, u8"層出口のロード地点が歩行不可セル上にあります。" });
+                }
+            }
+        }
+
+        for (const EnvironmentObject& object : mapData.environmentObjects)
+        {
+            int layerIndex = -1;
+            int cellX = -1;
+            int cellZ = -1;
+            if (object.modelId.empty())
+            {
+                issues.push_back({ ValidationIssue::Error, u8"環境オブジェクトのモデルIDが空です。" });
+            }
+            if (object.scaleX <= 0.0f || object.scaleY <= 0.0f || object.scaleZ <= 0.0f)
+            {
+                issues.push_back({ ValidationIssue::Error, u8"環境オブジェクトのサイズが0以下です。" });
+            }
+            if (!TryGetLayerAndCell(mapData, object.layerId, object.xz, layerIndex, cellX, cellZ))
+            {
+                issues.push_back({ ValidationIssue::Error, u8"環境オブジェクトが有効なセル範囲外にあります。" });
             }
         }
 
@@ -1147,7 +1195,7 @@ namespace NarakuMap
         mapData.returnPoint = { { 0.0f, 0.0f }, 0 };
         mapData.autoFallStartHeight = 0.90f;
 
-        mapData.ropes.push_back({ { 7.0f, 9.0f }, 0, 1 });
+        mapData.ropes.push_back({ { 7.0f, 9.0f }, { 7.0f, 9.0f }, 0, 1 });
 
         const Vec2 miningPositions[10] =
         {
@@ -1263,10 +1311,44 @@ namespace NarakuMap
         {
             const RopePoint& rope = mapData.ropes[i];
             AppendIndent(out, 2);
-            out << "{ \"x\": " << rope.xz.x << ", \"z\": " << rope.xz.z
+            out << "{ \"topX\": " << rope.topXZ.x << ", \"topZ\": " << rope.topXZ.z
+                << ", \"bottomX\": " << rope.bottomXZ.x << ", \"bottomZ\": " << rope.bottomXZ.z
                 << ", \"topLayerId\": " << rope.topLayerId
                 << ", \"bottomLayerId\": " << rope.bottomLayerId << " }";
             out << (i + 1 < static_cast<int>(mapData.ropes.size()) ? ",\n" : "\n");
+        }
+        AppendIndent(out, 1);
+        out << "],\n";
+
+        AppendIndent(out, 1);
+        out << "\"layerGates\": [\n";
+        for (int i = 0; i < static_cast<int>(mapData.layerGates.size()); ++i)
+        {
+            const LayerGatePoint& gate = mapData.layerGates[i];
+            AppendIndent(out, 2);
+            out << "{ \"role\": \"" << (gate.isEntry ? "entry" : "exit") << "\""
+                << ", \"ropeX\": " << gate.ropeXZ.x << ", \"ropeZ\": " << gate.ropeXZ.z
+                << ", \"loadX\": " << gate.loadXZ.x << ", \"loadZ\": " << gate.loadXZ.z
+                << ", \"layerId\": " << gate.layerId << " }";
+            out << (i + 1 < static_cast<int>(mapData.layerGates.size()) ? ",\n" : "\n");
+        }
+        AppendIndent(out, 1);
+        out << "],\n";
+
+        AppendIndent(out, 1);
+        out << "\"environmentObjects\": [\n";
+        for (int i = 0; i < static_cast<int>(mapData.environmentObjects.size()); ++i)
+        {
+            const EnvironmentObject& object = mapData.environmentObjects[i];
+            AppendIndent(out, 2);
+            out << "{ \"modelId\": \"" << EscapeJsonString(object.modelId) << "\""
+                << ", \"x\": " << object.xz.x
+                << ", \"z\": " << object.xz.z
+                << ", \"layerId\": " << object.layerId
+                << ", \"scaleX\": " << object.scaleX
+                << ", \"scaleY\": " << object.scaleY
+                << ", \"scaleZ\": " << object.scaleZ << " }";
+            out << (i + 1 < static_cast<int>(mapData.environmentObjects.size()) ? ",\n" : "\n");
         }
         AppendIndent(out, 1);
         out << "],\n";
@@ -1452,11 +1534,63 @@ namespace NarakuMap
 
                 RopePoint rope;
                 double number = 0.0;
-                GetNumber(ropeValue, "x", number); rope.xz.x = static_cast<float>(number);
-                GetNumber(ropeValue, "z", number); rope.xz.z = static_cast<float>(number);
+                const bool hasTopX = GetNumber(ropeValue, "topX", number);
+                if (hasTopX) rope.topXZ.x = static_cast<float>(number);
+                const bool hasTopZ = GetNumber(ropeValue, "topZ", number);
+                if (hasTopZ) rope.topXZ.z = static_cast<float>(number);
+                const bool hasBottomX = GetNumber(ropeValue, "bottomX", number);
+                if (hasBottomX) rope.bottomXZ.x = static_cast<float>(number);
+                const bool hasBottomZ = GetNumber(ropeValue, "bottomZ", number);
+                if (hasBottomZ) rope.bottomXZ.z = static_cast<float>(number);
+                if (!hasTopX || !hasTopZ || !hasBottomX || !hasBottomZ)
+                {
+                    GetNumber(ropeValue, "x", number);
+                    rope.topXZ.x = rope.bottomXZ.x = static_cast<float>(number);
+                    GetNumber(ropeValue, "z", number);
+                    rope.topXZ.z = rope.bottomXZ.z = static_cast<float>(number);
+                }
                 GetNumber(ropeValue, "topLayerId", number); rope.topLayerId = static_cast<int>(number);
                 GetNumber(ropeValue, "bottomLayerId", number); rope.bottomLayerId = static_cast<int>(number);
                 loadedMap.ropes.push_back(rope);
+            }
+        }
+
+        const JsonValue* layerGatesValue = nullptr;
+        if (GetObjectValue<JsonValue>(rootValue, "layerGates", layerGatesValue) && layerGatesValue->type == JsonValue::TypeArray)
+        {
+            for (const JsonValue& gateValue : layerGatesValue->arrayValue)
+            {
+                if (gateValue.type != JsonValue::TypeObject) continue;
+                LayerGatePoint gate;
+                std::string role;
+                double number = 0.0;
+                GetString(gateValue, "role", role); gate.isEntry = role == "entry";
+                GetNumber(gateValue, "ropeX", number); gate.ropeXZ.x = static_cast<float>(number);
+                GetNumber(gateValue, "ropeZ", number); gate.ropeXZ.z = static_cast<float>(number);
+                GetNumber(gateValue, "loadX", number); gate.loadXZ.x = static_cast<float>(number);
+                GetNumber(gateValue, "loadZ", number); gate.loadXZ.z = static_cast<float>(number);
+                GetNumber(gateValue, "layerId", number); gate.layerId = static_cast<int>(number);
+                loadedMap.layerGates.push_back(gate);
+            }
+        }
+
+        const JsonValue* environmentObjectsValue = nullptr;
+        if (GetObjectValue<JsonValue>(rootValue, "environmentObjects", environmentObjectsValue) &&
+            environmentObjectsValue->type == JsonValue::TypeArray)
+        {
+            for (const JsonValue& objectValue : environmentObjectsValue->arrayValue)
+            {
+                if (objectValue.type != JsonValue::TypeObject) continue;
+                EnvironmentObject object;
+                double number = 0.0;
+                GetString(objectValue, "modelId", object.modelId);
+                GetNumber(objectValue, "x", number); object.xz.x = static_cast<float>(number);
+                GetNumber(objectValue, "z", number); object.xz.z = static_cast<float>(number);
+                GetNumber(objectValue, "layerId", number); object.layerId = static_cast<int>(number);
+                if (GetNumber(objectValue, "scaleX", number)) object.scaleX = static_cast<float>(number);
+                if (GetNumber(objectValue, "scaleY", number)) object.scaleY = static_cast<float>(number);
+                if (GetNumber(objectValue, "scaleZ", number)) object.scaleZ = static_cast<float>(number);
+                loadedMap.environmentObjects.push_back(object);
             }
         }
 
@@ -1493,6 +1627,14 @@ namespace NarakuMap
         for (MiningPoint& point : loadedMap.miningPoints)
         {
             if (FindLayerIndexById(loadedMap, point.layerId) < 0) point.layerId = fallbackLayerId;
+        }
+        for (EnvironmentObject& object : loadedMap.environmentObjects)
+        {
+            if (FindLayerIndexById(loadedMap, object.layerId) < 0) object.layerId = fallbackLayerId;
+        }
+        for (LayerGatePoint& gate : loadedMap.layerGates)
+        {
+            if (FindLayerIndexById(loadedMap, gate.layerId) < 0) gate.layerId = fallbackLayerId;
         }
 
         outMapData = loadedMap;

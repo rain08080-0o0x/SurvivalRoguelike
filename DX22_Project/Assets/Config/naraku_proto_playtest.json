@@ -1,0 +1,21 @@
+{
+  "walkSpeed": 6.1,
+  "runSpeed": 15,
+  "ropeSpeed": 10,
+  "attackPower": 1,
+  "runCostPerSecond": 15.24,
+  "ropeCostPerSecond": 3,
+  "attackCost": 10,
+  "miningCost": 26.2,
+  "stepCost": 4.28,
+  "jumpCost": 0,
+  "staminaRecoverPerSecond": 30,
+  "upperLayerAlpha": 0.06,
+  "minimapPosX": 20,
+  "minimapPosY": 20,
+  "minimapSize": 220,
+  "showMinimap": 1,
+  "cameraDistance": 13.8564,
+  "cameraMinPitchDegrees": 1,
+  "cameraMaxPitchDegrees": 89
+}

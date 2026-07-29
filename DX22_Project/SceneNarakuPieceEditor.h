@@ -5,6 +5,7 @@
 
 class RenderTarget;
 class DepthStencil;
+class Model;
 struct ImVec2;
 
 #include <DirectXMath.h>
@@ -61,7 +62,15 @@ public:
         /** @brief 高さグリッドウィンドウの表示状態を切り替えます。 */
         MenuToggleHeightGridWindow,
         /** @brief 小ステージHierarchyウィンドウの表示状態を切り替えます。 */
-        MenuTogglePieceHierarchyWindow
+        MenuTogglePieceHierarchyWindow,
+        /** @brief 環境モデルを登録します。 */
+        MenuNewEnvironmentModel,
+        /** @brief 選択中の環境モデル登録を削除します。 */
+        MenuDeleteEnvironmentModel,
+        /** @brief 選択中の環境モデル設定を編集します。 */
+        MenuEnvironmentModelSetting,
+        /** @brief Assetsウィンドウの表示状態を切り替えます。 */
+        MenuToggleEnvironmentAssetsWindow
     };
 
     /**
@@ -132,6 +141,27 @@ private:
 
         /** @brief 採掘ポイントやロープなどのグリッドオブジェクトを編集するモードです。 */
         GridObject,
+
+        /** @brief 登録モデルをセルへ配置して編集するモードです。 */
+        EnvironmentObject,
+    };
+
+    /** @brief Assetsウィンドウへ登録する環境モデル情報です。 */
+    struct EnvironmentModelAsset
+    {
+        std::string id;
+        std::string name;
+        std::string path;
+        DirectX::XMFLOAT3 defaultScale = { 1.0f, 1.0f, 1.0f };
+        Model* model = nullptr;
+        DirectX::XMFLOAT3 boundsMin = { -0.5f, 0.0f, -0.5f };
+        DirectX::XMFLOAT3 boundsMax = { 0.5f, 1.0f, 0.5f };
+        DirectX::XMFLOAT3 previewAnchor = {};
+        bool hasBounds = false;
+        RenderTarget* thumbnailRenderTarget = nullptr;
+        DepthStencil* thumbnailDepthStencil = nullptr;
+        unsigned int thumbnailSize = 0;
+        bool thumbnailDirty = true;
     };
 
     /**
@@ -162,6 +192,12 @@ private:
 
         /** @brief 開始・帰還地点を配置するツールです。 */
         StartReturn,
+
+        /** @brief 層間口のロープ端点を配置するツールです。 */
+        LayerRopePoint,
+
+        /** @brief 層出口で下層生成を開始するロード地点を配置するツールです。 */
+        LayerLoadPoint,
     };
 
     /**
@@ -180,6 +216,12 @@ private:
 
         /** @brief 開始・帰還地点が選択されている状態です。 */
         StartReturn,
+
+        /** @brief 層間口のロープ端点が選択されている状態です。 */
+        LayerRopePoint,
+
+        /** @brief 層間口のロード地点が選択されている状態です。 */
+        LayerLoadPoint,
     };
 
     /**
@@ -222,6 +264,9 @@ private:
 
         /** @brief 退避時点で選択されていた採掘ポイントの配列インデックスです。 */
         int selectedMiningPointIndex = -1;
+
+        /** @brief 選択中の環境オブジェクト配列インデックスです。 */
+        int selectedEnvironmentObjectIndex = -1;
     };
 
     /**
@@ -344,6 +389,12 @@ private:
      * @brief 配置済みグリッドオブジェクトの選択情報UIを描画します。
      */
     void DrawGridObjectSelectionWindow();
+
+    /** @brief 登録モデル一覧と環境オブジェクト編集UIを描画します。 */
+    void DrawEnvironmentAssetsWindow();
+
+    /** @brief モデル登録・設定用モーダルを描画します。 */
+    void DrawEnvironmentModelPopup();
 
     /**
      * @brief ファイル操作と検証結果を表示するウィンドウを描画します。
@@ -567,6 +618,74 @@ private:
      */
     void DrawPreviewWindow();
 
+    /** @brief 環境オブジェクト配置モードの入力を処理します。 */
+    void UpdateEnvironmentObjectEditing();
+
+    /** @brief 環境モデル登録簿を読み込みます。 */
+    void LoadEnvironmentModelCatalog();
+
+    /** @brief 環境モデル登録簿を保存します。 */
+    bool SaveEnvironmentModelCatalog();
+
+    /** @brief 登録済み環境モデルを解放します。 */
+    void ReleaseEnvironmentModels();
+
+    /** @brief ファイル選択後に新規モデル設定モーダルを開きます。 */
+    void OpenNewEnvironmentModelDialog();
+
+    /** @brief 選択中モデル設定モーダルを開きます。 */
+    void OpenEnvironmentModelSetting();
+
+    /** @brief 選択中モデルを登録簿から削除します。 */
+    void DeleteSelectedEnvironmentModel();
+
+    /** @brief モデル設定モーダルの内容を登録簿へ反映します。 */
+    void ApplyEnvironmentModelPopup();
+
+    /** @brief 読み込み済みモデルの頂点境界とプレビュー基準点を計算します。 */
+    void UpdateEnvironmentModelBounds(EnvironmentModelAsset& asset);
+
+    /** @brief 指定サイズのモデルサムネイル描画先を確保します。 */
+    bool EnsureEnvironmentModelThumbnail(EnvironmentModelAsset& asset, unsigned int size);
+
+    /** @brief 固定カメラでモデルサムネイルを描画します。 */
+    void RenderEnvironmentModelThumbnail(EnvironmentModelAsset& asset, unsigned int size);
+
+    /** @brief Assets表示用のサムネイルテクスチャを取得します。 */
+    void* GetEnvironmentModelThumbnailTextureId(int index, unsigned int size);
+
+    /** @brief モデル設定画面専用のプレビュー描画先を確保します。 */
+    bool EnsureEnvironmentModelPopupPreview(unsigned int size);
+
+    /** @brief 入力中サイズとセル基準グリッドをモデル設定画面へ描画します。 */
+    void RenderEnvironmentModelPopupPreview(unsigned int size);
+
+    /** @brief モデル設定画面のプレビューテクスチャを取得します。 */
+    void* GetEnvironmentModelPopupPreviewTextureId(unsigned int size);
+
+    /** @brief 新規登録用の先行読込モデルと設定画面の描画資源を解放します。 */
+    void ReleaseEnvironmentModelPopupPreview();
+
+    /** @brief 指定IDの登録モデル位置を返します。 */
+    int FindEnvironmentModelIndexById(const std::string& modelId) const;
+
+    /** @brief 指定セルの環境オブジェクト位置を返します。 */
+    int FindEnvironmentObjectIndexByCell(int cellX, int cellZ) const;
+
+    /** @brief 環境オブジェクトを指定セルへ配置できるか確認します。 */
+    bool CanPlaceEnvironmentObject(int cellX, int cellZ, std::string& outMessage) const;
+
+    /** @brief 指定セルに環境オブジェクトがあるか返します。 */
+    bool HasEnvironmentObjectAt(int cellX, int cellZ) const;
+
+    /** @brief 登録済み環境モデルを3Dプレビューへ描画します。 */
+    void DrawEnvironmentObjects3D() const;
+
+    /**
+     * @brief 3Dプレビュー画像上にカメラ追従の方位コンパスを描画します。
+     */
+    void DrawPreviewCompass() const;
+
     /**
      * @brief 現在のピース形状をオフスクリーンのテクスチャへ描画します。
      */
@@ -622,6 +741,13 @@ private:
      * @brief 現在のカメラ状態からビュー行列と射影行列を再計算します。
      */
     void UpdateCameraMatrices();
+
+    /**
+     * @brief ワールド方位ベクトルをプレビュー上の画面方向へ変換します。
+     * @param worldDirection 変換対象のワールド方位ベクトルです。
+     * @return プレビュー画面上の単位方向です。
+     */
+    DirectX::XMFLOAT2 GetCompassScreenDirection(const DirectX::XMFLOAT3& worldDirection) const;
 
     /**
      * @brief 3Dプレビューカメラを既定の向きと距離に戻します。
@@ -1022,6 +1148,46 @@ private:
     /** @brief 現在選択中の採掘ポイントインデックスです。 */
     int m_selectedMiningPointIndex = -1;
 
+    /** @brief Assetsウィンドウへ登録済みの環境モデル一覧です。 */
+    std::vector<EnvironmentModelAsset> m_environmentModels;
+
+    /** @brief Assetsウィンドウで選択中の登録モデルです。 */
+    int m_selectedEnvironmentModelIndex = -1;
+
+    /** @brief 小ステージ上で選択中の環境オブジェクトです。 */
+    int m_selectedEnvironmentObjectIndex = -1;
+
+    /** @brief モデル登録・設定モーダルで編集する名前です。 */
+    std::array<char, 128> m_environmentModelNameInput = {};
+
+    /** @brief モデル登録・設定モーダルで保持するモデルパスです。 */
+    std::array<char, 512> m_environmentModelPathInput = {};
+
+    /** @brief モデル登録・設定モーダルで編集する既定サイズです。 */
+    DirectX::XMFLOAT3 m_environmentModelScaleInput = { 1.0f, 1.0f, 1.0f };
+
+    /** @brief 次回描画でモデル設定モーダルを開く要求です。 */
+    bool m_requestOpenEnvironmentModelPopup = false;
+
+    /** @brief モデル設定モーダルが新規登録用かどうかです。 */
+    bool m_environmentModelPopupIsNew = false;
+
+    /** @brief 新規登録の確定前にモデルビューへ表示する読込済みモデルです。 */
+    Model* m_environmentModelPopupPreviewModel = nullptr;
+
+    /** @brief 新規登録モデルの頂点境界とプレビュー基準点です。 */
+    DirectX::XMFLOAT3 m_environmentModelPopupBoundsMin = { -0.5f, 0.0f, -0.5f };
+    DirectX::XMFLOAT3 m_environmentModelPopupBoundsMax = { 0.5f, 1.0f, 0.5f };
+    DirectX::XMFLOAT3 m_environmentModelPopupPreviewAnchor = {};
+
+    /** @brief モデル設定画面のモデルビュー描画先です。 */
+    RenderTarget* m_environmentModelPopupRenderTarget = nullptr;
+    DepthStencil* m_environmentModelPopupDepthStencil = nullptr;
+    unsigned int m_environmentModelPopupPreviewSize = 0;
+
+    /** @brief Assetsウィンドウのモデルタイル表示寸法です。 */
+    float m_environmentAssetTileSize = 96.0f;
+
     /** @brief プレビュー上でホバー中セルのX方向グリッド座標です。 */
     int m_hoverCellX = -1;
 
@@ -1192,6 +1358,9 @@ private:
 
     /** @brief 小ステージHierarchyウィンドウの表示状態です。 */
     bool m_showPieceHierarchyWindow = true;
+
+    /** @brief 環境モデルAssetsウィンドウの表示状態です。 */
+    bool m_showEnvironmentAssetsWindow = true;
 
     /** @brief 保存済み小ステージの登録一覧です。 */
     std::vector<PieceHierarchyEntry> m_pieceHierarchyEntries;

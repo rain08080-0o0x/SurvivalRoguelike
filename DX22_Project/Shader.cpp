@@ -18,6 +18,13 @@ Shader::~Shader()
 		SAFE_RELEASE((*it));
 		++it;
 	}
+
+	std::vector<ID3D11ShaderResourceView*>::iterator textureIt = m_pTextures.begin();
+	while (textureIt != m_pTextures.end())
+	{
+		SAFE_RELEASE((*textureIt));
+		++textureIt;
+	}
 }
 HRESULT Shader::Load(const char* pFileName)
 {
@@ -76,8 +83,13 @@ void Shader::WriteBuffer(UINT slot, void* pData)
 }
 void Shader::SetTexture(UINT slot, Texture* tex)
 {
-	if (!tex || slot >= m_pTextures.size()) { return; }
-	ID3D11ShaderResourceView* pTex = tex->GetResource();
+	if (slot >= m_pTextures.size()) { return; }
+	ID3D11ShaderResourceView* pTex = tex ? tex->GetResource() : nullptr;
+	if (pTex)
+	{
+		pTex->AddRef();
+	}
+	SAFE_RELEASE(m_pTextures[slot]);
 	m_pTextures[slot] = pTex;
 	switch (m_kind)
 	{

@@ -1,4 +1,4 @@
-#include "NarakuPieceData.h"
+﻿#include "NarakuPieceData.h"
 
 #include <Windows.h>
 #undef max
@@ -851,6 +851,16 @@ namespace NarakuPiece
         }
     }
 
+    const char* ToString(LayerTransitionRole value)
+    {
+        switch (value)
+        {
+        case LayerTransitionRole::Entry: return "entry";
+        case LayerTransitionRole::Exit: return "exit";
+        default: return "none";
+        }
+    }
+
     const char* ToString(Direction value)
     {
         switch (value)
@@ -945,6 +955,14 @@ namespace NarakuPiece
             out = StageCategory::Blocked;
             return true;
         }
+        return false;
+    }
+
+    bool TryParseLayerTransitionRole(const std::string& text, LayerTransitionRole& out)
+    {
+        if (text == "none") { out = LayerTransitionRole::None; return true; }
+        if (text == "entry") { out = LayerTransitionRole::Entry; return true; }
+        if (text == "exit") { out = LayerTransitionRole::Exit; return true; }
         return false;
     }
 
@@ -1088,6 +1106,71 @@ namespace NarakuPiece
             if (!IsCellInRange(data, data.rope.top) || !IsCellInRange(data, data.rope.bottom))
             {
                 AddIssue(issues, ValidationIssue::Severity::Error, "rope の top または bottom が範囲外です。");
+            }
+        }
+
+        if (data.layerTransition.role != LayerTransitionRole::None)
+        {
+            if (!data.layerTransition.ropePointEnabled || !IsCellInRange(data, data.layerTransition.ropePoint))
+            {
+                AddIssue(issues, ValidationIssue::Severity::Error, "layerTransition の ropePoint が必要です。");
+            }
+            if (data.layerTransition.role == LayerTransitionRole::Exit &&
+                (!data.layerTransition.loadPointEnabled || !IsCellInRange(data, data.layerTransition.loadPoint)))
+            {
+                AddIssue(issues, ValidationIssue::Severity::Error, "層出口には loadPoint が必要です。");
+            }
+        }
+
+        for (size_t index = 0; index < data.environmentObjects.size(); ++index)
+        {
+            const EnvironmentObjectData& object = data.environmentObjects[index];
+            if (object.modelId.empty())
+            {
+                AddIssue(issues, ValidationIssue::Severity::Error, "environmentObject の modelId が空です。");
+            }
+            if (!IsCellInRange(data, object.cell))
+            {
+                AddIssue(issues, ValidationIssue::Severity::Error, "environmentObject の cell が範囲外です。");
+                continue;
+            }
+            const int cellWidth = std::max(0, data.gridWidth - 1);
+            const int cellIndex = object.cell.z * cellWidth + object.cell.x;
+            if (cellIndex >= 0 && cellIndex < static_cast<int>(data.cells.size()) &&
+                data.cells[static_cast<size_t>(cellIndex)].deleted)
+            {
+                AddIssue(issues, ValidationIssue::Severity::Error, "environmentObject は削除セルへ配置できません。");
+            }
+            if (object.scaleX <= 0.0f || object.scaleY <= 0.0f || object.scaleZ <= 0.0f)
+            {
+                AddIssue(issues, ValidationIssue::Severity::Error, "environmentObject の scale は 0 より大きい値が必要です。");
+            }
+
+            for (size_t otherIndex = index + 1; otherIndex < data.environmentObjects.size(); ++otherIndex)
+            {
+                const EnvironmentObjectData& other = data.environmentObjects[otherIndex];
+                if (object.cell.x == other.cell.x && object.cell.z == other.cell.z)
+                {
+                    AddIssue(issues, ValidationIssue::Severity::Error, "同じセルに複数の environmentObject は配置できません。");
+                    break;
+                }
+            }
+
+            const bool overlapsMining = std::any_of(
+                data.miningPoints.begin(), data.miningPoints.end(),
+                [&](const MiningPointData& point)
+                {
+                    return point.cell.x == object.cell.x && point.cell.z == object.cell.z;
+                });
+            const bool overlapsStartReturn = data.startReturnCandidate.enabled &&
+                data.startReturnCandidate.cell.x == object.cell.x &&
+                data.startReturnCandidate.cell.z == object.cell.z;
+            const bool overlapsLoadPoint = data.layerTransition.loadPointEnabled &&
+                data.layerTransition.loadPoint.x == object.cell.x &&
+                data.layerTransition.loadPoint.z == object.cell.z;
+            if (overlapsMining || overlapsStartReturn || overlapsLoadPoint)
+            {
+                AddIssue(issues, ValidationIssue::Severity::Error, "environmentObject がロープ以外のゲームオブジェクトと重なっています。");
             }
         }
 
@@ -1287,6 +1370,20 @@ namespace NarakuPiece
         AppendIndent(out, 1);
         out << "},\n";
         AppendIndent(out, 1);
+        out << "\"layerTransition\": {\n";
+        AppendIndent(out, 2);
+        out << "\"role\": \"" << ToString(data.layerTransition.role) << "\",\n";
+        AppendIndent(out, 2);
+        out << "\"ropePointEnabled\": " << (data.layerTransition.ropePointEnabled ? "true" : "false") << ",\n";
+        AppendIndent(out, 2);
+        out << "\"ropePoint\": { \"x\": " << data.layerTransition.ropePoint.x << ", \"z\": " << data.layerTransition.ropePoint.z << " },\n";
+        AppendIndent(out, 2);
+        out << "\"loadPointEnabled\": " << (data.layerTransition.loadPointEnabled ? "true" : "false") << ",\n";
+        AppendIndent(out, 2);
+        out << "\"loadPoint\": { \"x\": " << data.layerTransition.loadPoint.x << ", \"z\": " << data.layerTransition.loadPoint.z << " }\n";
+        AppendIndent(out, 1);
+        out << "},\n";
+        AppendIndent(out, 1);
         out << "\"miningPoints\": [\n";
         for (size_t i = 0; i < data.miningPoints.size(); ++i)
         {
@@ -1299,6 +1396,21 @@ namespace NarakuPiece
                 << "\"initiallyRecorded\": " << (point.initiallyRecorded ? "true" : "false")
                 << " }";
             out << (i + 1 < data.miningPoints.size() ? ",\n" : "\n");
+        }
+        AppendIndent(out, 1);
+        out << "],\n";
+        AppendIndent(out, 1);
+        out << "\"environmentObjects\": [\n";
+        for (size_t i = 0; i < data.environmentObjects.size(); ++i)
+        {
+            const EnvironmentObjectData& object = data.environmentObjects[i];
+            AppendIndent(out, 2);
+            out << "{ "
+                << "\"modelId\": \"" << EscapeJsonString(object.modelId) << "\", "
+                << "\"cell\": { \"x\": " << object.cell.x << ", \"z\": " << object.cell.z << " }, "
+                << "\"scale\": { \"x\": " << object.scaleX << ", \"y\": " << object.scaleY << ", \"z\": " << object.scaleZ << " }"
+                << " }";
+            out << (i + 1 < data.environmentObjects.size() ? ",\n" : "\n");
         }
         AppendIndent(out, 1);
         out << "],\n";
@@ -1520,6 +1632,26 @@ namespace NarakuPiece
             LoadGridPoint(*ropeValue, "bottom", loadedData.rope.bottom);
         }
 
+        const JsonValue* layerTransitionValue = nullptr;
+        if (GetObjectValue<JsonValue>(rootValue, "layerTransition", layerTransitionValue) &&
+            layerTransitionValue->type == JsonValue::TypeObject)
+        {
+            if (GetString(*layerTransitionValue, "role", text))
+            {
+                TryParseLayerTransitionRole(text, loadedData.layerTransition.role);
+            }
+            if (GetBool(*layerTransitionValue, "ropePointEnabled", boolValue))
+            {
+                loadedData.layerTransition.ropePointEnabled = boolValue;
+            }
+            LoadGridPoint(*layerTransitionValue, "ropePoint", loadedData.layerTransition.ropePoint);
+            if (GetBool(*layerTransitionValue, "loadPointEnabled", boolValue))
+            {
+                loadedData.layerTransition.loadPointEnabled = boolValue;
+            }
+            LoadGridPoint(*layerTransitionValue, "loadPoint", loadedData.layerTransition.loadPoint);
+        }
+
         const JsonValue* miningPointsValue = nullptr;
         if (GetObjectValue<JsonValue>(rootValue, "miningPoints", miningPointsValue) &&
             miningPointsValue->type == JsonValue::TypeArray)
@@ -1548,6 +1680,37 @@ namespace NarakuPiece
                     point.initiallyRecorded = boolValue;
                 }
                 loadedData.miningPoints.push_back(point);
+            }
+        }
+
+        const JsonValue* environmentObjectsValue = nullptr;
+        if (GetObjectValue<JsonValue>(rootValue, "environmentObjects", environmentObjectsValue) &&
+            environmentObjectsValue->type == JsonValue::TypeArray)
+        {
+            loadedData.environmentObjects.clear();
+            loadedData.environmentObjects.reserve(environmentObjectsValue->arrayValue.size());
+            for (const JsonValue& objectValue : environmentObjectsValue->arrayValue)
+            {
+                if (objectValue.type != JsonValue::TypeObject)
+                {
+                    continue;
+                }
+
+                EnvironmentObjectData object;
+                if (GetString(objectValue, "modelId", text))
+                {
+                    object.modelId = text;
+                }
+                LoadGridPoint(objectValue, "cell", object.cell);
+                const JsonValue* scaleValue = nullptr;
+                if (GetObjectValue<JsonValue>(objectValue, "scale", scaleValue) &&
+                    scaleValue->type == JsonValue::TypeObject)
+                {
+                    if (GetNumber(*scaleValue, "x", number)) object.scaleX = static_cast<float>(number);
+                    if (GetNumber(*scaleValue, "y", number)) object.scaleY = static_cast<float>(number);
+                    if (GetNumber(*scaleValue, "z", number)) object.scaleZ = static_cast<float>(number);
+                }
+                loadedData.environmentObjects.push_back(object);
             }
         }
 

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstdint>
 #include <string>
@@ -112,8 +112,11 @@ namespace NarakuMap
      */
     struct RopePoint
     {
-        /** @brief ロープの XZ 座標です。 */
-        Vec2 xz;
+        /** @brief ロープ上端の XZ 座標です。 */
+        Vec2 topXZ;
+
+        /** @brief ロープ下端の XZ 座標です。 */
+        Vec2 bottomXZ;
 
         /** @brief 上側に接続するレイヤー ID です。 */
         int topLayerId = 0;
@@ -149,6 +152,33 @@ namespace NarakuMap
 
         /** @brief 採掘時に得られる旧器名や識別名です。 */
         std::string relicName;
+    };
+
+    /** @brief 生成エリア内に配置された層入口または層出口です。 */
+    struct LayerGatePoint
+    {
+        bool isEntry = false;
+        Vec2 ropeXZ;
+        Vec2 loadXZ;
+        int layerId = 0;
+    };
+
+    /** @brief 生成マップ上へ配置する環境モデル情報です。 */
+    struct EnvironmentObject
+    {
+        /** @brief 環境モデル登録簿のモデルIDです。 */
+        std::string modelId;
+
+        /** @brief 配置先のワールドXZ座標です。 */
+        Vec2 xz;
+
+        /** @brief 所属する地形レイヤーIDです。 */
+        int layerId = 0;
+
+        /** @brief モデルへ適用する軸別倍率です。 */
+        float scaleX = 1.0f;
+        float scaleY = 1.0f;
+        float scaleZ = 1.0f;
     };
 
     /**
@@ -187,6 +217,12 @@ namespace NarakuMap
 
         /** @brief 採掘ポイント一覧です。 */
         std::vector<MiningPoint> miningPoints;
+
+        /** @brief 別エリアとの昇降に使う層間口一覧です。 */
+        std::vector<LayerGatePoint> layerGates;
+
+        /** @brief 小ステージから統合された環境オブジェクト一覧です。 */
+        std::vector<EnvironmentObject> environmentObjects;
 
         /** @brief プレイヤー開始地点です。 */
         LayerPoint playerStartPoint;

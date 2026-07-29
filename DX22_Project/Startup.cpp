@@ -100,24 +100,37 @@ namespace
 		HMENU menuBar = CreateMenu();
 		HMENU fileMenu = CreatePopupMenu();
 		HMENU viewMenu = CreatePopupMenu();
+		HMENU modelsMenu = CreatePopupMenu();
 
 		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuNewPiece, L"New File...");
-		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuSavePiece, L"Save...");
-		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuLoadPiece, L"Load...");
-		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuRenamePiece, L"Rename...");
 		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuDeletePiece, L"Delete...");
+		AppendMenuW(fileMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuLoadPiece, L"Load...");
+		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuSavePiece, L"Save...");
+		AppendMenuW(fileMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(fileMenu, MF_STRING, SceneNarakuPieceEditor::MenuRenamePiece, L"Rename...");
 
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuTogglePieceBasicWindow, L"\x57FA\x672C\x60C5\x5831");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuTogglePieceConnectionWindow, L"\x63A5\x7D9A\x8A2D\x5B9A");
+		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuToggleTerrainEditWindow, L"\x5730\x5F62\x7DE8\x96C6");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuToggleGridObjectPlacementWindow, L"\x914D\x7F6E\x30C4\x30FC\x30EB");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuToggleGridObjectSelectionWindow, L"\x9078\x629E\x30AA\x30D6\x30B8\x30A7\x30AF\x30C8");
+		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuToggleEnvironmentAssetsWindow, L"Assets");
+		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuTogglePieceFileAndValidationWindow, L"\x4FDD\x5B58\x30FB\x691C\x8A3C");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuTogglePreviewWindow, L"3D\x30D7\x30EC\x30D3\x30E5\x30FC");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuToggleHeightGridWindow, L"\x9AD8\x3055\x30B0\x30EA\x30C3\x30C9");
+		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuTogglePieceHierarchyWindow, L"\x5C0F\x30B9\x30C6\x30FC\x30B8Hierarchy");
 
+		AppendMenuW(modelsMenu, MF_STRING, SceneNarakuPieceEditor::MenuNewEnvironmentModel, L"New Model...");
+		AppendMenuW(modelsMenu, MF_STRING, SceneNarakuPieceEditor::MenuDeleteEnvironmentModel, L"Delete...");
+		AppendMenuW(modelsMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(modelsMenu, MF_STRING, SceneNarakuPieceEditor::MenuEnvironmentModelSetting, L"Model Setting...");
+
 		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(fileMenu), L"File");
+		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(modelsMenu), L"Models");
 		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(viewMenu), L"View");
 		AppendMenuW(menuBar, MF_STRING | MF_GRAYED, SceneNarakuPieceEditor::MenuFileStatus, L"\x7DE8\x96C6\x4E2D: piece_0001.json [\x4E0B\x66F8\x304D]");
 		return menuBar;

@@ -525,7 +525,11 @@ void SceneNarakuEditor::UpdateSelectionAndEditing()
                 m_selectedRope >= 0 &&
                 m_selectedRope < ToInt(m_mapData.ropes.size()))
             {
-                DragPointOnLayerPlane(m_mapData.ropes[m_selectedRope].xz, m_mapData.ropes[m_selectedRope].topLayerId);
+                NarakuMap::RopePoint& rope = m_mapData.ropes[m_selectedRope];
+                const NarakuMap::Vec2 previousTop = rope.topXZ;
+                DragPointOnLayerPlane(rope.topXZ, rope.topLayerId);
+                rope.bottomXZ.x += rope.topXZ.x - previousTop.x;
+                rope.bottomXZ.z += rope.topXZ.z - previousTop.z;
                 return;
             }
             m_draggingRopePosition = false;
@@ -739,7 +743,11 @@ void SceneNarakuEditor::UpdateSelectionAndEditing()
                 }
                 PushUndoSnapshot();
                 m_draggingRopePosition = true;
-                DragPointOnLayerPlane(m_mapData.ropes[m_selectedRope].xz, m_mapData.ropes[m_selectedRope].topLayerId);
+                NarakuMap::RopePoint& rope = m_mapData.ropes[m_selectedRope];
+                const NarakuMap::Vec2 previousTop = rope.topXZ;
+                DragPointOnLayerPlane(rope.topXZ, rope.topLayerId);
+                rope.bottomXZ.x += rope.topXZ.x - previousTop.x;
+                rope.bottomXZ.z += rope.topXZ.z - previousTop.z;
                 return;
             }
 
@@ -856,7 +864,10 @@ void SceneNarakuEditor::FocusSelection()
         const int bottomIndex = FindLayerIndexById(rope.bottomLayerId);
         const float topDepth = (topIndex >= 0) ? m_mapData.terrainLayers[topIndex].layerDepth : 0.0f;
         const float bottomDepth = (bottomIndex >= 0) ? m_mapData.terrainLayers[bottomIndex].layerDepth : topDepth;
-        m_cameraTarget = XMFLOAT3(rope.xz.x, ToWorldY((topDepth + bottomDepth) * 0.5f, 0.8f), rope.xz.z);
+        m_cameraTarget = XMFLOAT3(
+            (rope.topXZ.x + rope.bottomXZ.x) * 0.5f,
+            ToWorldY((topDepth + bottomDepth) * 0.5f, 0.8f),
+            (rope.topXZ.z + rope.bottomXZ.z) * 0.5f);
         return;
     }
 
@@ -1933,14 +1944,25 @@ void SceneNarakuEditor::DrawRopeWindow()
 
     ImGui::Separator();
     NarakuMap::RopePoint& rope = m_mapData.ropes[m_selectedRope];
-    NarakuMap::Vec2 ropeXZ = rope.xz;
-    if (ImGui::InputFloat2(u8"位置XZ", &ropeXZ.x, "%.2f"))
+    NarakuMap::Vec2 topXZ = rope.topXZ;
+    if (ImGui::InputFloat2(u8"上端位置XZ", &topXZ.x, "%.2f"))
     {
         PushUndoSnapshot();
-        rope.xz = ropeXZ;
+        rope.topXZ = topXZ;
         if (m_enablePositionSnap)
         {
-            ApplySnapToPoint(rope.xz, rope.topLayerId, m_snapToCellCenter);
+            ApplySnapToPoint(rope.topXZ, rope.topLayerId, m_snapToCellCenter);
+        }
+    }
+
+    NarakuMap::Vec2 bottomXZ = rope.bottomXZ;
+    if (ImGui::InputFloat2(u8"下端位置XZ", &bottomXZ.x, "%.2f"))
+    {
+        PushUndoSnapshot();
+        rope.bottomXZ = bottomXZ;
+        if (m_enablePositionSnap)
+        {
+            ApplySnapToPoint(rope.bottomXZ, rope.bottomLayerId, m_snapToCellCenter);
         }
     }
 
@@ -1956,7 +1978,7 @@ void SceneNarakuEditor::DrawRopeWindow()
                 rope.topLayerId = layer.id;
                 if (m_enablePositionSnap)
                 {
-                    ApplySnapToPoint(rope.xz, rope.topLayerId, m_snapToCellCenter);
+                    ApplySnapToPoint(rope.topXZ, rope.topLayerId, m_snapToCellCenter);
                 }
             }
             if (selected)
@@ -1977,6 +1999,10 @@ void SceneNarakuEditor::DrawRopeWindow()
             {
                 PushUndoSnapshot();
                 rope.bottomLayerId = layer.id;
+                if (m_enablePositionSnap)
+                {
+                    ApplySnapToPoint(rope.bottomXZ, rope.bottomLayerId, m_snapToCellCenter);
+                }
             }
             if (selected)
             {
@@ -1990,7 +2016,7 @@ void SceneNarakuEditor::DrawRopeWindow()
     {
         ImGui::Separator();
         ImGui::TextUnformatted(u8"複数選択一括反映");
-        if (ImGui::Button(u8"主選択の位置XZを一括反映", ImVec2(-1.0f, 0.0f)))
+        if (ImGui::Button(u8"主選択の上下端位置を一括反映", ImVec2(-1.0f, 0.0f)))
         {
             PushUndoSnapshot();
             for (const int ropeIndex : m_multiSelectedRopes)
@@ -1999,10 +2025,12 @@ void SceneNarakuEditor::DrawRopeWindow()
                 {
                     continue;
                 }
-                m_mapData.ropes[ropeIndex].xz = rope.xz;
+                m_mapData.ropes[ropeIndex].topXZ = rope.topXZ;
+                m_mapData.ropes[ropeIndex].bottomXZ = rope.bottomXZ;
                 if (m_enablePositionSnap)
                 {
-                    ApplySnapToPoint(m_mapData.ropes[ropeIndex].xz, m_mapData.ropes[ropeIndex].topLayerId, m_snapToCellCenter);
+                    ApplySnapToPoint(m_mapData.ropes[ropeIndex].topXZ, m_mapData.ropes[ropeIndex].topLayerId, m_snapToCellCenter);
+                    ApplySnapToPoint(m_mapData.ropes[ropeIndex].bottomXZ, m_mapData.ropes[ropeIndex].bottomLayerId, m_snapToCellCenter);
                 }
             }
         }
@@ -2018,7 +2046,7 @@ void SceneNarakuEditor::DrawRopeWindow()
                 m_mapData.ropes[ropeIndex].topLayerId = rope.topLayerId;
                 if (m_enablePositionSnap)
                 {
-                    ApplySnapToPoint(m_mapData.ropes[ropeIndex].xz, m_mapData.ropes[ropeIndex].topLayerId, m_snapToCellCenter);
+                    ApplySnapToPoint(m_mapData.ropes[ropeIndex].topXZ, m_mapData.ropes[ropeIndex].topLayerId, m_snapToCellCenter);
                 }
             }
         }
@@ -2032,6 +2060,10 @@ void SceneNarakuEditor::DrawRopeWindow()
                     continue;
                 }
                 m_mapData.ropes[ropeIndex].bottomLayerId = rope.bottomLayerId;
+                if (m_enablePositionSnap)
+                {
+                    ApplySnapToPoint(m_mapData.ropes[ropeIndex].bottomXZ, m_mapData.ropes[ropeIndex].bottomLayerId, m_snapToCellCenter);
+                }
             }
         }
     }
@@ -2880,8 +2912,8 @@ void SceneNarakuEditor::DrawRopes()
 
         const float topDepth = m_mapData.terrainLayers[topIndex].layerDepth;
         const float bottomDepth = m_mapData.terrainLayers[bottomIndex].layerDepth;
-        const XMFLOAT3 top = { rope.xz.x, ToWorldY(topDepth, 1.1f), rope.xz.z };
-        const XMFLOAT3 bottom = { rope.xz.x, ToWorldY(bottomDepth, 0.1f), rope.xz.z };
+        const XMFLOAT3 top = { rope.topXZ.x, ToWorldY(topDepth, 1.1f), rope.topXZ.z };
+        const XMFLOAT3 bottom = { rope.bottomXZ.x, ToWorldY(bottomDepth, 0.1f), rope.bottomXZ.z };
 
         XMFLOAT4 ropeColor = XMFLOAT4(0.92f, 0.64f, 0.18f, 1.0f);
         if (IsRopeMultiSelected(i))
@@ -3620,7 +3652,10 @@ int SceneNarakuEditor::PickRope(POINT mousePos) const
 
         const float focusDepth = (m_mapData.terrainLayers[topIndex].layerDepth + m_mapData.terrainLayers[bottomIndex].layerDepth) * 0.5f;
         XMFLOAT2 screen = {};
-        const XMFLOAT3 focusPos(rope.xz.x, ToWorldY(focusDepth, 0.8f), rope.xz.z);
+        const XMFLOAT3 focusPos(
+            (rope.topXZ.x + rope.bottomXZ.x) * 0.5f,
+            ToWorldY(focusDepth, 0.8f),
+            (rope.topXZ.z + rope.bottomXZ.z) * 0.5f);
         if (!ProjectWorldToScreen(focusPos, screen))
         {
             continue;
@@ -3964,7 +3999,8 @@ NarakuMap::RopePoint SceneNarakuEditor::CreateNewRope() const
 {
 
     NarakuMap::RopePoint rope = {};
-    rope.xz = { 0.0f, 0.0f };
+    rope.topXZ = { 0.0f, 0.0f };
+    rope.bottomXZ = { 0.0f, 0.0f };
     if (!m_mapData.terrainLayers.empty())
     {
         rope.topLayerId = m_mapData.terrainLayers.front().id;

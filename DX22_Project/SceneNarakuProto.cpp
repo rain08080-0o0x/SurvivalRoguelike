@@ -1,10 +1,14 @@
-#include "SceneNarakuProto.h"
+﻿#include "SceneNarakuProto.h"
 
 #include "NarakuStageGenerator.h"
 #include "Defines.h"
 #include "DirectX.h"
 #include "Geometory.h"
 #include "Input.h"
+#include "MeshBuffer.h"
+#include "Model.h"
+#include "Shader.h"
+#include "ShaderList.h"
 #include "Sprite.h"
 #include "Texture.h"
 #include "imgui.h"
@@ -12,9 +16,79 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
+#include <iomanip>
+#include <limits>
+#include <random>
+#include <sstream>
 
 namespace
 {
+    constexpr const char* kPlaytestConfigPath = "Assets/Config/naraku_proto_playtest.json";
+    constexpr const wchar_t* kEnvironmentModelCatalogRelativePath = L"Assets/Naraku/environment_models.cfg";
+
+    std::wstring Utf8ToWide(const std::string& text)
+    {
+        if (text.empty()) return {};
+        const int length = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
+        if (length <= 1) return {};
+        std::wstring result(static_cast<size_t>(length), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, &result[0], length);
+        result.pop_back();
+        return result;
+    }
+
+    std::string WideToUtf8(const std::wstring& text)
+    {
+        if (text.empty()) return {};
+        const int length = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), -1, nullptr, 0, nullptr, nullptr);
+        if (length <= 1) return {};
+        std::string result(static_cast<size_t>(length), '\0');
+        WideCharToMultiByte(CP_UTF8, 0, text.c_str(), -1, &result[0], length, nullptr, nullptr);
+        result.pop_back();
+        return result;
+    }
+
+    std::wstring GetNarakuProjectRoot()
+    {
+        std::wstring mapPath = NarakuMap::ResolveMapPathForFileSystem(NarakuMap::GetDefaultMapPath());
+        std::replace(mapPath.begin(), mapPath.end(), L'\\', L'/');
+        const std::wstring marker = L"/Assets/Maps/";
+        const size_t markerPos = mapPath.find(marker);
+        return markerPos == std::wstring::npos ? std::wstring() : mapPath.substr(0, markerPos);
+    }
+
+    std::wstring ResolveProjectPath(const std::wstring& path)
+    {
+        if (path.size() >= 2 && path[1] == L':') return path;
+        const std::wstring root = GetNarakuProjectRoot();
+        if (root.empty()) return path;
+        return root + L"/" + path;
+    }
+
+    bool TryReadJsonFloat(const std::string& json, const char* key, float& outValue)
+    {
+        const std::string token = std::string("\"") + key + "\"";
+        const std::size_t keyPos = json.find(token);
+        if (keyPos == std::string::npos)
+        {
+            return false;
+        }
+        const std::size_t colonPos = json.find(':', keyPos + token.size());
+        if (colonPos == std::string::npos)
+        {
+            return false;
+        }
+        char* end = nullptr;
+        const float value = std::strtof(json.c_str() + colonPos + 1, &end);
+        if (end == json.c_str() + colonPos + 1 || !std::isfinite(value))
+        {
+            return false;
+        }
+        outValue = value;
+        return true;
+    }
+
     // 既存プロジェクトは固定FPS前提なので、1フレーム秒数も固定値で扱います。
     constexpr float kDt = 1.0f / fFPS;
     // ステップで進む距離です。
@@ -51,6 +125,8 @@ namespace
     constexpr float kEnemyTelegraphTime = 0.55f;
     // 敵の体当たり移動時間です。
     constexpr float kEnemyChargeTime = 0.45f;
+    constexpr float kEnemyChargeStartSpeedScale = 0.35f;
+    constexpr float kEnemyChargeEndSpeedScale = 1.65f;
     // 敵の体当たりが命中する距離です。
     constexpr float kEnemyHitRange = 0.45f;
     // 敵の体当たり命中時に押し出す距離です。
@@ -66,8 +142,35 @@ namespace
     constexpr float kNearbyMiningVisibleRange = 8.0f;
     // つるはし攻撃の射程です。
     constexpr float kAttackRange = 1.15f;
-    // ImGuiデバッグフィールドの半径です。
-    constexpr float kWorldHalfSize = 45.0f;
+    constexpr int kAttackHitEffectFrameCount = 10;
+    constexpr float kAttackHitEffectFrameTime = 1.0f / 30.0f;
+    constexpr float kAttackHitEffectDuration = kAttackHitEffectFrameCount * kAttackHitEffectFrameTime;
+    constexpr float kCameraShakeDuration = 0.24f;
+    constexpr float kCameraShakeAmplitude = 0.18f;
+    constexpr float kSkySphereRadius = 180.0f;
+    /** @brief 探索カメラの注視点からの固定距離です。 */
+    constexpr float kCameraDefaultDistance = 13.8564f;
+    /** @brief カメラ仰角の下限（真横を0度、真上を90度）です。 */
+    constexpr float kCameraMinPitchDegrees = 1.0f;
+    constexpr float kCameraMaxPitchDegrees = 89.0f;
+    constexpr float kCameraDefaultMinPitchDegrees = 10.0f;
+    constexpr float kCameraDefaultMaxPitchDegrees = 60.0f;
+    constexpr float kCameraMinDistance = 6.0f;
+    constexpr float kCameraMaxDistance = kCameraDefaultDistance;
+    constexpr float kRelicArmorWalkMultiplier = 1.2f;
+    constexpr float kRelicArmorRunMultiplier = 2.0f;
+    constexpr float kRelicArmorHpRecoveryPerSecond = 0.2f;
+    constexpr int kMapGenerationMaxAttempts = 5;
+    constexpr int kLayerGateFailureLimit = 5;
+    constexpr int kMaximumAreaDepth = 3;
+    constexpr float kLayerTransitionDuration = 1.5f;
+    constexpr float kLayerTransitionHeight = 6.0f;
+    constexpr float kCompassRadius = 30.0f;
+    constexpr float kCompassMargin = 12.0f;
+    constexpr float kCompassLineThickness = 1.5f;
+    constexpr float kCompassLinePadding = 2.0f;
+    constexpr float kCompassLabelDistance = 8.0f;
+    const char* const kCompassDirectionLabels[] = { u8"北", u8"南", u8"東", u8"西" };
     // Shiftをこの秒数以上押し続けたら走り扱いにします。
     constexpr float kShiftRunThreshold = 0.18f;
     // 通常歩行で乗り越えられる上り段差です。
@@ -109,61 +212,446 @@ namespace
 
 SceneNarakuProto::SceneNarakuProto()
 {
-    // 半透明床のSprite描画に使う1x1白テクスチャを作成します。
-    m_debugWhiteTexture = new Texture();
+    InitializeTerrainFloorBatch();
+    InitializeEnemyBillboardBatch();
 
-    // 白1ピクセルをRGBA8で用意します。
-    const unsigned int whitePixel = 0xffffffff;
+    m_attackHitTexture = new Texture();
+    if (FAILED(m_attackHitTexture->Create("Assets/Texture/Effect/yellow_bom.png")))
+    {
+        SAFE_DELETE(m_attackHitTexture);
+    }
 
-    // Sprite側の色指定だけで床色を変えられるよう、元テクスチャは白にします。
-    m_debugWhiteTexture->Create(DXGI_FORMAT_R8G8B8A8_UNORM, 1, 1, &whitePixel);
+    m_skyModel = new Model();
+    if (!m_skyModel->Load("Assets/Model/sky/sky.obj"))
+    {
+        SAFE_DELETE(m_skyModel);
+    }
 
     // プレイテスト用の調整値を既定値で初期化します。
     ResetDebugPlayerParams();
+    LoadDebugPlayerParams();
 
-    // シーン作成時に最初の潜行状態を作ります。
+    // 初期装備を所有・装備済みにします。
+    m_ownedHeadArmor[static_cast<std::size_t>(ArmorTier::Leather)] = true;
+    m_ownedBodyArmor[static_cast<std::size_t>(ArmorTier::Leather)] = true;
+    m_ownedWeapons[static_cast<std::size_t>(WeaponTier::RustyPickaxe)] = true;
+
+    // フィールドを準備し、最初は自宅で持ち物を決められる状態にします。
     ResetRun();
+    m_mode = Mode::Home;
 }
 
 SceneNarakuProto::~SceneNarakuProto()
 {
-    // 半透明床用テクスチャを解放します。
-    SAFE_DELETE(m_debugWhiteTexture);
+    ReleaseEnvironmentModels();
+    ReleaseEnemyBillboardBatch();
+    ReleaseTerrainFloorBatch();
+    SAFE_DELETE(m_skyModel);
+    SAFE_DELETE(m_attackHitTexture);
 }
 
-void SceneNarakuProto::ResetRun()
+void SceneNarakuProto::InitializeTerrainFloorBatch()
+{
+    const char* vertexShaderCode = R"HLSL(
+struct VS_IN {
+    float3 position : POSITION0;
+    float4 color : COLOR0;
+};
+struct VS_OUT {
+    float4 position : SV_POSITION;
+    float4 color : COLOR0;
+};
+cbuffer Matrix : register(b0) {
+    float4x4 view;
+    float4x4 projection;
+};
+VS_OUT main(VS_IN input) {
+    VS_OUT output;
+    output.position = mul(float4(input.position, 1.0f), view);
+    output.position = mul(output.position, projection);
+    output.color = input.color;
+    return output;
+})HLSL";
+
+    const char* pixelShaderCode = R"HLSL(
+struct PS_IN {
+    float4 position : SV_POSITION;
+    float4 color : COLOR0;
+};
+float4 main(PS_IN input) : SV_TARGET {
+    return input.color;
+})HLSL";
+
+    m_terrainFloorVS = new VertexShader();
+    if (FAILED(m_terrainFloorVS->Compile(vertexShaderCode)))
+    {
+        SAFE_DELETE(m_terrainFloorVS);
+    }
+
+    m_terrainFloorPS = new PixelShader();
+    if (FAILED(m_terrainFloorPS->Compile(pixelShaderCode)))
+    {
+        SAFE_DELETE(m_terrainFloorPS);
+    }
+}
+
+void SceneNarakuProto::ReleaseTerrainFloorBatch()
+{
+    SAFE_DELETE(m_terrainFloorMesh);
+    SAFE_DELETE(m_terrainFloorPS);
+    SAFE_DELETE(m_terrainFloorVS);
+    m_terrainFloorVertices.clear();
+    m_terrainFloorVertexCount = 0;
+}
+
+void SceneNarakuProto::RebuildTerrainFloorBatch()
+{
+    std::size_t quadCapacity = m_ropePoints.size() * 2u + m_layerGates.size();
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+    {
+        if (layer.gridWidth < 2 || layer.gridHeight < 2)
+        {
+            continue;
+        }
+        quadCapacity += static_cast<std::size_t>(layer.gridWidth - 1) *
+            static_cast<std::size_t>(layer.gridHeight - 1);
+    }
+
+    SAFE_DELETE(m_terrainFloorMesh);
+    m_terrainFloorVertices.clear();
+    m_terrainFloorVertexCount = 0;
+    if (quadCapacity == 0 || m_terrainFloorVS == nullptr || m_terrainFloorPS == nullptr)
+    {
+        return;
+    }
+
+    m_terrainFloorVertices.resize(quadCapacity * 6u);
+    MeshBuffer::Description desc = {};
+    desc.pVtx = m_terrainFloorVertices.data();
+    desc.vtxSize = sizeof(TerrainFloorVertex);
+    desc.vtxCount = static_cast<UINT>(m_terrainFloorVertices.size());
+    desc.isWrite = true;
+    desc.topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+    m_terrainFloorMesh = new MeshBuffer();
+    if (FAILED(m_terrainFloorMesh->Create(desc)))
+    {
+        SAFE_DELETE(m_terrainFloorMesh);
+        m_terrainFloorVertices.clear();
+    }
+}
+
+void SceneNarakuProto::AppendTerrainFloorQuad(
+    const DirectX::XMFLOAT3& center,
+    const DirectX::XMFLOAT2& size,
+    const DirectX::XMFLOAT4& color)
+{
+    if (m_terrainFloorVertexCount + 6u > m_terrainFloorVertices.size())
+    {
+        return;
+    }
+
+    const float halfWidth = size.x * 0.5f;
+    const float halfDepth = size.y * 0.5f;
+    const TerrainFloorVertex topLeft = { { center.x - halfWidth, center.y, center.z + halfDepth }, color };
+    const TerrainFloorVertex topRight = { { center.x + halfWidth, center.y, center.z + halfDepth }, color };
+    const TerrainFloorVertex bottomLeft = { { center.x - halfWidth, center.y, center.z - halfDepth }, color };
+    const TerrainFloorVertex bottomRight = { { center.x + halfWidth, center.y, center.z - halfDepth }, color };
+
+    TerrainFloorVertex* destination = m_terrainFloorVertices.data() + m_terrainFloorVertexCount;
+    destination[0] = topLeft;
+    destination[1] = topRight;
+    destination[2] = bottomLeft;
+    destination[3] = bottomLeft;
+    destination[4] = topRight;
+    destination[5] = bottomRight;
+    m_terrainFloorVertexCount += 6u;
+}
+
+void SceneNarakuProto::DrawTerrainFloorBatch(
+    const DirectX::XMFLOAT4X4& view,
+    const DirectX::XMFLOAT4X4& projection)
+{
+    if (m_terrainFloorMesh == nullptr || m_terrainFloorVS == nullptr ||
+        m_terrainFloorPS == nullptr || m_terrainFloorVertexCount == 0)
+    {
+        return;
+    }
+
+    DirectX::XMFLOAT4X4 matrices[2] = { view, projection };
+    m_terrainFloorVS->WriteBuffer(0, matrices);
+    m_terrainFloorVS->Bind();
+    m_terrainFloorPS->Bind();
+    m_terrainFloorMesh->Write(m_terrainFloorVertices.data());
+    m_terrainFloorMesh->Draw(static_cast<int>(m_terrainFloorVertexCount));
+}
+
+void SceneNarakuProto::InitializeEnemyBillboardBatch()
+{
+    const char* vertexShaderCode = R"HLSL(
+struct VS_IN {
+    float3 position : POSITION0;
+    float2 uv : TEXCOORD0;
+};
+struct VS_OUT {
+    float4 position : SV_POSITION;
+    float2 uv : TEXCOORD0;
+};
+cbuffer Matrix : register(b0) {
+    float4x4 view;
+    float4x4 projection;
+};
+VS_OUT main(VS_IN input) {
+    VS_OUT output;
+    output.position = mul(float4(input.position, 1.0f), view);
+    output.position = mul(output.position, projection);
+    output.uv = input.uv;
+    return output;
+})HLSL";
+
+    const char* pixelShaderCode = R"HLSL(
+struct PS_IN {
+    float4 position : SV_POSITION;
+    float2 uv : TEXCOORD0;
+};
+Texture2D enemyTexture : register(t0);
+SamplerState enemySampler : register(s0);
+float4 main(PS_IN input) : SV_TARGET {
+    float4 color = enemyTexture.Sample(enemySampler, input.uv);
+    clip(color.a - 0.01f);
+    return color;
+})HLSL";
+
+    m_enemyBillboardVS = new VertexShader();
+    if (FAILED(m_enemyBillboardVS->Compile(vertexShaderCode)))
+    {
+        SAFE_DELETE(m_enemyBillboardVS);
+    }
+
+    m_enemyBillboardPS = new PixelShader();
+    if (FAILED(m_enemyBillboardPS->Compile(pixelShaderCode)))
+    {
+        SAFE_DELETE(m_enemyBillboardPS);
+    }
+
+    m_enemyTexture = new Texture();
+    if (FAILED(m_enemyTexture->Create("Assets/Texture/Character/Enemy/enemy.png")))
+    {
+        SAFE_DELETE(m_enemyTexture);
+    }
+
+    if (m_enemyBillboardPS != nullptr && m_enemyTexture != nullptr)
+    {
+        m_enemyBillboardPS->SetTexture(0, m_enemyTexture);
+    }
+}
+
+void SceneNarakuProto::ReleaseEnemyBillboardBatch()
+{
+    SAFE_DELETE(m_enemyBillboardMesh);
+    SAFE_DELETE(m_enemyBillboardPS);
+    SAFE_DELETE(m_enemyBillboardVS);
+    SAFE_DELETE(m_enemyTexture);
+    m_enemyBillboardVertices.clear();
+    m_enemyBillboardVertexCount = 0;
+}
+
+void SceneNarakuProto::RebuildEnemyBillboardBatch()
+{
+    SAFE_DELETE(m_enemyBillboardMesh);
+    m_enemyBillboardVertices.clear();
+    m_enemyBillboardVertexCount = 0;
+    if (m_enemies.empty() || m_enemyBillboardVS == nullptr ||
+        m_enemyBillboardPS == nullptr || m_enemyTexture == nullptr)
+    {
+        return;
+    }
+
+    m_enemyBillboardVertices.resize(m_enemies.size() * 6u);
+    MeshBuffer::Description desc = {};
+    desc.pVtx = m_enemyBillboardVertices.data();
+    desc.vtxSize = sizeof(EnemyBillboardVertex);
+    desc.vtxCount = static_cast<UINT>(m_enemyBillboardVertices.size());
+    desc.isWrite = true;
+    desc.topology = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+    m_enemyBillboardMesh = new MeshBuffer();
+    if (FAILED(m_enemyBillboardMesh->Create(desc)))
+    {
+        SAFE_DELETE(m_enemyBillboardMesh);
+        m_enemyBillboardVertices.clear();
+    }
+}
+
+void SceneNarakuProto::DrawEnemyBillboardBatch(
+    const DirectX::XMFLOAT4X4& view,
+    const DirectX::XMFLOAT4X4& projection)
+{
+    using namespace DirectX;
+
+    if (m_enemyBillboardMesh == nullptr || m_enemyBillboardVS == nullptr ||
+        m_enemyBillboardPS == nullptr || m_enemyTexture == nullptr)
+    {
+        return;
+    }
+
+    constexpr float billboardWidth = 1.2f;
+    constexpr float billboardHeight = 1.2f;
+    constexpr float uvLeft = 1.0f / 9.0f;
+    constexpr float uvRight = 2.0f / 9.0f;
+    constexpr float uvTop = 0.0f;
+    constexpr float uvBottom = 1.0f / 16.0f;
+
+    const XMMATRIX viewMatrix = XMMatrixTranspose(XMLoadFloat4x4(&view));
+    XMMATRIX billboard = XMMatrixInverse(nullptr, viewMatrix);
+    billboard.r[3] = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+
+    m_enemyBillboardVertexCount = 0;
+    for (const EnemyState& enemy : m_enemies)
+    {
+        if (!enemy.alive ||
+            m_enemyBillboardVertexCount + 6u > m_enemyBillboardVertices.size())
+        {
+            continue;
+        }
+
+        const XMFLOAT3 center = ToWorld3D(
+            enemy.pos,
+            enemy.depth,
+            billboardHeight * 0.5f);
+        const XMMATRIX world =
+            XMMatrixScaling(billboardWidth, billboardHeight, 1.0f) *
+            billboard *
+            XMMatrixTranslation(center.x, center.y, center.z);
+
+        XMFLOAT3 topLeft = {};
+        XMFLOAT3 topRight = {};
+        XMFLOAT3 bottomLeft = {};
+        XMFLOAT3 bottomRight = {};
+        XMStoreFloat3(&topLeft, XMVector3TransformCoord(XMVectorSet(-0.5f, 0.5f, 0.0f, 1.0f), world));
+        XMStoreFloat3(&topRight, XMVector3TransformCoord(XMVectorSet(0.5f, 0.5f, 0.0f, 1.0f), world));
+        XMStoreFloat3(&bottomLeft, XMVector3TransformCoord(XMVectorSet(-0.5f, -0.5f, 0.0f, 1.0f), world));
+        XMStoreFloat3(&bottomRight, XMVector3TransformCoord(XMVectorSet(0.5f, -0.5f, 0.0f, 1.0f), world));
+
+        EnemyBillboardVertex* destination =
+            m_enemyBillboardVertices.data() + m_enemyBillboardVertexCount;
+        destination[0] = { topLeft, { uvLeft, uvTop } };
+        destination[1] = { topRight, { uvRight, uvTop } };
+        destination[2] = { bottomLeft, { uvLeft, uvBottom } };
+        destination[3] = { bottomLeft, { uvLeft, uvBottom } };
+        destination[4] = { topRight, { uvRight, uvTop } };
+        destination[5] = { bottomRight, { uvRight, uvBottom } };
+        m_enemyBillboardVertexCount += 6u;
+    }
+
+    if (m_enemyBillboardVertexCount == 0)
+    {
+        return;
+    }
+
+    XMFLOAT4X4 matrices[2] = { view, projection };
+    m_enemyBillboardVS->WriteBuffer(0, matrices);
+    m_enemyBillboardVS->Bind();
+    m_enemyBillboardPS->Bind();
+    m_enemyBillboardMesh->Write(m_enemyBillboardVertices.data());
+
+    SetCullingMode(D3D11_CULL_NONE);
+    SetBlendMode(BLEND_ALPHA);
+    SetSamplerState(SAMPLER_POINT);
+    m_enemyBillboardMesh->Draw(static_cast<int>(m_enemyBillboardVertexCount));
+    SetSamplerState(SAMPLER_LINEAR);
+}
+
+bool SceneNarakuProto::ResetRun()
 {
     int keepMoney = m_money;
 
+    constexpr const wchar_t* generated4x4MapPath = L"Assets/Maps/generated_naraku_map_4x4.json";
+    constexpr const wchar_t* generated3x3MapPath = L"Assets/Maps/generated_naraku_map.json";
+    bool generated = false;
+    std::string mapError;
+    for (int attempt = 0; attempt < kMapGenerationMaxAttempts; ++attempt)
+    {
+        if (NarakuStageGenerator::GenerateFixed4x4AreaMap(generated4x4MapPath, false, true, &mapError) &&
+            NarakuMap::LoadMap(generated4x4MapPath, m_runtimeMap, &mapError))
+        {
+            generated = true;
+            NarakuMap::SetCurrentMapPath(generated4x4MapPath);
+            break;
+        }
+    }
+
+    if (!generated)
+    {
+        if (NarakuMap::LoadMap(generated3x3MapPath, m_runtimeMap, &mapError))
+        {
+            NarakuMap::SetCurrentMapPath(generated3x3MapPath);
+        }
+        else
+        {
+            NarakuMap::SetCurrentMapPath(NarakuMap::GetDefaultMapPath());
+            if (!NarakuMap::LoadMap(NarakuMap::GetDefaultMapPath(), m_runtimeMap, &mapError))
+            {
+                m_runtimeMap = NarakuMap::CreateDefaultMap();
+            }
+        }
+    }
+
+    LoadEnvironmentModels();
+
     m_player = PlayerState();
     m_inventory.clear();
+    m_foodCount = 0;
     m_groundRelics.clear();
+    m_groundFoods.clear();
     m_miningPoints.clear();
     m_enemies.clear();
+    m_attackHitEffects.clear();
     m_floorRegions.clear();
     m_ropePoints.clear();
+    m_layerGates.clear();
+    m_areas.clear();
+    m_currentAreaIndex = -1;
     m_activeRope = -1;
+    m_ropeProgress = 0.0f;
     m_pins.clear();
     m_messages.clear();
+    m_centerNotification.clear();
+    m_centerNotificationTimer = 0.0f;
+    m_loadingSourceGateIndex = -1;
+    m_loadingStep = 0;
+    m_loadingProgress = 0.0f;
+    m_transitionSourceGateIndex = -1;
+    m_transitionDestinationAreaIndex = -1;
+    m_transitionDestinationGateIndex = -1;
+    m_layerTransitionProgress = 0.0f;
+    m_layerTransitionVisualOffset = 0.0f;
+    m_layerTransitionAscending = false;
+    m_heavyRunNotificationShown = false;
     m_shiftHold = 0.0f;
     m_shiftPendingStep = false;
     m_shiftWasPressed = false;
     m_shiftRunCommitted = false;
+    m_cameraShakeTimer = 0.0f;
     m_miningTimer = 0.0f;
+    m_miningDuration = kMiningTime;
     m_miningIndex = -1;
     m_selectedInventory = -1;
+    m_mapScrollOffset = { 0.0f, 0.0f };
     m_mode = Mode::Explore;
     m_result = RunResult();
     m_pendingRelicDepth = 0.0f;
     m_money = keepMoney;
 
-    std::string mapError;
-    if (!NarakuMap::LoadMap(NarakuMap::GetCurrentMapPath(), m_runtimeMap, &mapError))
-    {
-        m_runtimeMap = NarakuMap::CreateDefaultMap();
-    }
-
     m_autoFallStartHeight = m_runtimeMap.autoFallStartHeight;
+    m_worldHalfSize = 1.0f;
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+    {
+        const float halfWidth = static_cast<float>(layer.gridWidth - 1) * layer.cellSize * 0.5f;
+        const float halfHeight = static_cast<float>(layer.gridHeight - 1) * layer.cellSize * 0.5f;
+        m_worldHalfSize = std::max(m_worldHalfSize, std::fabs(layer.center.x) + halfWidth);
+        m_worldHalfSize = std::max(m_worldHalfSize, std::fabs(layer.center.z) + halfHeight);
+    }
 
     auto getLayerDepthById = [this](int layerId) -> float
     {
@@ -184,8 +672,8 @@ void SceneNarakuProto::ResetRun()
 
     m_startPoint = { m_runtimeMap.playerStartPoint.xz.x, m_runtimeMap.playerStartPoint.xz.z };
     m_startDepth = getLayerDepthById(m_runtimeMap.playerStartPoint.layerId);
-    m_returnPoint = { m_runtimeMap.returnPoint.xz.x, m_runtimeMap.returnPoint.xz.z };
-    m_returnDepth = getLayerDepthById(m_runtimeMap.returnPoint.layerId);
+    m_returnPoint = m_startPoint;
+    m_returnDepth = m_startDepth;
 
     m_player.pos = m_startPoint;
     m_player.depth = m_startDepth;
@@ -221,9 +709,25 @@ void SceneNarakuProto::ResetRun()
         }
 
         m_ropePoints.push_back({
-            { rope.xz.x, rope.xz.z },
+            { rope.topXZ.x, rope.topXZ.z },
+            { rope.bottomXZ.x, rope.bottomXZ.z },
             m_runtimeMap.terrainLayers[topIndex].layerDepth,
             m_runtimeMap.terrainLayers[bottomIndex].layerDepth });
+    }
+
+    for (const NarakuMap::LayerGatePoint& gate : m_runtimeMap.layerGates)
+    {
+        const int layerIndex = NarakuMap::FindLayerIndexById(m_runtimeMap, gate.layerId);
+        if (layerIndex < 0)
+        {
+            continue;
+        }
+        LayerGateState runtimeGate;
+        runtimeGate.isEntry = gate.isEntry;
+        runtimeGate.ropePos = { gate.ropeXZ.x, gate.ropeXZ.z };
+        runtimeGate.loadPos = { gate.loadXZ.x, gate.loadXZ.z };
+        runtimeGate.depth = m_runtimeMap.terrainLayers[layerIndex].layerDepth;
+        m_layerGates.push_back(runtimeGate);
     }
 
     int fallbackRelicIndex = 0;
@@ -238,15 +742,10 @@ void SceneNarakuProto::ResetRun()
         runtimePoint.pos = { point.xz.x, point.xz.z };
         runtimePoint.visualType = point.visualType;
         runtimePoint.discovered = point.discovered;
+        /** 再潜行ごとに採掘状態を初期化し、今回の潜行中だけ更新します。 */
         runtimePoint.mined = false;
         runtimePoint.depth = getLayerDepthById(point.layerId);
         runtimePoint.relicName = point.relicName.empty() ? kRelicNames[fallbackRelicIndex % 8] : point.relicName;
-        
-        if (std::find(m_permanentlyMinedRelics.begin(), m_permanentlyMinedRelics.end(), runtimePoint.relicName) != m_permanentlyMinedRelics.end())
-        {
-            runtimePoint.mined = true;
-            runtimePoint.discovered = true;
-        }
 
         ++fallbackRelicIndex;
         m_miningPoints.push_back(runtimePoint);
@@ -286,11 +785,432 @@ void SceneNarakuProto::ResetRun()
     enemyC.depth = pickEnemyDepth(enemyC.pos);
     m_enemies.push_back(enemyC);
 
+    RebuildTerrainFloorBatch();
+    RebuildEnemyBillboardBatch();
     AddMessage(u8"奈落塔プロトタイプを開始しました。");
+    if (generated)
+    {
+        m_areas.emplace_back();
+        m_areas.front().depth = 1;
+        m_currentAreaIndex = 0;
+        SaveCurrentAreaState();
+    }
+    if (!generated)
+    {
+        m_mode = Mode::Home;
+    }
+    return generated;
+}
+
+void SceneNarakuProto::SaveCurrentAreaState()
+{
+    if (m_currentAreaIndex < 0 || m_currentAreaIndex >= static_cast<int>(m_areas.size()))
+    {
+        return;
+    }
+
+    AreaState& area = m_areas[m_currentAreaIndex];
+    area.map = m_runtimeMap;
+    area.groundRelics = m_groundRelics;
+    area.groundFoods = m_groundFoods;
+    area.miningPoints = m_miningPoints;
+    area.enemies = m_enemies;
+    area.floorRegions = m_floorRegions;
+    area.ropePoints = m_ropePoints;
+    area.layerGates = m_layerGates;
+    area.pins = m_pins;
+    area.startPoint = m_startPoint;
+    area.startDepth = m_startDepth;
+    area.returnPoint = m_returnPoint;
+    area.returnDepth = m_returnDepth;
+    area.worldHalfSize = m_worldHalfSize;
+}
+
+void SceneNarakuProto::ActivateArea(int areaIndex, bool placeAtEntry)
+{
+    if (areaIndex < 0 || areaIndex >= static_cast<int>(m_areas.size()))
+    {
+        return;
+    }
+
+    const AreaState& area = m_areas[areaIndex];
+    m_currentAreaIndex = areaIndex;
+    m_runtimeMap = area.map;
+    m_groundRelics = area.groundRelics;
+    m_groundFoods = area.groundFoods;
+    m_miningPoints = area.miningPoints;
+    m_enemies = area.enemies;
+    m_floorRegions = area.floorRegions;
+    m_ropePoints = area.ropePoints;
+    m_layerGates = area.layerGates;
+    m_pins = area.pins;
+    m_startPoint = area.startPoint;
+    m_startDepth = area.startDepth;
+    m_returnPoint = area.returnPoint;
+    m_returnDepth = area.returnDepth;
+    m_worldHalfSize = area.worldHalfSize;
+    m_autoFallStartHeight = m_runtimeMap.autoFallStartHeight;
+    m_activeRope = -1;
+    m_player.onRope = false;
+
+    if (placeAtEntry)
+    {
+        for (const LayerGateState& gate : m_layerGates)
+        {
+            if (!gate.isEntry)
+            {
+                continue;
+            }
+            m_player.pos = gate.ropePos;
+            m_player.depth = gate.depth;
+            break;
+        }
+    }
+    m_player.previousDepth = m_player.depth;
+    m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+    m_player.peakFeetWorldY = m_player.feetWorldY;
+    m_player.grounded = true;
+    m_player.verticalSpeed = 0.0f;
+    RebuildTerrainFloorBatch();
+    RebuildEnemyBillboardBatch();
+}
+
+void SceneNarakuProto::BuildCurrentAreaRuntime(bool placeAtStart)
+{
+    m_groundRelics.clear();
+    m_groundFoods.clear();
+    m_miningPoints.clear();
+    m_enemies.clear();
+    m_attackHitEffects.clear();
+    m_floorRegions.clear();
+    m_ropePoints.clear();
+    m_layerGates.clear();
+    m_pins.clear();
+    m_activeRope = -1;
+    m_miningIndex = -1;
+    m_autoFallStartHeight = m_runtimeMap.autoFallStartHeight;
+    m_worldHalfSize = 1.0f;
+
+    auto getLayerDepthById = [this](int layerId) -> float
+    {
+        const int index = NarakuMap::FindLayerIndexById(m_runtimeMap, layerId);
+        return index >= 0 ? m_runtimeMap.terrainLayers[index].layerDepth : 0.0f;
+    };
+    auto getFloorColor = [](int textureId) -> DirectX::XMFLOAT4
+    {
+        switch (textureId)
+        {
+        case 1: return { 0.42f, 0.33f, 0.20f, 0.20f };
+        case 2: return { 0.25f, 0.36f, 0.55f, 0.28f };
+        case 3: return { 0.25f, 0.45f, 0.36f, 0.24f };
+        default: return { 0.18f, 0.45f, 0.30f, 0.18f };
+        }
+    };
+
+    m_startPoint = { m_runtimeMap.playerStartPoint.xz.x, m_runtimeMap.playerStartPoint.xz.z };
+    m_startDepth = getLayerDepthById(m_runtimeMap.playerStartPoint.layerId);
+    m_returnPoint = m_startPoint;
+    m_returnDepth = m_startDepth;
+
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+    {
+        if (layer.gridWidth < 2 || layer.gridHeight < 2)
+        {
+            continue;
+        }
+        const float width = static_cast<float>(layer.gridWidth - 1) * layer.cellSize;
+        const float height = static_cast<float>(layer.gridHeight - 1) * layer.cellSize;
+        m_worldHalfSize = std::max(m_worldHalfSize, std::fabs(layer.center.x) + width * 0.5f);
+        m_worldHalfSize = std::max(m_worldHalfSize, std::fabs(layer.center.z) + height * 0.5f);
+        m_floorRegions.push_back({ { layer.center.x, layer.center.z }, { width * 0.5f, height * 0.5f },
+            layer.layerDepth, getFloorColor(layer.groundTextureId), layer.id });
+    }
+
+    for (const NarakuMap::RopePoint& rope : m_runtimeMap.ropes)
+    {
+        const int top = NarakuMap::FindLayerIndexById(m_runtimeMap, rope.topLayerId);
+        const int bottom = NarakuMap::FindLayerIndexById(m_runtimeMap, rope.bottomLayerId);
+        if (top >= 0 && bottom >= 0)
+        {
+            m_ropePoints.push_back({ { rope.topXZ.x, rope.topXZ.z }, { rope.bottomXZ.x, rope.bottomXZ.z },
+                m_runtimeMap.terrainLayers[top].layerDepth, m_runtimeMap.terrainLayers[bottom].layerDepth });
+        }
+    }
+
+    for (const NarakuMap::LayerGatePoint& gate : m_runtimeMap.layerGates)
+    {
+        const int layer = NarakuMap::FindLayerIndexById(m_runtimeMap, gate.layerId);
+        if (layer < 0)
+        {
+            continue;
+        }
+        LayerGateState runtimeGate;
+        runtimeGate.isEntry = gate.isEntry;
+        runtimeGate.ropePos = { gate.ropeXZ.x, gate.ropeXZ.z };
+        runtimeGate.loadPos = { gate.loadXZ.x, gate.loadXZ.z };
+        runtimeGate.depth = m_runtimeMap.terrainLayers[layer].layerDepth;
+        m_layerGates.push_back(runtimeGate);
+    }
+
+    int relicIndex = 0;
+    for (const NarakuMap::MiningPoint& point : m_runtimeMap.miningPoints)
+    {
+        if (!point.enabled)
+        {
+            continue;
+        }
+        MiningPoint runtimePoint;
+        runtimePoint.pos = { point.xz.x, point.xz.z };
+        runtimePoint.visualType = point.visualType;
+        runtimePoint.discovered = point.discovered;
+        runtimePoint.mined = false;
+        runtimePoint.depth = getLayerDepthById(point.layerId);
+        runtimePoint.relicName = point.relicName.empty() ? kRelicNames[relicIndex % 8] : point.relicName;
+        ++relicIndex;
+        m_miningPoints.push_back(runtimePoint);
+    }
+
+    const Vec2 enemyOffsets[] = { { -8.0f, 11.0f }, { 13.0f, -8.0f }, { -18.0f, -13.0f } };
+    for (const Vec2& offset : enemyOffsets)
+    {
+        EnemyState enemy = {};
+        enemy.pos = Add(m_startPoint, offset);
+        enemy.depth = m_startDepth;
+        m_enemies.push_back(enemy);
+    }
+
+    if (placeAtStart)
+    {
+        m_player.pos = m_startPoint;
+        m_player.depth = m_startDepth;
+        for (const LayerGateState& gate : m_layerGates)
+        {
+            if (gate.isEntry)
+            {
+                m_player.pos = gate.ropePos;
+                m_player.depth = gate.depth;
+                break;
+            }
+        }
+        m_player.previousDepth = m_player.depth;
+        m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+        m_player.peakFeetWorldY = m_player.feetWorldY;
+    }
+    RebuildTerrainFloorBatch();
+    RebuildEnemyBillboardBatch();
+}
+
+void SceneNarakuProto::TryUseLayerGate(int gateIndex)
+{
+    if (gateIndex < 0 || gateIndex >= static_cast<int>(m_layerGates.size()))
+    {
+        return;
+    }
+
+    LayerGateState& gate = m_layerGates[gateIndex];
+    if (gate.disabled)
+    {
+        ShowCenterNotification(u8"この層間口は使用できない！");
+        return;
+    }
+    if (gate.destinationAreaIndex >= 0)
+    {
+        BeginLayerTransition(gateIndex, gate.destinationAreaIndex);
+        return;
+    }
+    if (gate.isEntry)
+    {
+        ShowCenterNotification(u8"接続先がありません。");
+        return;
+    }
+    if (m_currentAreaIndex < 0 || m_areas[m_currentAreaIndex].depth >= kMaximumAreaDepth)
+    {
+        ShowCenterNotification(u8"これ以上深くは進めない！");
+        return;
+    }
+
+    SaveCurrentAreaState();
+    m_loadingSourceGateIndex = gateIndex;
+    m_loadingStep = 0;
+    m_loadingProgress = 0.05f;
+    m_mode = Mode::Loading;
+}
+
+void SceneNarakuProto::BeginLayerTransition(int sourceGateIndex, int destinationAreaIndex)
+{
+    if (sourceGateIndex < 0 || sourceGateIndex >= static_cast<int>(m_layerGates.size()) ||
+        destinationAreaIndex < 0 || destinationAreaIndex >= static_cast<int>(m_areas.size()))
+    {
+        return;
+    }
+
+    int destinationGateIndex = -1;
+    const std::vector<LayerGateState>& destinationGates = m_areas[destinationAreaIndex].layerGates;
+    for (int i = 0; i < static_cast<int>(destinationGates.size()); ++i)
+    {
+        if (destinationGates[i].destinationAreaIndex == m_currentAreaIndex)
+        {
+            destinationGateIndex = i;
+            break;
+        }
+    }
+    if (destinationGateIndex < 0)
+    {
+        ShowCenterNotification(u8"層間口の接続情報が不正です。");
+        return;
+    }
+
+    m_transitionSourceGateIndex = sourceGateIndex;
+    m_transitionDestinationAreaIndex = destinationAreaIndex;
+    m_transitionDestinationGateIndex = destinationGateIndex;
+    m_layerTransitionProgress = 0.0f;
+    m_layerTransitionVisualOffset = 0.0f;
+    m_layerTransitionAscending = m_layerGates[sourceGateIndex].isEntry;
+    m_player.pos = m_layerGates[sourceGateIndex].ropePos;
+    m_player.depth = m_layerGates[sourceGateIndex].depth;
+    m_player.onRope = false;
+    m_mode = Mode::LayerTransition;
+}
+
+void SceneNarakuProto::UpdateLoading()
+{
+    if (m_loadingStep == 0)
+    {
+        m_loadingStep = 1;
+        m_loadingProgress = 0.15f;
+        return;
+    }
+    if (m_loadingStep != 1 || m_currentAreaIndex < 0 ||
+        m_loadingSourceGateIndex < 0 || m_loadingSourceGateIndex >= static_cast<int>(m_layerGates.size()))
+    {
+        m_mode = Mode::Explore;
+        return;
+    }
+
+    const int parentAreaIndex = m_currentAreaIndex;
+    const int sourceGateIndex = m_loadingSourceGateIndex;
+    const int childDepth = m_areas[parentAreaIndex].depth + 1;
+    wchar_t generatedPath[128] = {};
+    std::swprintf(generatedPath, 128, L"Assets/Maps/generated_area_%03d.json", static_cast<int>(m_areas.size()));
+
+    NarakuMap::MapData childMap;
+    std::string error;
+    m_loadingProgress = 0.45f;
+    const bool requireExit = childDepth < kMaximumAreaDepth;
+    if (!NarakuStageGenerator::GenerateFixed4x4AreaMap(generatedPath, true, requireExit, &error) ||
+        !NarakuMap::LoadMap(generatedPath, childMap, &error))
+    {
+        LayerGateState& sourceGate = m_layerGates[sourceGateIndex];
+        ++sourceGate.generationFailures;
+        sourceGate.disabled = sourceGate.generationFailures >= kLayerGateFailureLimit;
+        SaveCurrentAreaState();
+        m_mode = Mode::Explore;
+        m_loadingProgress = 0.0f;
+        m_loadingStep = 0;
+        ShowCenterNotification(sourceGate.disabled
+            ? u8"生成に5回失敗したため、この層間口は使用不能になりました。"
+            : u8"下層の生成に失敗しました。もう一度Fで試せます。");
+        return;
+    }
+
+    SaveCurrentAreaState();
+    m_runtimeMap = std::move(childMap);
+    BuildCurrentAreaRuntime(true);
+
+    const int childAreaIndex = static_cast<int>(m_areas.size());
+    m_areas.emplace_back();
+    m_areas.back().depth = childDepth;
+    m_currentAreaIndex = childAreaIndex;
+
+    int childEntryIndex = -1;
+    for (int i = 0; i < static_cast<int>(m_layerGates.size()); ++i)
+    {
+        if (m_layerGates[i].isEntry)
+        {
+            childEntryIndex = i;
+            m_layerGates[i].destinationAreaIndex = parentAreaIndex;
+            break;
+        }
+    }
+    if (childEntryIndex < 0)
+    {
+        m_areas.pop_back();
+        ActivateArea(parentAreaIndex, false);
+        LayerGateState& sourceGate = m_layerGates[sourceGateIndex];
+        ++sourceGate.generationFailures;
+        sourceGate.disabled = sourceGate.generationFailures >= kLayerGateFailureLimit;
+        SaveCurrentAreaState();
+        m_mode = Mode::Explore;
+        ShowCenterNotification(u8"生成結果に層入口がありません。もう一度Fで試せます。");
+        return;
+    }
+
+    SaveCurrentAreaState();
+    m_areas[parentAreaIndex].layerGates[sourceGateIndex].destinationAreaIndex = childAreaIndex;
+    ActivateArea(parentAreaIndex, false);
+    m_layerGates[sourceGateIndex].destinationAreaIndex = childAreaIndex;
+    SaveCurrentAreaState();
+    m_loadingProgress = 1.0f;
+    m_loadingStep = 2;
+    BeginLayerTransition(sourceGateIndex, childAreaIndex);
+}
+
+void SceneNarakuProto::UpdateLayerTransition(float dt)
+{
+    m_layerTransitionProgress = std::min(1.0f, m_layerTransitionProgress + dt / kLayerTransitionDuration);
+    const float direction = m_layerTransitionAscending ? 1.0f : -1.0f;
+    m_layerTransitionVisualOffset = direction * kLayerTransitionHeight * m_layerTransitionProgress;
+
+    if (m_layerTransitionAscending)
+    {
+        m_player.upperLoad += kLayerTransitionHeight * dt / kLayerTransitionDuration;
+        if (m_player.upperLoad >= kUpperLoadLimit)
+        {
+            m_player.mental = std::max(0.0f, m_player.mental - 10.0f);
+            m_player.upperLoad = 0.0f;
+            AddMessage(u8"上昇負荷が発症しました。精神力-10。");
+        }
+    }
+
+    if (m_layerTransitionProgress < 1.0f)
+    {
+        return;
+    }
+
+    SaveCurrentAreaState();
+    const int destinationArea = m_transitionDestinationAreaIndex;
+    const int destinationGate = m_transitionDestinationGateIndex;
+    ActivateArea(destinationArea, false);
+    if (destinationGate >= 0 && destinationGate < static_cast<int>(m_layerGates.size()))
+    {
+        m_player.pos = m_layerGates[destinationGate].ropePos;
+        m_player.depth = m_layerGates[destinationGate].depth;
+        m_player.previousDepth = m_player.depth;
+        m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+        m_player.peakFeetWorldY = m_player.feetWorldY;
+    }
+    m_layerTransitionVisualOffset = 0.0f;
+    m_transitionSourceGateIndex = -1;
+    m_transitionDestinationAreaIndex = -1;
+    m_transitionDestinationGateIndex = -1;
+    m_mode = Mode::Explore;
 }
 
 void SceneNarakuProto::Update()
 {
+    m_centerNotificationTimer = std::max(0.0f, m_centerNotificationTimer - kDt);
+
+    if (m_mode == Mode::Loading)
+    {
+        UpdateLoading();
+        return;
+    }
+    if (m_mode == Mode::LayerTransition)
+    {
+        UpdateLayerTransition(kDt);
+        return;
+    }
+
     // Cキーで当たり判定デバッグ表示を切り替えます。
     if (IsKeyTrigger('C'))
     {
@@ -309,16 +1229,26 @@ void SceneNarakuProto::Update()
     }
 
     // 探索モード中だけプレイヤーや敵などのゲーム更新を進めます。
-    if (m_mode == Mode::Explore) UpdateExplore(kDt);
+    if (m_mode == Mode::Explore)
+    {
+        if (IsKeyTrigger('E')) UseFood();
+        UpdateExplore(kDt);
+    }
 }
 
 void SceneNarakuProto::UpdateExplore(float dt)
 {
+    // 探索モード中だけ右ドラッグによるカメラ回転を受け付けます。
+    UpdateCameraControls();
+
     // ImGui からの変更値が不正でもゲーム進行が壊れないよう毎フレーム丸めます。
     ClampDebugPlayerParams();
 
     // 今フレームの上昇量を後で計算できるよう、更新前の深度を保存します。
     m_player.previousDepth = m_player.depth;
+    m_player.previousWorldY = m_player.onRope && m_activeRope >= 0
+        ? GetRopeWorldY(m_activeRope, m_ropeProgress)
+        : m_player.feetWorldY;
 
     // 入力に応じてプレイヤーの移動と行動制限を更新します。
     UpdateMovement(dt);
@@ -331,6 +1261,11 @@ void SceneNarakuProto::UpdateExplore(float dt)
 
     // 敵の追跡と体当たりを更新します。
     UpdateEnemies(dt);
+
+    if (HasRelicArmorSetEffect() && m_player.hp > 0.0f)
+    {
+        m_player.hp = std::min(10.0f, m_player.hp + kRelicArmorHpRecoveryPerSecond * dt);
+    }
 
     // 近くの未発見採掘ポイントを発見済みにします。
     DiscoverNearbyMiningPoints();
@@ -353,27 +1288,30 @@ void SceneNarakuProto::UpdateMovement(float dt)
     // WASD入力を集めるための移動ベクトルです。
     Vec2 input;
 
+    // 採掘中は移動やジャンプ、ステップ入力を受け付けません。
+    const bool isMining = m_miningIndex >= 0;
+
     // 着地直後の硬直を更新します。
     m_player.landingRecoveryTimer = std::max(0.0f, m_player.landingRecoveryTimer - dt);
     const bool inLandingRecovery = m_player.landingRecoveryTimer > 0.0f;
 
     // Wキーでカメラから見た前方向へ進みます。
-    if (IsKeyPress('W')) input.y += 1.0f;
+    if (!isMining && IsKeyPress('W')) input.y += 1.0f;
 
     // Sキーでカメラから見た後ろ方向へ進みます。
-    if (IsKeyPress('S')) input.y -= 1.0f;
+    if (!isMining && IsKeyPress('S')) input.y -= 1.0f;
 
     // Aキーでカメラから見た左方向へ進みます。
-    if (IsKeyPress('A')) input.x -= 1.0f;
+    if (!isMining && IsKeyPress('A')) input.x -= 1.0f;
 
     // Dキーでカメラから見た右方向へ進みます。
-    if (IsKeyPress('D')) input.x += 1.0f;
+    if (!isMining && IsKeyPress('D')) input.x += 1.0f;
 
     // カメラから見た前方向を、斜め投影で画面上方向に見えるワールド方向へ対応させます。
-    const Vec2 cameraForward = Normalize({ -1.0f, -1.0f });
+    const Vec2 cameraForward = GetCameraForward();
 
     // カメラから見た右方向を、現在の3Dカメラで画面右方向に見えるワールド方向へ対応させます。
-    const Vec2 cameraRight = Normalize({ -1.0f, 1.0f });
+    const Vec2 cameraRight = GetCameraRight();
 
     // 入力をカメラ基準方向からワールド移動方向へ変換します。
     Vec2 move = Add(Mul(cameraRight, input.x), Mul(cameraForward, input.y));
@@ -385,10 +1323,10 @@ void SceneNarakuProto::UpdateMovement(float dt)
     if (move.x != 0.0f || move.y != 0.0f) m_player.facing = move;
 
     // Spaceが押された瞬間にジャンプ開始を試します。
-    if (!inLandingRecovery && IsKeyTrigger(VK_SPACE)) TryStartJump();
+    if (!isMining && !inLandingRecovery && IsKeyTrigger(VK_SPACE)) TryStartJump();
 
     // 左右Shiftの現在入力を物理キーとして取得します。
-    const bool shiftPressed = IsShiftPress();
+    const bool shiftPressed = !isMining && IsShiftPress();
 
     // 前フレームは押されておらず、今フレーム押されたらShift押下開始です。
     const bool shiftStarted = shiftPressed && !m_shiftWasPressed;
@@ -506,13 +1444,28 @@ void SceneNarakuProto::UpdateMovement(float dt)
         float speed = GetMoveSpeed();
 
         // 100%以上の重量では走れないため、ここで走行可否を判定します。
-        bool canRun = GetCurrentWeight() < kMaxWeight && m_player.stamina > 0.0f;
+        const bool tooHeavyToRun = GetCurrentWeight() >= GetMaxWeight();
+        bool canRun = !tooHeavyToRun && m_player.stamina > 0.0f;
+
+        if (wantsRun && tooHeavyToRun && (move.x != 0.0f || move.y != 0.0f))
+        {
+            if (!m_heavyRunNotificationShown)
+            {
+                ShowCenterNotification(u8"重すぎて走れない！");
+                m_heavyRunNotificationShown = true;
+            }
+        }
+        else
+        {
+            m_heavyRunNotificationShown = false;
+        }
 
         // 走り入力、移動入力、重量、スタミナをすべて満たした時だけ走ります。
         if (wantsRun && canRun && (move.x != 0.0f || move.y != 0.0f))
         {
             // 走り速度へ切り替えます。
-            speed = m_debugPlayerParams.runSpeed;
+            speed = m_debugPlayerParams.runSpeed *
+                (HasRelicArmorSetEffect() ? kRelicArmorRunMultiplier : 1.0f);
 
             // 1フレームぶんの走りスタミナを消費します。
             SpendStamina(m_debugPlayerParams.runCostPerSecond * dt);
@@ -541,13 +1494,13 @@ void SceneNarakuProto::UpdateMovement(float dt)
         float depthInput = 0.0f;
 
         // Wは上昇なので深度を減らします。
-        if (IsKeyPress('W')) depthInput -= 1.0f;
+        if (!isMining && IsKeyPress('W')) depthInput -= 1.0f;
 
         // Sは下降なので深度を増やします。
-        if (IsKeyPress('S')) depthInput += 1.0f;
+        if (!isMining && IsKeyPress('S')) depthInput += 1.0f;
 
         // A/Dが押された瞬間はスタミナがなくてもロープから横へ離脱できるようにします。
-        const bool wantsLeaveRope = IsKeyTrigger('A') || IsKeyTrigger('D');
+        const bool wantsLeaveRope = !isMining && (IsKeyTrigger('A') || IsKeyTrigger('D'));
 
         // ロープから離れる時は、掴まり状態を解除して少しだけ横へずらします。
         if (wantsLeaveRope)
@@ -568,11 +1521,16 @@ void SceneNarakuProto::UpdateMovement(float dt)
             // ロープ昇降のスタミナを消費します。
             SpendStamina(m_debugPlayerParams.ropeCostPerSecond * dt);
 
-            // ロープの上端から下端までの範囲内に深度を制限します。
-            m_player.depth = std::max(rope.topDepth, std::min(m_player.depth + depthInput * m_debugPlayerParams.ropeSpeed * dt, rope.bottomDepth));
-
-            // ロープ中は平面位置をロープ位置へ固定して、床外へずれないようにします。
-            m_player.pos = rope.pos;
+            const float topWorldY = GetGroundWorldY(rope.topPos, rope.topDepth);
+            const float bottomWorldY = GetGroundWorldY(rope.bottomPos, rope.bottomDepth);
+            const float horizontalLength = Distance(rope.topPos, rope.bottomPos);
+            const float verticalLength = bottomWorldY - topWorldY;
+            const float ropeLength = std::max(0.001f, std::sqrt(horizontalLength * horizontalLength + verticalLength * verticalLength));
+            m_ropeProgress = std::max(0.0f, std::min(1.0f,
+                m_ropeProgress + depthInput * m_debugPlayerParams.ropeSpeed * dt / ropeLength));
+            m_player.pos = GetRopePosition(m_activeRope, m_ropeProgress);
+            m_player.depth = rope.topDepth + (rope.bottomDepth - rope.topDepth) * m_ropeProgress;
+            m_player.feetWorldY = GetRopeWorldY(m_activeRope, m_ropeProgress);
         }
     }
 
@@ -641,10 +1599,10 @@ void SceneNarakuProto::UpdateMovement(float dt)
     }
 
     // デバッグフィールド外へ出ないようX座標を制限します。
-    m_player.pos.x = std::max(-kWorldHalfSize, std::min(m_player.pos.x, kWorldHalfSize));
+    m_player.pos.x = std::max(-m_worldHalfSize, std::min(m_player.pos.x, m_worldHalfSize));
 
     // デバッグフィールド外へ出ないようY座標を制限します。
-    m_player.pos.y = std::max(-kWorldHalfSize, std::min(m_player.pos.y, kWorldHalfSize));
+    m_player.pos.y = std::max(-m_worldHalfSize, std::min(m_player.pos.y, m_worldHalfSize));
 
     // 危険地形に乗っている間は一定間隔でダメージを受けます。
     if (!m_player.onRope && (GetCellAttributeFlagsAt(m_player.pos, m_player.depth) & NarakuMap::CellAttributeHazard) != 0u)
@@ -668,6 +1626,18 @@ void SceneNarakuProto::UpdateMovement(float dt)
 
 void SceneNarakuProto::UpdateAction(float dt)
 {
+    m_cameraShakeTimer = std::max(0.0f, m_cameraShakeTimer - dt);
+    for (AttackHitEffect& effect : m_attackHitEffects)
+    {
+        effect.remainingTime -= dt;
+    }
+    m_attackHitEffects.erase(
+        std::remove_if(
+            m_attackHitEffects.begin(),
+            m_attackHitEffects.end(),
+            [](const AttackHitEffect& effect) { return effect.remainingTime <= 0.0f; }),
+        m_attackHitEffects.end());
+
     // 攻撃中なら攻撃タイマーを進めます。
     if (m_player.attackTimer > 0.0f)
     {
@@ -693,7 +1663,7 @@ void SceneNarakuProto::UpdateAction(float dt)
             for (EnemyState& enemy : m_enemies)
             {
                 // 死んでいる敵は判定しません。
-                if (!enemy.alive) continue;
+                if (!enemy.alive || enemy.hitByPlayerAttack) continue;
 
                 // プレイヤーから敵への方向を計算します。
                 Vec2 toEnemy = Sub(enemy.pos, m_player.pos);
@@ -701,6 +1671,9 @@ void SceneNarakuProto::UpdateAction(float dt)
                 // 射程内かつ前方にいる場合だけヒットさせます。
                 if (Distance(enemy.pos, m_player.pos) <= kAttackRange && Dot(Normalize(toEnemy), m_player.facing) > 0.25f)
                 {
+                    enemy.hitByPlayerAttack = true;
+                    m_attackHitEffects.push_back({ enemy.pos, enemy.depth, kAttackHitEffectDuration });
+
                     // つるはし1回ぶんのダメージを与えます。
                     enemy.hp -= m_debugPlayerParams.attackPower;
 
@@ -710,8 +1683,9 @@ void SceneNarakuProto::UpdateAction(float dt)
                         // 敵を非アクティブにします。
                         enemy.alive = false;
 
-                        // 食料素材ドロップ相当のログを出します。
-                        AddMessage(u8"敵を倒しました。食料素材を落としました。");
+                        // プロトでは商店販売品と同じ食料を敵位置へ落とします。
+                        m_groundFoods.push_back({ enemy.pos, enemy.depth, true });
+                        AddMessage(u8"敵を倒しました。食料を落としました。");
                     }
                 }
             }
@@ -741,6 +1715,28 @@ void SceneNarakuProto::UpdateMining(float dt)
     // 採掘中でなければ何もしません。
     if (m_miningIndex < 0) return;
 
+    // 被弾ノックバック、足場喪失（空中）、またはロープに掴まった場合は採掘を中断します。
+    if (m_player.knockbackTimer > 0.0f)
+    {
+        m_miningIndex = -1;
+        m_miningTimer = 0.0f;
+        AddMessage(u8"ダメージを受けたため、採掘が中断されました。");
+        return;
+    }
+    if (!m_player.grounded)
+    {
+        m_miningIndex = -1;
+        m_miningTimer = 0.0f;
+        AddMessage(u8"足場を失ったため、採掘が中断されました。");
+        return;
+    }
+    if (m_player.onRope)
+    {
+        m_miningIndex = -1;
+        m_miningTimer = 0.0f;
+        return;
+    }
+
     // 採掘完了までの残り時間を減らします。
     m_miningTimer -= dt;
 
@@ -753,16 +1749,13 @@ void SceneNarakuProto::UpdateMining(float dt)
     // このポイントを採掘済みにします。
     point.mined = true;
     point.discovered = true;
-    if (std::find(m_permanentlyMinedRelics.begin(), m_permanentlyMinedRelics.end(), point.relicName) == m_permanentlyMinedRelics.end())
-    {
-        m_permanentlyMinedRelics.push_back(point.relicName);
-    }
 
     // リザルト用の採掘数を増やします。
     ++m_result.minedCount;
 
     // 発見確認に出す旧器を作ります。
-    m_pendingRelic = { point.relicName, 15.0f, 5 };
+    // 種類と重量は採掘した時点で確定し、鑑定状態は表示名だけに反映します。
+    m_pendingRelic = CreateRandomRelic(point.relicName);
 
     // 拾わず置く場合に戻す位置を採掘ポイント位置にします。
     m_pendingRelicPos = point.pos;
@@ -833,8 +1826,14 @@ void SceneNarakuProto::UpdateEnemies(float dt)
         // 体当たり中なら専用の高速移動と命中判定を行います。
         if (enemy.chargeTimer > 0.0f)
         {
-            // 体当たり方向へ通常移動の3倍速度で進みます。
-            const Vec2 chargeTarget = Add(enemy.pos, Mul(enemy.chargeDir, kEnemyChargeSpeed * dt));
+            const float chargeProgress = std::max(
+                0.0f,
+                std::min(1.0f, 1.0f - enemy.chargeTimer / kEnemyChargeTime));
+            const float chargeSpeedScale = kEnemyChargeStartSpeedScale +
+                (kEnemyChargeEndSpeedScale - kEnemyChargeStartSpeedScale) * chargeProgress;
+            const Vec2 chargeTarget = Add(
+                enemy.pos,
+                Mul(enemy.chargeDir, kEnemyChargeSpeed * chargeSpeedScale * dt));
             enemy.pos = ResolveFloorMove(enemy.pos, chargeTarget, enemy.depth);
 
             // 体当たりの残り時間を減らします。
@@ -852,6 +1851,7 @@ void SceneNarakuProto::UpdateEnemies(float dt)
                 {
                     // 体当たり1回ぶんのダメージを与えます。
                     m_player.hp -= 1.0f;
+                    m_cameraShakeTimer = kCameraShakeDuration;
 
                     // ノックバック時間を設定します。
                     m_player.knockbackTimer = kKnockbackTime;
@@ -951,8 +1951,12 @@ void SceneNarakuProto::UpdateEnemies(float dt)
 
 void SceneNarakuProto::UpdateUpperLoad(float dt)
 {
-    // 前フレームからどれだけ上昇したかを計算します。
-    float ascent = m_player.previousDepth - m_player.depth;
+    const float currentWorldY = m_player.onRope && m_activeRope >= 0
+        ? GetRopeWorldY(m_activeRope, m_ropeProgress)
+        : m_player.feetWorldY;
+    const float ascent = (m_player.grounded || m_player.onRope)
+        ? currentWorldY - m_player.previousWorldY
+        : 0.0f;
 
     // 上昇している場合は上昇負荷ゲージを加算します。
     if (ascent > 0.0f)
@@ -993,11 +1997,29 @@ void SceneNarakuProto::TryInteract()
         return;
     }
 
+    // 採掘中は他のインタラクトを受け付けません。
+    if (m_miningIndex >= 0)
+    {
+        return;
+    }
+
+    for (int gateIndex = 0; gateIndex < static_cast<int>(m_layerGates.size()); ++gateIndex)
+    {
+        const LayerGateState& gate = m_layerGates[gateIndex];
+        const Vec2 interactPoint = gate.isEntry ? gate.ropePos : gate.loadPos;
+        if (IsNear(m_player.pos, interactPoint, kInteractRange) &&
+            std::fabs(m_player.depth - gate.depth) <= 0.35f)
+        {
+            TryUseLayerGate(gateIndex);
+            return;
+        }
+    }
+
     // 帰還地点が最優先です。原点付近でFを押すと帰還します。
     if (IsNear(m_player.pos, m_returnPoint, kReturnRange) && std::fabs(m_player.depth - m_returnDepth) <= 0.35f)
     {
-        // 帰還リザルトへ移行します。
-        FinishReturn();
+        // 誤操作を避けるため、帰還処理の前に確認を表示します。
+        m_mode = Mode::ReturnConfirm;
 
         // 1回のF入力で複数の対象を処理しないよう戻ります。
         return;
@@ -1013,8 +2035,10 @@ void SceneNarakuProto::TryInteract()
         // すでにロープ中なら、近い端へ吸着してロープを離します。
         if (m_player.onRope)
         {
-            m_player.depth = std::fabs(m_player.depth - rope.bottomDepth) < std::fabs(m_player.depth - rope.topDepth) ? rope.bottomDepth : rope.topDepth;
-            m_player.pos = rope.pos;
+            const bool useBottom = m_ropeProgress >= 0.5f;
+            m_ropeProgress = useBottom ? 1.0f : 0.0f;
+            m_player.depth = useBottom ? rope.bottomDepth : rope.topDepth;
+            m_player.pos = useBottom ? rope.bottomPos : rope.topPos;
             m_player.onRope = false;
             m_activeRope = -1;
             m_player.grounded = true;
@@ -1029,14 +2053,17 @@ void SceneNarakuProto::TryInteract()
         // ロープ外なら、近い端へ吸着してロープにつかまります。
         else
         {
+            const float topDistance = Distance(m_player.pos, rope.topPos) + std::fabs(m_player.depth - rope.topDepth);
+            const float bottomDistance = Distance(m_player.pos, rope.bottomPos) + std::fabs(m_player.depth - rope.bottomDepth);
+            m_ropeProgress = bottomDistance < topDistance ? 1.0f : 0.0f;
             m_player.onRope = true;
             m_activeRope = ropeIndex;
-            m_player.pos = rope.pos;
-            m_player.depth = std::fabs(m_player.depth - rope.bottomDepth) < std::fabs(m_player.depth - rope.topDepth) ? rope.bottomDepth : rope.topDepth;
+            m_player.pos = GetRopePosition(m_activeRope, m_ropeProgress);
+            m_player.depth = rope.topDepth + (rope.bottomDepth - rope.topDepth) * m_ropeProgress;
             m_player.grounded = false;
             m_player.verticalSpeed = 0.0f;
             m_player.airTime = 0.0f;
-            m_player.feetWorldY = GetRopeWorldY(m_activeRope, m_player.depth);
+            m_player.feetWorldY = GetRopeWorldY(m_activeRope, m_ropeProgress);
             m_player.peakFeetWorldY = m_player.feetWorldY;
             m_player.landingRecoveryTimer = 0.0f;
             AddMessage(u8"ロープにつかまりました。");
@@ -1073,6 +2100,24 @@ void SceneNarakuProto::TryInteract()
         }
     }
 
+    // 敵が落とした食料を拾います。
+    for (GroundFood& food : m_groundFoods)
+    {
+        if (!food.active) continue;
+        if (IsNear(m_player.pos, food.pos, kInteractRange) && std::fabs(m_player.depth - food.depth) <= 0.35f)
+        {
+            if (GetCurrentWeight() + 1.0f > GetPickupWeightLimit())
+            {
+                AddMessage(u8"これ以上は重すぎて食料を拾えません。");
+                return;
+            }
+            food.active = false;
+            ++m_foodCount;
+            AddMessage(u8"食料を1個拾いました。");
+            return;
+        }
+    }
+
     // 最後に採掘ポイントの開始判定を行います。
     for (int i = 0; i < static_cast<int>(m_miningPoints.size()); ++i)
     {
@@ -1098,8 +2143,9 @@ void SceneNarakuProto::TryInteract()
         // 採掘中のポイント番号を記録します。
         m_miningIndex = i;
 
-        // 採掘完了までの2秒タイマーを開始します。
-        m_miningTimer = kMiningTime;
+        // 装備中のつるはしによる速度倍率を採掘所要時間へ反映します。
+        m_miningDuration = kMiningTime / GetMiningSpeedMultiplier();
+        m_miningTimer = m_miningDuration;
 
         // HUDログに採掘開始を出します。
         AddMessage(u8"採掘を開始しました。");
@@ -1115,7 +2161,12 @@ void SceneNarakuProto::TryStartStep()
     if (m_player.landingRecoveryTimer > 0.0f) return;
 
     // 重量100%以上ではステップ不可です。
-    if (GetCurrentWeight() >= kMaxWeight) { AddMessage(u8"重量が重すぎてステップできません。"); return; }
+    if (GetCurrentWeight() >= GetMaxWeight())
+    {
+        AddMessage(u8"重量が重すぎてステップできません。");
+        ShowCenterNotification(u8"重すぎてステップができない！");
+        return;
+    }
 
     // スタミナ不足ならステップ不可です。
     if (!CanSpendStamina(m_debugPlayerParams.stepCost)) { AddMessage(u8"スタミナが足りないためステップできません。"); return; }
@@ -1139,7 +2190,7 @@ void SceneNarakuProto::TryStartJump()
     if (m_player.onRope) return;
 
     // 重量100%以上ではジャンプ不可です。
-    if (GetCurrentWeight() >= kMaxWeight) { AddMessage(u8"重量が重すぎてジャンプできません。"); return; }
+    if (GetCurrentWeight() >= GetMaxWeight()) { AddMessage(u8"重量が重すぎてジャンプできません。"); return; }
 
     // スタミナ不足ならジャンプ不可です。
     if (!CanSpendStamina(m_debugPlayerParams.jumpCost)) { AddMessage(u8"スタミナが足りないためジャンプできません。"); return; }
@@ -1169,6 +2220,9 @@ void SceneNarakuProto::TryStartAttack()
     // 攻撃中は次の攻撃を開始しません。
     if (m_player.attackTimer > 0.0f) return;
 
+    // 採掘中は攻撃させません。
+    if (m_miningIndex >= 0) return;
+
     // スタミナ不足なら攻撃不可です。
     if (!CanSpendStamina(m_debugPlayerParams.attackCost)) { AddMessage(u8"スタミナが足りないため攻撃できません。"); return; }
 
@@ -1177,6 +2231,13 @@ void SceneNarakuProto::TryStartAttack()
 
     // 攻撃全体時間を設定します。
     m_player.attackTimer = kAttackTotal;
+
+    // 連続攻撃が左右の往復に見えるよう、攻撃開始ごとに振り方向を反転します。
+    m_player.attackSwingReverse = !m_player.attackSwingReverse;
+    for (EnemyState& enemy : m_enemies)
+    {
+        enemy.hitByPlayerAttack = false;
+    }
 }
 
 bool SceneNarakuProto::IsShiftPress() const
@@ -1198,6 +2259,7 @@ void SceneNarakuProto::StartDeath(const char* reason)
 
     // 死亡ペナルティとして所持旧器を全ロストします。
     m_inventory.clear();
+    m_foodCount = 0;
 
     // 死亡ペナルティとして探索中ピンを失わせます。
     m_pins.clear();
@@ -1214,35 +2276,93 @@ void SceneNarakuProto::FinishReturn()
     // 持ち帰った旧器数を記録します。
     m_result.carriedRelics = static_cast<int>(m_inventory.size());
 
-    // 売却額を集計する前に0へ戻します。
+    // 商店で全売却した場合の参考額を集計します。
     m_result.saleAmount = 0;
+    m_result.identifiedRelics = 0;
 
-    // 所持旧器の売値を合計します。
-    for (const RelicItem& item : m_inventory) m_result.saleAmount += item.value;
+    // 採掘時に決まっていた種類を公開し、遺物を自宅保管へ移します。
+    for (const RelicItem& item : m_inventory)
+    {
+        const std::size_t index = static_cast<std::size_t>(item.type);
+        if (!m_identifiedRelics[index])
+        {
+            m_identifiedRelics[index] = true;
+            ++m_result.identifiedRelics;
+        }
+        ++m_storedRelics[index];
+        m_result.saleAmount += item.value;
+    }
+
+    m_inventory.clear();
+
+    // 使わずに持ち帰った食料も自宅へ戻します。
+    m_storedFoodCount += m_foodCount;
+    m_foodCount = 0;
 
     // 帰還リザルトモードへ移行します。
     m_mode = Mode::ReturnResult;
 }
 
-void SceneNarakuProto::SellAllAndRestart()
+void SceneNarakuProto::StartDive()
 {
-    // リザルトで計算した売却額を所持金に加算します。
-    m_money += m_result.saleAmount;
+    float loadoutWeight = 10.0f + static_cast<float>(m_loadoutFoodCount);
+    for (std::size_t i = 0; i < m_loadoutRelics.size(); ++i)
+    {
+        if (m_loadoutRelics[i] > m_storedRelics[i])
+        {
+            AddMessage(u8"持ち込み予定数が自宅在庫を超えています。");
+            return;
+        }
+        loadoutWeight += GetRelicWeight(static_cast<RelicType>(i)) * static_cast<float>(m_loadoutRelics[i]);
+    }
+    if (loadoutWeight > GetMaxWeight())
+    {
+        AddMessage(u8"持ち込み重量が100を超えているため潜行できません。");
+        return;
+    }
 
-    // 次の潜行を開始します。
-    ResetRun();
+    // フィールド側の一時状態を初期化してから、選択済みの持ち込み品を移します。
+    if (!ResetRun())
+    {
+        return;
+    }
+    m_foodCount = m_loadoutFoodCount;
+    m_storedFoodCount -= m_loadoutFoodCount;
+    m_loadoutFoodCount = 0;
+
+    for (std::size_t i = 0; i < m_loadoutRelics.size(); ++i)
+    {
+        const RelicType type = static_cast<RelicType>(i);
+        const int count = m_loadoutRelics[i];
+        m_storedRelics[i] -= count;
+        for (int itemIndex = 0; itemIndex < count; ++itemIndex)
+        {
+            m_inventory.push_back(CreateRelic(type, GetRelicTypeName(type)));
+        }
+        m_loadoutRelics[i] = 0;
+    }
 }
 
 void SceneNarakuProto::RestartAfterDeath()
 {
-    // 死亡後の再挑戦として新しい潜行を開始します。
-    ResetRun();
+    // 死亡後は持ち込みなしで再挑戦します。
+    m_loadoutFoodCount = 0;
+    m_loadoutRelics.fill(0);
+    StartDive();
 }
 
 void SceneNarakuProto::Draw()
 {
+    if (m_mode == Mode::Loading)
+    {
+        DrawLoadingScreen();
+        return;
+    }
+
     // デバッグ用3Dフィールドを最初に描画します。
     Draw3DField();
+
+    DrawCompass();
 
     // 常時確認するステータスHUDを描画します。
     DrawHud();
@@ -1259,11 +2379,234 @@ void SceneNarakuProto::Draw()
     // 旧器発見中は拾う/置く確認を重ねます。
     else if (m_mode == Mode::RelicPrompt) DrawRelicPrompt();
 
+    else if (m_mode == Mode::ReturnConfirm) DrawReturnConfirm();
+
     // 帰還または死亡後はリザルトを重ねます。
     else if (m_mode == Mode::ReturnResult || m_mode == Mode::DeathResult) DrawResult();
 
+    else if (m_mode == Mode::Home) DrawHome();
+
+    else if (m_mode == Mode::GeneralShop) DrawGeneralShop();
+
+    else if (m_mode == Mode::Armory) DrawArmory();
+
+    DrawCenterNotification();
+
     // 採掘（探窟）進行度バーを画面中央にオーバーレイ表示します。
     DrawMiningProgressBar();
+}
+
+void SceneNarakuProto::DrawLoadingScreen()
+{
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowBgAlpha(1.0f);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBringToFrontOnFocus;
+    if (ImGui::Begin("LayerLoading##NarakuProto", nullptr, flags))
+    {
+        const ImVec2 windowPos = ImGui::GetWindowPos();
+        const ImVec2 windowSize = ImGui::GetWindowSize();
+        const char* loadingText = u8"ロード中...";
+        const ImVec2 textSize = ImGui::CalcTextSize(loadingText);
+        ImGui::SetCursorScreenPos(ImVec2(
+            windowPos.x + (windowSize.x - textSize.x) * 0.5f,
+            windowPos.y + (windowSize.y - textSize.y) * 0.5f));
+        ImGui::TextUnformatted(loadingText);
+
+        constexpr float barWidth = 260.0f;
+        constexpr float margin = 28.0f;
+        ImGui::SetCursorScreenPos(ImVec2(
+            windowPos.x + windowSize.x - barWidth - margin,
+            windowPos.y + windowSize.y - 24.0f - margin));
+        ImGui::ProgressBar(std::max(0.0f, std::min(1.0f, m_loadingProgress)), ImVec2(barWidth, 18.0f), "");
+    }
+    ImGui::End();
+}
+
+void SceneNarakuProto::UpdateCameraControls()
+{
+    const float wheel = ImGui::GetIO().MouseWheel;
+    if (wheel != 0.0f)
+    {
+        m_cameraDistance -= wheel;
+    }
+
+    NormalizeCameraSettings();
+
+    if (!IsMouseRightPress())
+    {
+        return;
+    }
+
+    constexpr float mouseSensitivity = 0.006f;
+    const POINT mouseDelta = GetMouseDelta();
+
+    m_cameraYaw += static_cast<float>(mouseDelta.x) * mouseSensitivity;
+    m_cameraPitch += static_cast<float>(mouseDelta.y) * mouseSensitivity;
+    NormalizeCameraSettings();
+
+    constexpr float twoPi = DirectX::XM_2PI;
+    if (m_cameraYaw > twoPi || m_cameraYaw < -twoPi)
+    {
+        m_cameraYaw = std::fmod(m_cameraYaw, twoPi);
+    }
+}
+
+void SceneNarakuProto::NormalizeCameraSettings()
+{
+    m_cameraDistance = std::max(kCameraMinDistance, std::min(m_cameraDistance, kCameraMaxDistance));
+    m_cameraMinPitchDegrees = std::max(kCameraMinPitchDegrees, std::min(m_cameraMinPitchDegrees, kCameraMaxPitchDegrees));
+    m_cameraMaxPitchDegrees = std::max(kCameraMinPitchDegrees, std::min(m_cameraMaxPitchDegrees, kCameraMaxPitchDegrees));
+    m_cameraMinPitchDegrees = std::min(m_cameraMinPitchDegrees, m_cameraMaxPitchDegrees);
+    m_cameraMaxPitchDegrees = std::max(m_cameraMaxPitchDegrees, m_cameraMinPitchDegrees);
+    const float minPitch = DirectX::XMConvertToRadians(m_cameraMinPitchDegrees);
+    const float maxPitch = DirectX::XMConvertToRadians(m_cameraMaxPitchDegrees);
+    m_cameraPitch = std::max(minPitch, std::min(m_cameraPitch, maxPitch));
+}
+
+SceneNarakuProto::Vec2 SceneNarakuProto::GetCameraForward() const
+{
+    return Normalize({ -std::sin(m_cameraYaw), -std::cos(m_cameraYaw) });
+}
+
+SceneNarakuProto::Vec2 SceneNarakuProto::GetCameraRight() const
+{
+    const Vec2 forward = GetCameraForward();
+    return Normalize({ forward.y, -forward.x });
+}
+
+void SceneNarakuProto::ReleaseEnvironmentModels()
+{
+    for (EnvironmentModelResource& resource : m_environmentModels)
+    {
+        SAFE_DELETE(resource.model);
+    }
+    m_environmentModels.clear();
+}
+
+void SceneNarakuProto::LoadEnvironmentModels()
+{
+    ReleaseEnvironmentModels();
+    const std::wstring catalogPath = ResolveProjectPath(kEnvironmentModelCatalogRelativePath);
+    std::ifstream input(catalogPath, std::ios::binary);
+    if (!input) return;
+
+    std::string line;
+    while (std::getline(input, line))
+    {
+        if (line.empty() || line[0] == '#') continue;
+
+        std::istringstream row(line);
+        std::string id;
+        std::string name;
+        std::string modelPath;
+        float scaleX = 1.0f;
+        float scaleY = 1.0f;
+        float scaleZ = 1.0f;
+        if (!(row >> std::quoted(id) >> std::quoted(name) >> std::quoted(modelPath)
+            >> scaleX >> scaleY >> scaleZ))
+        {
+            continue;
+        }
+
+        const std::string resolvedModelPath = WideToUtf8(ResolveProjectPath(Utf8ToWide(modelPath)));
+        Model* model = new Model();
+        if (!model->Load(resolvedModelPath.c_str(), 1.0f, Model::ZFlip))
+        {
+            SAFE_DELETE(model);
+            continue;
+        }
+
+        DirectX::XMFLOAT3 minValue = {
+            std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::max(),
+            std::numeric_limits<float>::max() };
+        DirectX::XMFLOAT3 maxValue = {
+            std::numeric_limits<float>::lowest(),
+            std::numeric_limits<float>::lowest(),
+            std::numeric_limits<float>::lowest() };
+        bool hasVertex = false;
+        for (unsigned int meshIndex = 0; meshIndex < model->GetMeshNum(); ++meshIndex)
+        {
+            const Model::Mesh* mesh = model->GetMesh(meshIndex);
+            if (mesh == nullptr) continue;
+            for (const Model::Vertex& vertex : mesh->vertices)
+            {
+                minValue.x = std::min(minValue.x, vertex.pos.x);
+                minValue.y = std::min(minValue.y, vertex.pos.y);
+                minValue.z = std::min(minValue.z, vertex.pos.z);
+                maxValue.x = std::max(maxValue.x, vertex.pos.x);
+                maxValue.y = std::max(maxValue.y, vertex.pos.y);
+                maxValue.z = std::max(maxValue.z, vertex.pos.z);
+                hasVertex = true;
+            }
+        }
+
+        EnvironmentModelResource resource;
+        resource.id = id;
+        resource.model = model;
+        if (hasVertex)
+        {
+            resource.placementAnchor = {
+                (minValue.x + maxValue.x) * 0.5f,
+                minValue.y,
+                (minValue.z + maxValue.z) * 0.5f };
+        }
+        m_environmentModels.push_back(resource);
+    }
+}
+
+void SceneNarakuProto::DrawEnvironmentObjects(
+    const DirectX::XMFLOAT4X4& view,
+    const DirectX::XMFLOAT4X4& projection,
+    const DirectX::XMFLOAT3& cameraPosition)
+{
+    using namespace DirectX;
+    ShaderList::SetCameraPos(cameraPosition);
+    ShaderList::SetLight({ 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, -1.0f, 0.0f });
+
+    for (const NarakuMap::EnvironmentObject& object : m_runtimeMap.environmentObjects)
+    {
+        const auto resourceIt = std::find_if(
+            m_environmentModels.begin(),
+            m_environmentModels.end(),
+            [&](const EnvironmentModelResource& resource) { return resource.id == object.modelId; });
+        if (resourceIt == m_environmentModels.end() || resourceIt->model == nullptr) continue;
+
+        const int layerIndex = NarakuMap::FindLayerIndexById(m_runtimeMap, object.layerId);
+        if (layerIndex < 0) continue;
+        const NarakuMap::TerrainLayer& layer = m_runtimeMap.terrainLayers[layerIndex];
+        const Vec2 position = { object.xz.x, object.xz.z };
+        const float groundY = GetGroundWorldY(position, layer.layerDepth);
+
+        XMFLOAT4X4 wvp[3] = {};
+        XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(
+            XMMatrixTranslation(
+                -resourceIt->placementAnchor.x,
+                -resourceIt->placementAnchor.y,
+                -resourceIt->placementAnchor.z) *
+            XMMatrixScaling(object.scaleX, object.scaleY, object.scaleZ) *
+            XMMatrixTranslation(object.xz.x, groundY, object.xz.z)));
+        wvp[1] = view;
+        wvp[2] = projection;
+        ShaderList::SetWVP(wvp);
+        resourceIt->model->SetVertexShader(ShaderList::GetVS(ShaderList::VS_WORLD));
+        resourceIt->model->SetPixelShader(ShaderList::GetPS(ShaderList::PS_LAMBERT));
+        for (unsigned int meshIndex = 0; meshIndex < resourceIt->model->GetMeshNum(); ++meshIndex)
+        {
+            const Model::Mesh* mesh = resourceIt->model->GetMesh(meshIndex);
+            if (mesh == nullptr) continue;
+            const Model::Material* sourceMaterial = resourceIt->model->GetMaterial(mesh->materialID);
+            if (sourceMaterial != nullptr)
+            {
+                Model::Material material = *sourceMaterial;
+                ShaderList::SetMaterial(material);
+            }
+            resourceIt->model->Draw(static_cast<int>(meshIndex));
+        }
+    }
 }
 
 void SceneNarakuProto::Draw3DField()
@@ -1271,14 +2614,89 @@ void SceneNarakuProto::Draw3DField()
     using namespace DirectX;
 
     // プレイヤー位置を3D描画用の注視点に変換します。
-    const float playerHeightOffset = m_player.onRope && m_activeRope >= 0 ? (GetRopeWorldY(m_activeRope, m_player.depth) - GetGroundWorldY(m_player.pos, m_player.depth)) : GetPlayerAirborneOffset();
+    const float playerHeightOffset = (m_player.onRope && m_activeRope >= 0
+        ? (GetRopeWorldY(m_activeRope, m_ropeProgress) - GetGroundWorldY(m_player.pos, m_player.depth))
+        : GetPlayerAirborneOffset()) + m_layerTransitionVisualOffset;
     const XMFLOAT3 playerCenter = ToWorld3D(m_player.pos, m_player.depth, 0.7f + playerHeightOffset);
 
+    // 初期状態でも同じ制約を適用し、最初の右ドラッグ前にカメラが高くなりすぎないようにします。
+    NormalizeCameraSettings();
+    const float verticalOffset = std::sin(m_cameraPitch) * m_cameraDistance;
+
     // 斜め見下ろしになるように、プレイヤーの右後ろ上方へカメラを置きます。
-    const XMVECTOR eye = XMVectorSet(playerCenter.x + 8.0f, playerCenter.y + 8.0f, playerCenter.z + 8.0f, 0.0f);
+    // プレイヤーを注視点に固定し、yaw/pitchから一定距離の軌道位置を算出します。
+    const float horizontalDistance = std::sqrt(std::max(
+        0.0f,
+        m_cameraDistance * m_cameraDistance - verticalOffset * verticalOffset));
+    XMVECTOR eye = XMVectorSet(
+        playerCenter.x + std::sin(m_cameraYaw) * horizontalDistance,
+        playerCenter.y + verticalOffset,
+        playerCenter.z + std::cos(m_cameraYaw) * horizontalDistance,
+        0.0f);
 
     // カメラは常にプレイヤー付近を向くようにします。
-    const XMVECTOR target = XMVectorSet(playerCenter.x, playerCenter.y, playerCenter.z, 0.0f);
+    XMVECTOR target = XMVectorSet(playerCenter.x, playerCenter.y, playerCenter.z, 0.0f);
+
+    if (m_cameraShakeTimer > 0.0f)
+    {
+        const float elapsed = kCameraShakeDuration - m_cameraShakeTimer;
+        const float attenuation = m_cameraShakeTimer / kCameraShakeDuration;
+        const float shakeX = std::sin(elapsed * 92.0f) * kCameraShakeAmplitude * attenuation;
+        const float shakeY = std::cos(elapsed * 117.0f) * kCameraShakeAmplitude * attenuation;
+        eye = XMVectorAdd(eye, XMVectorSet(shakeX, shakeY, 0.0f, 0.0f));
+        target = XMVectorAdd(target, XMVectorSet(-shakeX * 0.25f, -shakeY * 0.15f, 0.0f, 0.0f));
+    }
+
+    const XMVECTOR cameraToPlayer = XMVectorSubtract(target, eye);
+    const float cameraToPlayerLength = XMVectorGetX(XMVector3Length(cameraToPlayer));
+    const XMVECTOR cameraToPlayerDirection = cameraToPlayerLength > 0.0001f
+        ? XMVectorScale(cameraToPlayer, 1.0f / cameraToPlayerLength)
+        : XMVectorZero();
+
+    const auto intersectsViewSegment = [&](const XMFLOAT3& a, const XMFLOAT3& b, const XMFLOAT3& c) -> bool
+    {
+        constexpr float epsilon = 0.00001f;
+        const XMVECTOR vertexA = XMLoadFloat3(&a);
+        const XMVECTOR edgeAB = XMVectorSubtract(XMLoadFloat3(&b), vertexA);
+        const XMVECTOR edgeAC = XMVectorSubtract(XMLoadFloat3(&c), vertexA);
+        const XMVECTOR perpendicular = XMVector3Cross(cameraToPlayerDirection, edgeAC);
+        const float determinant = XMVectorGetX(XMVector3Dot(edgeAB, perpendicular));
+        if (std::fabs(determinant) < epsilon)
+        {
+            return false;
+        }
+
+        const float inverseDeterminant = 1.0f / determinant;
+        const XMVECTOR originOffset = XMVectorSubtract(eye, vertexA);
+        const float triangleU = XMVectorGetX(XMVector3Dot(originOffset, perpendicular)) * inverseDeterminant;
+        if (triangleU < 0.0f || triangleU > 1.0f)
+        {
+            return false;
+        }
+
+        const XMVECTOR cross = XMVector3Cross(originOffset, edgeAB);
+        const float triangleV = XMVectorGetX(XMVector3Dot(cameraToPlayerDirection, cross)) * inverseDeterminant;
+        if (triangleV < 0.0f || triangleU + triangleV > 1.0f)
+        {
+            return false;
+        }
+
+        const float distance = XMVectorGetX(XMVector3Dot(edgeAC, cross)) * inverseDeterminant;
+        return distance > 0.05f && distance < cameraToPlayerLength - 0.35f;
+    };
+
+    const auto isTerrainCellOccludingPlayer = [&](const NarakuMap::TerrainLayer& layer, int cellX, int cellZ) -> bool
+    {
+        if (cameraToPlayerLength <= 0.35f)
+        {
+            return false;
+        }
+        const XMFLOAT3 a = GetTerrainVertexWorld3D(layer, cellX, cellZ, 0.0f);
+        const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, 0.0f);
+        const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, 0.0f);
+        const XMFLOAT3 d = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ + 1, 0.0f);
+        return intersectsViewSegment(a, b, c) || intersectsViewSegment(b, d, c);
+    };
 
     // DirectXの標準的な上方向を使ってビュー行列を作ります。
     const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -1296,25 +2714,57 @@ void SceneNarakuProto::Draw3DField()
     Geometory::SetProjection(projection);
     Sprite::SetProjection(projection);
 
-    // 線描画に使う色をまとめます。
-    const XMFLOAT4 gridColor = { 0.22f, 0.24f, 0.26f, 1.0f };
-    const XMFLOAT4 playerColor = { 0.1f, 0.7f, 1.0f, 1.0f };
-    const XMFLOAT4 enemyColor = { 1.0f, 0.25f, 0.2f, 1.0f };
-    const XMFLOAT4 miningColor = { 1.0f, 0.85f, 0.2f, 1.0f };
-    const XMFLOAT4 minedColor = { 0.45f, 0.45f, 0.45f, 1.0f };
-    const XMFLOAT4 relicColor = { 0.4f, 1.0f, 0.65f, 1.0f };
-    const XMFLOAT4 ropeColor = { 0.6f, 0.45f, 0.25f, 1.0f };
-    const XMFLOAT4 returnColor = { 0.25f, 1.0f, 0.3f, 1.0f };
-    const XMFLOAT4 pinColor = { 1.0f, 0.35f, 0.9f, 1.0f };
+    if (m_skyModel != nullptr)
+    {
+        XMFLOAT3 cameraPosition = {};
+        XMStoreFloat3(&cameraPosition, eye);
+        XMFLOAT4X4 wvp[3] = {};
+        XMStoreFloat4x4(
+            &wvp[0],
+            XMMatrixTranspose(
+                XMMatrixScaling(kSkySphereRadius, kSkySphereRadius, kSkySphereRadius) *
+                XMMatrixTranslation(cameraPosition.x, cameraPosition.y, cameraPosition.z)));
+        wvp[1] = view;
+        wvp[2] = projection;
+
+        SetDepthTest(false);
+        SetCullingMode(D3D11_CULL_NONE);
+        SetBlendMode(BLEND_NONE);
+        ShaderList::SetWVP(wvp);
+        ShaderList::SetLight({ 1.0f, 1.0f, 1.0f, 1.0f }, { 0.0f, -1.0f, 0.0f });
+        m_skyModel->SetVertexShader(ShaderList::GetVS(ShaderList::VS_WORLD));
+        m_skyModel->SetPixelShader(ShaderList::GetPS(ShaderList::PS_LAMBERT));
+        for (unsigned int meshIndex = 0; meshIndex < m_skyModel->GetMeshNum(); ++meshIndex)
+        {
+            const Model::Mesh* mesh = m_skyModel->GetMesh(meshIndex);
+            if (mesh == nullptr)
+            {
+                continue;
+            }
+            Model::Material material = *m_skyModel->GetMaterial(mesh->materialID);
+            material.diffuse = { 0.40f, 0.40f, 0.40f, 1.0f };
+            material.ambient = { 0.40f, 0.40f, 0.40f, 1.0f };
+            material.specular = { 0.0f, 0.0f, 0.0f, 1.0f };
+            ShaderList::SetMaterial(material);
+            m_skyModel->Draw(static_cast<int>(meshIndex));
+        }
+    }
 
     // 3Dデバッグ描画は深度テストを有効にして、前後関係を分かりやすくします。
     SetDepthTest(true);
 
+    XMFLOAT3 cameraPosition = {};
+    XMStoreFloat3(&cameraPosition, eye);
+    SetCullingMode(D3D11_CULL_BACK);
+    SetBlendMode(BLEND_NONE);
+    DrawEnvironmentObjects(view, projection, cameraPosition);
+
     // 半透明床は両面から見える方がデバッグしやすいので、カリングを切ります。
     SetCullingMode(D3D11_CULL_NONE);
 
-    // Spriteのアルファ値を効かせるため、アルファブレンドを有効にします。
+    // 既存の半透明床と同じ合成結果になるよう、バッチ描画でもアルファブレンドを有効にします。
     SetBlendMode(BLEND_ALPHA);
+    m_terrainFloorVertexCount = 0;
 
     auto getLayerFloorColor = [](int textureId) -> DirectX::XMFLOAT4
     {
@@ -1333,6 +2783,10 @@ void SceneNarakuProto::Draw3DField()
         if (layer.layerDepth < m_player.depth - 0.01f)
         {
             color.w = m_debugPlayerParams.upperLayerAlpha;
+        }
+        if (m_mode == Mode::LayerTransition)
+        {
+            color.w *= std::max(0.08f, 1.0f - m_layerTransitionProgress);
         }
         return color;
     };
@@ -1359,6 +2813,11 @@ void SceneNarakuProto::Draw3DField()
                     continue;
                 }
 
+                if (isTerrainCellOccludingPlayer(layer, cellX, cellZ))
+                {
+                    continue;
+                }
+
                 const XMFLOAT3 a = GetTerrainVertexWorld3D(layer, cellX, cellZ, -0.05f);
                 const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, -0.05f);
                 const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, -0.05f);
@@ -1367,7 +2826,7 @@ void SceneNarakuProto::Draw3DField()
                     (a.x + b.x + c.x + d.x) * 0.25f,
                     (a.y + b.y + c.y + d.y) * 0.25f,
                     (a.z + b.z + c.z + d.z) * 0.25f);
-                DrawTransparentFloor3D(center, { layer.cellSize, layer.cellSize }, layerColor);
+                AppendTerrainFloorQuad(center, { layer.cellSize, layer.cellSize }, layerColor);
             }
         }
     }
@@ -1375,73 +2834,41 @@ void SceneNarakuProto::Draw3DField()
     // ロープ穴の目印として、地上側に暗い半透明板を重ねます。
     for (const RopePoint& rope : m_ropePoints)
     {
-        DrawTransparentFloor3D(ToWorld3D(rope.pos, rope.topDepth, -0.04f), { 3.0f, 3.0f }, { 0.02f, 0.03f, 0.04f, 0.35f });
+        AppendTerrainFloorQuad(ToWorld3D(rope.topPos, rope.topDepth, -0.04f), { 3.0f, 3.0f }, { 0.02f, 0.03f, 0.04f, 0.35f });
+        AppendTerrainFloorQuad(ToWorld3D(rope.bottomPos, rope.bottomDepth, -0.04f), { 3.0f, 3.0f }, { 0.02f, 0.03f, 0.04f, 0.35f });
     }
 
-    // 各レイヤーの実際の起伏に沿って、有効セルだけ地形グリッド線を描画します。
-    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+    for (const LayerGateState& gate : m_layerGates)
     {
-        if (layer.gridWidth < 2 || layer.gridHeight < 2)
-        {
-            continue;
-        }
-
-        // 上層レイヤーのグリッド線も床と同じ透明度へ寄せ、プレイヤー視認性を優先します。
-        const XMFLOAT4 layerGridColor = applyGameplayLayerAlpha(layer, gridColor);
-
-        for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
-        {
-            for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
-            {
-                const std::uint32_t flags = NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ);
-                if ((flags & NarakuMap::CellAttributeRemoved) != 0u)
-                {
-                    continue;
-                }
-
-                if (!NarakuMap::IsVertexEnabled(layer, cellX, cellZ) ||
-                    !NarakuMap::IsVertexEnabled(layer, cellX + 1, cellZ) ||
-                    !NarakuMap::IsVertexEnabled(layer, cellX, cellZ + 1) ||
-                    !NarakuMap::IsVertexEnabled(layer, cellX + 1, cellZ + 1))
-                {
-                    continue;
-                }
-
-                const XMFLOAT3 a = GetTerrainVertexWorld3D(layer, cellX, cellZ, 0.03f);
-                const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, 0.03f);
-                const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, 0.03f);
-                const XMFLOAT3 d = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ + 1, 0.03f);
-                Geometory::AddLine(a, b, layerGridColor);
-                Geometory::AddLine(b, d, layerGridColor);
-                Geometory::AddLine(d, c, layerGridColor);
-                Geometory::AddLine(c, a, layerGridColor);
-            }
-        }
+        const Vec2 point = gate.isEntry ? gate.ropePos : gate.loadPos;
+        const DirectX::XMFLOAT4 color = gate.disabled
+            ? DirectX::XMFLOAT4{ 0.45f, 0.12f, 0.12f, 0.55f }
+            : (gate.isEntry
+                ? DirectX::XMFLOAT4{ 0.20f, 0.55f, 1.0f, 0.55f }
+                : DirectX::XMFLOAT4{ 0.82f, 0.50f, 0.12f, 0.55f });
+        AppendTerrainFloorQuad(ToWorld3D(point, gate.depth, -0.03f), { 2.0f, 2.0f }, color);
     }
+    DrawTerrainFloorBatch(view, projection);
 
     // 帰還地点を緑の柱で示します。
     const XMFLOAT3 returnBase = ToWorld3D(m_returnPoint, m_returnDepth, 0.05f);
     DrawDebugBox3D({ returnBase.x, returnBase.y + 0.25f, returnBase.z }, { 0.9f, 0.5f, 0.9f });
-    Geometory::AddLine({ returnBase.x, returnBase.y, returnBase.z }, { returnBase.x, returnBase.y + 2.0f, returnBase.z }, returnColor);
 
-    // ロープは接続深度に合わせて上端から下端まで線で描画します。
+    // ロープの接続位置は上下端の箱で示します。
     for (const RopePoint& rope : m_ropePoints)
     {
         // ロープ上端を3D座標へ変換します。
-        const XMFLOAT3 top = ToWorld3D(rope.pos, rope.topDepth, 1.2f);
+        const XMFLOAT3 top = ToWorld3D(rope.topPos, rope.topDepth, 1.2f);
 
         // ロープ下端を3D座標へ変換します。
-        const XMFLOAT3 bottom = ToWorld3D(rope.pos, rope.bottomDepth, 0.0f);
-
-        // ロープ本体をラインで描画します。
-        Geometory::AddLine(top, bottom, ropeColor);
+        const XMFLOAT3 bottom = ToWorld3D(rope.bottomPos, rope.bottomDepth, 0.0f);
 
         // 触れる位置が分かるように小さい箱を置きます。
         DrawDebugBox3D({ top.x, top.y, top.z }, { 0.35f, 0.35f, 0.35f });
         DrawDebugBox3D({ bottom.x, bottom.y, bottom.z }, { 0.30f, 0.30f, 0.30f });
     }
 
-    // 採掘ポイントを黄色系の箱と縦マーカーで描画します。
+    // 採掘ポイントを箱で描画します。
     for (const MiningPoint& point : m_miningPoints)
     {
         // 未記録でも、近くまで来た採掘ポイントは現地で見えるようにします。
@@ -1458,12 +2885,9 @@ void SceneNarakuProto::Draw3DField()
         const float width = 0.45f + 0.08f * static_cast<float>(point.visualType);
         DrawDebugBox3D({ base.x, base.y + 0.2f, base.z }, { width, 0.4f, width });
 
-        // 採掘済みかどうかが分かる色の縦線を足します。
-        const XMFLOAT4 markerColor = point.mined ? minedColor : miningColor;
-        Geometory::AddLine({ base.x, base.y, base.z }, { base.x, base.y + 1.4f, base.z }, markerColor);
     }
 
-    // 地面に落ちている旧器を小さい箱と緑の縦線で示します。
+    // 地面に落ちている旧器を小さい箱で示します。
     for (const GroundRelic& relic : m_groundRelics)
     {
         // 回収不能になった旧器は描画しません。
@@ -1478,57 +2902,21 @@ void SceneNarakuProto::Draw3DField()
         // 小さな箱で旧器の本体を描きます。
         DrawDebugBox3D({ base.x, base.y + 0.12f, base.z }, { 0.35f, 0.25f, 0.35f });
 
-        // 近くから見失わないように縦マーカーを追加します。
-        Geometory::AddLine({ base.x, base.y, base.z }, { base.x, base.y + 1.0f, base.z }, relicColor);
     }
 
-    // 敵を赤い球と進行方向ラインで描画します。
-    for (const EnemyState& enemy : m_enemies)
+    // 敵が落とした食料を箱で描画します。
+    for (const GroundFood& food : m_groundFoods)
     {
-        // 死亡済みの敵は描画しません。
-        if (!enemy.alive)
-        {
-            continue;
-        }
-
-        // 敵の位置を地表上の3D座標へ変換します。
-        const XMFLOAT3 center = ToWorld3D(enemy.pos, enemy.depth, 0.45f);
-
-        // 球で敵本体を描きます。
-        DrawDebugSphere3D(center, 0.45f);
-
-        // 赤い縦線を足して、灰色球でも敵だと分かるようにします。
-        Geometory::AddLine({ center.x, center.y - 0.45f, center.z }, { center.x, center.y + 0.8f, center.z }, enemyColor);
-
-        // 体当たり準備中または体当たり中は、突進方向を赤い線で表示します。
-        if (enemy.telegraphTimer > 0.0f || enemy.chargeTimer > 0.0f)
-        {
-            const XMFLOAT3 end = { center.x + enemy.chargeDir.x * 2.0f, center.y, center.z + enemy.chargeDir.y * 2.0f };
-            Geometory::AddLine(center, end, enemyColor);
-        }
+        if (!food.active) continue;
+        const XMFLOAT3 base = ToWorld3D(food.pos, food.depth, 0.12f);
+        DrawDebugBox3D({ base.x, base.y + 0.12f, base.z }, { 0.30f, 0.22f, 0.30f });
     }
+
+    // 左上の緑スライムを全敵共通の静止ビルボードとしてまとめて描画します。
+    DrawEnemyBillboardBatch(view, projection);
 
     // プレイヤーを青い箱で描きます。
     DrawDebugBox3D(playerCenter, { 0.55f, 1.2f, 0.55f });
-
-    // プレイヤーの向きが分かるように、前方へ青いラインを伸ばします。
-    const XMFLOAT3 facingEnd =
-    {
-        playerCenter.x + m_player.facing.x * 1.4f,
-        playerCenter.y + 0.2f,
-        playerCenter.z + m_player.facing.y * 1.4f
-    };
-    Geometory::AddLine({ playerCenter.x, playerCenter.y + 0.2f, playerCenter.z }, facingEnd, playerColor);
-
-    // 地図ピンをピンクの縦線で表示します。
-    for (const Vec2& pin : m_pins)
-    {
-        // ピン位置を地表の3D座標へ変換します。
-        const XMFLOAT3 base = ToWorld3D(pin, 0.0f, 0.05f);
-
-        // ピンの立っている位置をラインで示します。
-        Geometory::AddLine({ base.x, base.y, base.z }, { base.x, base.y + 1.6f, base.z }, pinColor);
-    }
 
     if (m_showCollisionDebug)
     {
@@ -1545,81 +2933,121 @@ void SceneNarakuProto::Draw3DField()
             }
         }
 
-        // セルの通行不可（Blocked）、崖端（CliffEdge）、危険地形（Hazard）、削除セル（Removed）の3D境界線の描画を追加
-        const XMFLOAT4 blockedColor = { 1.00f, 0.28f, 0.28f, 1.00f };
-        const XMFLOAT4 cliffColor = { 0.95f, 0.82f, 0.22f, 0.95f };
-        const XMFLOAT4 hazardColor = { 0.80f, 0.25f, 0.90f, 1.00f };
-        const XMFLOAT4 removedColor = { 0.95f, 0.10f, 0.90f, 0.98f };
-
-        for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
-        {
-            if (layer.gridWidth < 2 || layer.gridHeight < 2)
-            {
-                continue;
-            }
-
-            const XMFLOAT4 applyAlphaBlocked = applyGameplayLayerAlpha(layer, blockedColor);
-            const XMFLOAT4 applyAlphaCliff = applyGameplayLayerAlpha(layer, cliffColor);
-            const XMFLOAT4 applyAlphaHazard = applyGameplayLayerAlpha(layer, hazardColor);
-            const XMFLOAT4 applyAlphaRemoved = applyGameplayLayerAlpha(layer, removedColor);
-
-            for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
-            {
-                for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
-                {
-                    const std::uint32_t flags = NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ);
-                    if (flags == NarakuMap::CellAttributeNone)
-                    {
-                        continue;
-                    }
-
-                    XMFLOAT4 color = { 0.0f, 0.0f, 0.0f, 0.0f };
-                    bool drawDiagonal = false;
-
-                    if (flags & NarakuMap::CellAttributeRemoved)
-                    {
-                        color = applyAlphaRemoved;
-                        drawDiagonal = true;
-                    }
-                    else if (flags & NarakuMap::CellAttributeBlocked)
-                    {
-                        color = applyAlphaBlocked;
-                    }
-                    else if (flags & NarakuMap::CellAttributeCliffEdge)
-                    {
-                        color = applyAlphaCliff;
-                    }
-                    else if (flags & NarakuMap::CellAttributeHazard)
-                    {
-                        color = applyAlphaHazard;
-                    }
-                    else
-                    {
-                        continue;
-                    }
-
-                    const XMFLOAT3 a = GetTerrainVertexWorld3D(layer, cellX, cellZ, 0.04f);
-                    const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, 0.04f);
-                    const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, 0.04f);
-                    const XMFLOAT3 d = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ + 1, 0.04f);
-
-                    Geometory::AddLine(a, b, color);
-                    Geometory::AddLine(b, d, color);
-                    Geometory::AddLine(d, c, color);
-                    Geometory::AddLine(c, a, color);
-
-                    if (drawDiagonal)
-                    {
-                        Geometory::AddLine(a, d, color);
-                        Geometory::AddLine(b, c, color);
-                    }
-                }
-            }
-        }
     }
 
-    // ここまで積んだラインをまとめて描画します。
-    Geometory::DrawLines();
+    if (m_attackHitTexture != nullptr && !m_attackHitEffects.empty())
+    {
+        const XMMATRIX viewMatrix = XMMatrixTranspose(XMLoadFloat4x4(&view));
+        XMFLOAT4X4 billboardFloat = {};
+        XMStoreFloat4x4(&billboardFloat, XMMatrixInverse(nullptr, viewMatrix));
+        billboardFloat._41 = 0.0f;
+        billboardFloat._42 = 0.0f;
+        billboardFloat._43 = 0.0f;
+        const XMMATRIX billboard = XMLoadFloat4x4(&billboardFloat);
+
+        SetBlendMode(BLEND_ADDALPHA);
+        SetCullingMode(D3D11_CULL_NONE);
+        Sprite::SetVertexShader(nullptr);
+        Sprite::SetPixelShader(nullptr);
+        Sprite::SetTexture(m_attackHitTexture);
+        Sprite::SetSize({ 1.5f, 1.5f });
+        Sprite::SetOffset({ 0.0f, 0.0f });
+        Sprite::SetUVScale({ 1.0f / static_cast<float>(kAttackHitEffectFrameCount), 1.0f });
+        Sprite::SetColor({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+        for (const AttackHitEffect& effect : m_attackHitEffects)
+        {
+            const float elapsed = kAttackHitEffectDuration - effect.remainingTime;
+            const int frame = std::max(
+                0,
+                std::min(
+                    kAttackHitEffectFrameCount - 1,
+                    static_cast<int>(elapsed / kAttackHitEffectFrameTime)));
+            const XMFLOAT3 effectPosition = ToWorld3D(effect.pos, effect.depth, 0.65f);
+            XMFLOAT4X4 effectWorld = {};
+            XMStoreFloat4x4(
+                &effectWorld,
+                XMMatrixTranspose(
+                    billboard * XMMatrixTranslation(effectPosition.x, effectPosition.y, effectPosition.z)));
+            Sprite::SetWorld(effectWorld);
+            Sprite::SetUVPos({ static_cast<float>(frame) / static_cast<float>(kAttackHitEffectFrameCount), 0.0f });
+            Sprite::Draw();
+        }
+        SetBlendMode(BLEND_ALPHA);
+    }
+
+}
+
+void SceneNarakuProto::DrawCompass() const
+{
+    using namespace DirectX;
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImVec2 viewportMin = viewport->WorkPos;
+    const ImVec2 viewportMax(
+        viewport->WorkPos.x + viewport->WorkSize.x,
+        viewport->WorkPos.y + viewport->WorkSize.y);
+    const ImVec2 center(
+        viewportMax.x - kCompassMargin - kCompassRadius,
+        viewportMin.y + kCompassMargin + kCompassRadius);
+
+    ImDrawList* drawList = ImGui::GetForegroundDrawList();
+    drawList->PushClipRect(viewportMin, viewportMax, true);
+    drawList->AddCircle(center, kCompassRadius, IM_COL32(220, 230, 240, 220), 32, kCompassLineThickness);
+    drawList->AddCircleFilled(center, 2.5f, IM_COL32(220, 230, 240, 230));
+
+    const float cosPitch = std::cos(m_cameraPitch);
+    const XMVECTOR cameraForward = XMVectorSet(
+        -std::sin(m_cameraYaw) * cosPitch,
+        -std::sin(m_cameraPitch),
+        -std::cos(m_cameraYaw) * cosPitch,
+        0.0f);
+    const XMMATRIX view = XMMatrixLookToLH(
+        XMVectorZero(),
+        cameraForward,
+        XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+    const XMFLOAT3 worldDirections[] =
+    {
+        { 0.0f, 0.0f, -1.0f },
+        { 0.0f, 0.0f, 1.0f },
+        { 1.0f, 0.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f },
+    };
+
+    for (int index = 0; index < 4; ++index)
+    {
+        XMFLOAT3 viewDirection = {};
+        XMStoreFloat3(&viewDirection, XMVector3TransformNormal(XMLoadFloat3(&worldDirections[index]), view));
+        const float length = std::sqrt(
+            viewDirection.x * viewDirection.x +
+            viewDirection.y * viewDirection.y);
+        if (length <= 0.0001f)
+        {
+            continue;
+        }
+
+        const ImVec2 direction(viewDirection.x / length, -viewDirection.y / length);
+        const ImVec2 endpoint(
+            center.x + direction.x * (kCompassRadius - kCompassLinePadding),
+            center.y + direction.y * (kCompassRadius - kCompassLinePadding));
+        const ImU32 color = index == 0
+            ? IM_COL32(245, 95, 95, 230)
+            : IM_COL32(220, 230, 240, 220);
+        drawList->AddLine(center, endpoint, color, kCompassLineThickness);
+
+        const ImVec2 textSize = ImGui::CalcTextSize(kCompassDirectionLabels[index]);
+        const ImVec2 labelCenter(
+            center.x + direction.x * (kCompassRadius + kCompassLabelDistance),
+            center.y + direction.y * (kCompassRadius + kCompassLabelDistance));
+        ImVec2 textPosition(
+            labelCenter.x - textSize.x * 0.5f,
+            labelCenter.y - textSize.y * 0.5f);
+        textPosition.x = std::max(viewportMin.x, std::min(textPosition.x, viewportMax.x - textSize.x));
+        textPosition.y = std::max(viewportMin.y, std::min(textPosition.y, viewportMax.y - textSize.y));
+        drawList->AddText(textPosition, color, kCompassDirectionLabels[index]);
+    }
+
+    drawList->PopClipRect();
 }
 
 void SceneNarakuProto::DrawField()
@@ -1657,11 +3085,9 @@ void SceneNarakuProto::DrawField()
     // すべてのロープを描画します。
     for (const RopePoint& rope : m_ropePoints)
     {
-        // ロープ座標を斜め見下ろし座標へ変換します。
-        Vec2 p = WorldToObliqueCanvas(canvasPos, canvasSize, rope.pos, rope.topDepth);
-
-        // ロープを縦長の茶色い矩形で描きます。
-        draw->AddRectFilled(ImVec2(p.x - 4.0f, p.y - 12.0f), ImVec2(p.x + 4.0f, p.y + 12.0f), IM_COL32(170, 120, 70, 255));
+        const Vec2 top = WorldToObliqueCanvas(canvasPos, canvasSize, rope.topPos, rope.topDepth);
+        const Vec2 bottom = WorldToObliqueCanvas(canvasPos, canvasSize, rope.bottomPos, rope.bottomDepth);
+        draw->AddLine(ImVec2(top.x, top.y), ImVec2(bottom.x, bottom.y), IM_COL32(170, 120, 70, 255), 4.0f);
     }
 
     // 発見済み、または近くまで来た採掘ポイントを描画します。
@@ -1749,7 +3175,7 @@ void SceneNarakuProto::DrawField()
 
         float barWidth = 240.0f;
         float barHeight = 18.0f;
-        float progress = std::max(0.0f, std::min(1.0f, 1.0f - (m_miningTimer / kMiningTime)));
+        float progress = std::max(0.0f, std::min(1.0f, 1.0f - (m_miningTimer / m_miningDuration)));
 
         std::string text = u8"採掘中...";
         ImVec2 textSize = ImGui::CalcTextSize(text.c_str());
@@ -1774,71 +3200,32 @@ void SceneNarakuProto::DrawField()
 
 void SceneNarakuProto::DrawHud()
 {
-    // HUDウィンドウの初期位置を指定します。
-    ImGui::SetNextWindowPos(ImVec2(800.0f, 20.0f), ImGuiCond_FirstUseEver);
+    constexpr float overlayWidth = 280.0f;
+    constexpr float overlayHeight = 106.0f;
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImVec2 overlayPos(viewport->WorkPos.x + 16.0f, viewport->WorkPos.y + 16.0f);
+    ImGui::SetNextWindowPos(overlayPos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(overlayWidth, overlayHeight), ImGuiCond_Always);
 
-    // HUDウィンドウの初期サイズを指定します。
-    ImGui::SetNextWindowSize(ImVec2(430.0f, 620.0f), ImGuiCond_FirstUseEver);
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs;
 
-    // HUDウィンドウを開始します。
-    ImGui::Begin(u8"奈落塔プロト HUD");
-
-    // 地上で保持している所持金を表示します。
-    ImGui::Text(u8"所持金: %d", m_money);
-
-    // ステータスとログの間を区切ります。
-    ImGui::Separator();
-
-    // 体力の数値を表示します。
-    ImGui::Text(u8"体力: %.1f / 10", m_player.hp);
-
-    // 体力バーを表示します。
-    ImGui::ProgressBar(m_player.hp / 10.0f, ImVec2(-1.0f, 0.0f));
-
-    // 精神力の数値を表示します。
-    ImGui::Text(u8"精神力: %.1f / 100", m_player.mental);
-
-    // 精神力バーを表示します。
-    ImGui::ProgressBar(m_player.mental / 100.0f, ImVec2(-1.0f, 0.0f));
-
-    // スタミナの数値を表示します。
-    ImGui::Text(u8"スタミナ: %.1f / 100", m_player.stamina);
-
-    // スタミナバーを表示します。
-    ImGui::ProgressBar(m_player.stamina / 100.0f, ImVec2(-1.0f, 0.0f));
-
-    // 現在重量と通常最大重量を表示します。
-    ImGui::Text(u8"重量: %.1f / %.1f", GetCurrentWeight(), kMaxWeight);
-
-    // 150%まで拾える仕様なので、バーは150%を上限として正規化します。
-    ImGui::ProgressBar(std::min(1.5f, GetCurrentWeight() / kMaxWeight) / 1.5f, ImVec2(-1.0f, 0.0f));
-
-    // 現在深度を表示します。
-    ImGui::Text(u8"深度: %.2fm", m_player.depth);
-
-    // 上昇負荷ゲージを表示します。プロトでは内部確認用に見せています。
-    ImGui::Text(u8"上昇負荷: %.2f / %.2f", m_player.upperLoad, kUpperLoadLimit);
-
-    // 段差を踏み越えた時に落下へ移る高さを実行中に調整できるようにします。
-    ImGui::SliderFloat(u8"自動落下開始高さ", &m_autoFallStartHeight, 0.10f, 3.00f, "%.2fm");
-
-    // ロープ状態を表示します。
-    ImGui::Text(u8"ロープ: %s", m_player.onRope ? u8"使用中" : u8"未使用");
-
-    // 所持旧器数を表示します。
-    ImGui::Text(u8"所持旧器: %d", static_cast<int>(m_inventory.size()));
-
-    // ステータスとログの間を区切ります。
-    ImGui::Separator();
-
-    // 新しいログから最大7件だけ表示します。
-    for (int i = static_cast<int>(m_messages.size()) - 1; i >= 0 && i >= static_cast<int>(m_messages.size()) - 7; --i)
+    if (ImGui::Begin("PlayerStatusOverlay##Overlay", nullptr, flags))
     {
-        // 1件分のログを折り返しありで表示します。
-        ImGui::TextWrapped("%s", m_messages[i].c_str());
-    }
+        const auto drawGauge = [](float ratio, const char* label, const ImVec4& color)
+        {
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.04f, 0.05f, 0.05f, 0.88f));
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
+            ImGui::ProgressBar(std::max(0.0f, std::min(1.0f, ratio)), ImVec2(-1.0f, 18.0f), label);
+            ImGui::PopStyleColor(2);
+        };
 
-    // HUDウィンドウを閉じます。
+        drawGauge(m_player.hp / 10.0f, "HP", ImVec4(0.78f, 0.18f, 0.16f, 1.0f));
+        drawGauge(m_player.stamina / 100.0f, u8"スタミナ", ImVec4(0.18f, 0.68f, 0.36f, 1.0f));
+        drawGauge(m_player.mental / 100.0f, u8"精神力", ImVec4(0.22f, 0.48f, 0.82f, 1.0f));
+        drawGauge(m_player.upperLoad / kUpperLoadLimit, u8"上昇負荷 (Debug)", ImVec4(0.88f, 0.58f, 0.18f, 1.0f));
+    }
     ImGui::End();
 }
 
@@ -1856,6 +3243,21 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
     // 現在の重量補正を確認しながら調整できるよう、実効状態を先頭に表示します。
     ImGui::Text(u8"実効歩行速度: %.2f", GetMoveSpeed());
     ImGui::Text(u8"重量補正: %.0f%%", GetWeightRate() * 100.0f);
+    ImGui::Separator();
+
+    if (ImGui::Button(u8"調整値を保存"))
+    {
+        ClampDebugPlayerParams();
+        NormalizeCameraSettings();
+        ShowCenterNotification(SaveDebugPlayerParams()
+            ? u8"プレイテスト調整を保存しました。"
+            : u8"プレイテスト調整を保存できませんでした。");
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"初期値に戻す"))
+    {
+        ResetDebugPlayerParams();
+    }
     ImGui::Separator();
 
     // 調整値は毎フレームクランプされますが、UI操作直後にも即座に丸めます。
@@ -1891,25 +3293,12 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
         ImGui::SliderFloat(u8"上層レイヤー透明度", &m_debugPlayerParams.upperLayerAlpha, 0.0f, 0.30f, "%.2f");
     }
 
-    if (ImGui::Button(u8"初期値に戻す"))
+    if (ImGui::CollapsingHeader(u8"カメラ", ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ResetDebugPlayerParams();
-    }
-
-    if (ImGui::Button(u8"小ステージ3x3生成"))
-    {
-        std::string error;
-        const wchar_t* generatedMapPath = L"Assets/Maps/generated_naraku_map.json";
-        if (NarakuStageGenerator::GenerateFixed3x3Map(generatedMapPath, &error))
-        {
-            NarakuMap::SetCurrentMapPath(generatedMapPath);
-            ResetRun();
-            AddMessage("generated 3x3 naraku map");
-        }
-        else
-        {
-            AddMessage(error.empty() ? "failed to generate 3x3 naraku map" : error);
-        }
+        ImGui::SliderFloat(u8"仰角下限（真横=0度）", &m_cameraMinPitchDegrees, kCameraMinPitchDegrees, kCameraMaxPitchDegrees, "%.1f度");
+        ImGui::SliderFloat(u8"仰角上限（真上=90度）", &m_cameraMaxPitchDegrees, kCameraMinPitchDegrees, kCameraMaxPitchDegrees, "%.1f度");
+        ImGui::Text(u8"距離: %.2f / %.2f", m_cameraDistance, kCameraMaxDistance);
+        NormalizeCameraSettings();
     }
 
     ClampDebugPlayerParams();
@@ -1929,20 +3318,38 @@ void SceneNarakuProto::DrawInventory()
     // 所持品ウィンドウを開始します。
     ImGui::Begin(u8"所持品", nullptr, ImGuiWindowFlags_NoCollapse);
 
+    const float currentWeight = GetCurrentWeight();
+    const float maxWeight = GetMaxWeight();
+    ImGui::Text(u8"重量: %.0f / %.0f  %.0f%%", currentWeight, maxWeight, currentWeight / maxWeight * 100.0f);
+    ImGui::Separator();
+
     // 所持旧器を一覧表示します。
     for (int i = 0; i < static_cast<int>(m_inventory.size()); ++i)
     {
+        ImGui::PushID(i);
+
         // 表示対象の旧器を取得します。
         const RelicItem& item = m_inventory[i];
 
         // Selectableに渡す表示文字列を作ります。
         char label[128];
 
-        // 旧器名、重量、売値を1行にまとめます。
-        std::snprintf(label, sizeof(label), u8"%s  重量 %.0f  売値 %d", item.name.c_str(), item.weight, item.value);
+        // 未鑑定中は重量だけを見せ、売値は帰還鑑定まで伏せます。
+        const std::size_t typeIndex = static_cast<std::size_t>(item.type);
+        const bool identified = typeIndex < m_identifiedRelics.size() && m_identifiedRelics[typeIndex];
+        if (identified)
+        {
+            std::snprintf(label, sizeof(label), u8"%s  重量 %.0f  売値 %d", GetRelicDisplayName(item), item.weight, item.value);
+        }
+        else
+        {
+            std::snprintf(label, sizeof(label), u8"%s  重量 %.0f  売値 ?", GetRelicDisplayName(item), item.weight);
+        }
 
         // クリックされた旧器を選択状態にします。
         if (ImGui::Selectable(label, m_selectedInventory == i)) m_selectedInventory = i;
+
+        ImGui::PopID();
     }
 
     // 有効な旧器が選ばれている時だけ捨てるボタンを出します。
@@ -1959,6 +3366,13 @@ void SceneNarakuProto::DrawInventory()
         }
     }
 
+    ImGui::Separator();
+    ImGui::Text(u8"食料: %d（重量 %d）", m_foodCount, m_foodCount);
+    if (m_foodCount > 0 && m_player.hp < 10.0f && ImGui::Button(u8"食料を使う（HP+2）"))
+    {
+        UseFood();
+    }
+
     // タブ切り替えは今後の実装予定として表示だけ残します。
     ImGui::Text(u8"Q/Eのタブ切り替えは後で実装します。現在は地図ピン用ウィンドウを使います。");
 
@@ -1968,8 +3382,12 @@ void SceneNarakuProto::DrawInventory()
 
 void SceneNarakuProto::DrawRelicPrompt()
 {
-    // 旧器確認ウィンドウは毎回画面中央付近に固定します。
-    ImGui::SetNextWindowPos(ImVec2(420.0f, 220.0f), ImGuiCond_Always);
+    // メインウィンドウの作業領域中央へ、確認ウィンドウ自身の中央を合わせます。
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImVec2 center(
+        viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+        viewport->WorkPos.y + viewport->WorkSize.y * 0.5f);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
     // 旧器確認ウィンドウのサイズを固定します。
     ImGui::SetNextWindowSize(ImVec2(420.0f, 180.0f), ImGuiCond_Always);
@@ -1978,16 +3396,16 @@ void SceneNarakuProto::DrawRelicPrompt()
     ImGui::Begin(u8"旧器を発見", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
 
     // 発見した旧器名を表示します。
-    ImGui::Text(u8"%s を発見", m_pendingRelic.name.c_str());
+    ImGui::Text(u8"%s を発見", GetRelicDisplayName(m_pendingRelic));
 
     // 発見した旧器の重量を表示します。
     ImGui::Text(u8"重量: %.0f", m_pendingRelic.weight);
 
     // 拾った後の総重量を表示します。
-    ImGui::Text(u8"拾得後重量: %.0f / 150", GetCurrentWeight() + m_pendingRelic.weight);
+    ImGui::Text(u8"拾得後重量: %.0f / %.0f", GetCurrentWeight() + m_pendingRelic.weight, GetPickupWeightLimit());
 
     // 150%上限を超えない場合だけ拾うボタンを出します。
-    if (GetCurrentWeight() + m_pendingRelic.weight <= kPickupWeightLimit)
+    if (GetCurrentWeight() + m_pendingRelic.weight <= GetPickupWeightLimit())
     {
         // 旧器を所持品に入れます。
         if (ImGui::Button(u8"拾う"))
@@ -2032,48 +3450,253 @@ void SceneNarakuProto::DrawRelicPrompt()
 
 void SceneNarakuProto::DrawResult()
 {
-    // リザルトウィンドウは毎回画面中央付近に固定します。
     ImGui::SetNextWindowPos(ImVec2(390.0f, 160.0f), ImGuiCond_Always);
-
-    // リザルトウィンドウのサイズを固定します。
-    ImGui::SetNextWindowSize(ImVec2(480.0f, 300.0f), ImGuiCond_Always);
-
-    // 死亡と帰還でウィンドウタイトルを切り替えます。
+    ImGui::SetNextWindowSize(ImVec2(540.0f, 360.0f), ImGuiCond_Always);
     ImGui::Begin(m_mode == Mode::DeathResult ? u8"死亡リザルト" : u8"帰還リザルト", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-
-    // 帰還理由または死亡理由を表示します。
     ImGui::Text(u8"結果: %s", m_result.reason.c_str());
-
-    // 最大到達深度を表示します。
     ImGui::Text(u8"最大深度: %.2fm", m_result.maxDepth);
+    ImGui::Text(u8"採掘した遺物: %d", m_result.minedCount);
+    ImGui::Separator();
 
-    // 採掘数を表示します。
-    ImGui::Text(u8"採掘した旧器: %d", m_result.minedCount);
-
-    // 帰還リザルトなら売却情報を表示します。
     if (m_mode == Mode::ReturnResult)
     {
-        // 持ち帰った旧器数を表示します。
-        ImGui::Text(u8"持ち帰った旧器: %d", m_result.carriedRelics);
-
-        // 売却額を表示します。
-        ImGui::Text(u8"売却額: %d", m_result.saleAmount);
-
-        // 売却して次の潜行へ進むボタンです。
-        if (ImGui::Button(u8"すべて売却して再潜行")) SellAllAndRestart();
+        ImGui::Text(u8"持ち帰った遺物: %d", m_result.carriedRelics);
+        ImGui::Text(u8"今回初めて鑑定した種類: %d", m_result.identifiedRelics);
+        ImGui::Text(u8"遺物の売却見込額: %d", m_result.saleAmount);
+        ImGui::Spacing();
+        if (ImGui::Button(u8"商店へ", ImVec2(120.0f, 0.0f))) m_mode = Mode::GeneralShop;
+        ImGui::SameLine();
+        if (ImGui::Button(u8"武具屋へ", ImVec2(120.0f, 0.0f))) m_mode = Mode::Armory;
+        ImGui::SameLine();
+        if (ImGui::Button(u8"自宅へ", ImVec2(120.0f, 0.0f))) m_mode = Mode::Home;
+        if (ImGui::Button(u8"持ち込みなしですぐに再潜行", ImVec2(372.0f, 0.0f)))
+        {
+            m_loadoutFoodCount = 0;
+            m_loadoutRelics.fill(0);
+            StartDive();
+        }
     }
-
-    // 死亡リザルトならロスト情報を表示します。
     else
     {
-        // 失った旧器数を表示します。
-        ImGui::Text(u8"失った旧器: %d", m_result.lostRelics);
-
-        // 再挑戦ボタンです。
+        ImGui::Text(u8"失った遺物: %d", m_result.lostRelics);
         if (ImGui::Button(u8"再挑戦")) RestartAfterDeath();
+        ImGui::SameLine();
+        if (ImGui::Button(u8"自宅へ")) m_mode = Mode::Home;
+    }
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawReturnConfirm()
+{
+    ImGui::SetNextWindowPos(ImVec2(460.0f, 230.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(400.0f, 170.0f), ImGuiCond_Always);
+    ImGui::Begin(u8"帰還確認", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+    ImGui::TextWrapped(u8"現在の持ち物を持って帰還します。帰還後、未鑑定の遺物は自動で鑑定されます。");
+    if (ImGui::Button(u8"帰還する", ImVec2(130.0f, 0.0f))) FinishReturn();
+    ImGui::SameLine();
+    if (ImGui::Button(u8"探索を続ける", ImVec2(130.0f, 0.0f))) m_mode = Mode::Explore;
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawHome()
+{
+    ImGui::SetNextWindowPos(ImVec2(230.0f, 60.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(760.0f, 700.0f), ImGuiCond_FirstUseEver);
+    ImGui::Begin(u8"自宅 - 潜行準備", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Text(u8"所持金: %d", m_money);
+    ImGui::Separator();
+
+    ImGui::Text(u8"頭装備");
+    for (std::size_t i = 0; i < m_ownedHeadArmor.size(); ++i)
+    {
+        if (!m_ownedHeadArmor[i]) continue;
+        const ArmorTier tier = static_cast<ArmorTier>(i);
+        ImGui::PushID(static_cast<int>(i));
+        if (ImGui::RadioButton(GetArmorName(tier), m_equippedHeadArmor == tier)) m_equippedHeadArmor = tier;
+        ImGui::PopID();
     }
 
-    // リザルトウィンドウを閉じます。
+    ImGui::Text(u8"胴装備");
+    for (std::size_t i = 0; i < m_ownedBodyArmor.size(); ++i)
+    {
+        if (!m_ownedBodyArmor[i]) continue;
+        const ArmorTier tier = static_cast<ArmorTier>(i);
+        ImGui::PushID(100 + static_cast<int>(i));
+        if (ImGui::RadioButton(GetArmorName(tier), m_equippedBodyArmor == tier)) m_equippedBodyArmor = tier;
+        ImGui::PopID();
+    }
+
+    ImGui::Text(u8"武器");
+    for (std::size_t i = 0; i < m_ownedWeapons.size(); ++i)
+    {
+        if (!m_ownedWeapons[i]) continue;
+        const WeaponTier tier = static_cast<WeaponTier>(i);
+        ImGui::PushID(200 + static_cast<int>(i));
+        if (ImGui::RadioButton(GetWeaponName(tier), m_equippedWeapon == tier)) m_equippedWeapon = tier;
+        ImGui::SameLine();
+        ImGui::TextDisabled(u8"採掘速度 %.0f%%", (tier == WeaponTier::RustyPickaxe ? 1.0f : tier == WeaponTier::NormalPickaxe ? 1.35f : tier == WeaponTier::SturdyPickaxe ? 1.80f : tier == WeaponTier::SharpPickaxe ? 2.0f : 2.5f) * 100.0f);
+        ImGui::PopID();
+    }
+
+    ImGui::Separator();
+    ImGui::Text(u8"次回の持ち込み");
+    ImGui::Text(u8"食料  保管:%d  持込:%d", m_storedFoodCount, m_loadoutFoodCount);
+    ImGui::SameLine();
+    if (ImGui::SmallButton(u8"-##food")) m_loadoutFoodCount = std::max(0, m_loadoutFoodCount - 1);
+    ImGui::SameLine();
+    if (ImGui::SmallButton(u8"+##food")) m_loadoutFoodCount = std::min(m_storedFoodCount, m_loadoutFoodCount + 1);
+
+    float loadoutWeight = 10.0f + static_cast<float>(m_loadoutFoodCount);
+    for (std::size_t i = 0; i < m_storedRelics.size(); ++i)
+    {
+        const RelicType type = static_cast<RelicType>(i);
+        loadoutWeight += GetRelicWeight(type) * static_cast<float>(m_loadoutRelics[i]);
+        ImGui::PushID(300 + static_cast<int>(i));
+        ImGui::Text(u8"%s  保管:%d  持込:%d", GetRelicTypeName(type), m_storedRelics[i], m_loadoutRelics[i]);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("-")) m_loadoutRelics[i] = std::max(0, m_loadoutRelics[i] - 1);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("+")) m_loadoutRelics[i] = std::min(m_storedRelics[i], m_loadoutRelics[i] + 1);
+        ImGui::PopID();
+    }
+    const float maxWeight = GetMaxWeight();
+    ImGui::Text(u8"開始重量: %.0f / %.0f", loadoutWeight, maxWeight);
+    if (loadoutWeight > maxWeight) ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.30f, 1.0f), u8"持ち込み重量を%.0f以下にしてください。", maxWeight);
+
+    if (ImGui::Button(u8"潜行開始", ImVec2(160.0f, 0.0f)) && loadoutWeight <= maxWeight) StartDive();
+    ImGui::SameLine();
+    if (ImGui::Button(u8"商店", ImVec2(100.0f, 0.0f))) m_mode = Mode::GeneralShop;
+    ImGui::SameLine();
+    if (ImGui::Button(u8"武具屋", ImVec2(100.0f, 0.0f))) m_mode = Mode::Armory;
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawGeneralShop()
+{
+    ImGui::SetNextWindowPos(ImVec2(300.0f, 90.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(680.0f, 620.0f), ImGuiCond_FirstUseEver);
+    ImGui::Begin(u8"商店", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Text(u8"所持金: %d", m_money);
+    ImGui::Separator();
+    ImGui::Text(u8"購入");
+    if (ImGui::Button(u8"食料を購入  5G（重量1 / HP+2）") && m_money >= 5) { m_money -= 5; ++m_storedFoodCount; }
+
+    const RelicType shopTypes[] = { RelicType::ArmamentUpgrade, RelicType::WeaponUpgrade, RelicType::ArmorUpgrade };
+    const int shopPrices[] = { 30, 35, 35 };
+    for (int i = 0; i < 3; ++i)
+    {
+        ImGui::PushID(i);
+        char label[160];
+        std::snprintf(label, sizeof(label), u8"%sを購入  %dG", GetRelicTypeName(shopTypes[i]), shopPrices[i]);
+        if (ImGui::Button(label) && m_money >= shopPrices[i])
+        {
+            m_money -= shopPrices[i];
+            const std::size_t typeIndex = static_cast<std::size_t>(shopTypes[i]);
+            ++m_storedRelics[typeIndex];
+            m_identifiedRelics[typeIndex] = true;
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::Separator();
+    ImGui::Text(u8"遺物売却");
+    bool hasSellableRelic = false;
+    for (std::size_t i = 0; i < m_storedRelics.size(); ++i)
+    {
+        if (m_storedRelics[i] <= 0) continue;
+
+        hasSellableRelic = true;
+        const RelicType type = static_cast<RelicType>(i);
+        ImGui::PushID(100 + static_cast<int>(i));
+        ImGui::Text(u8"%s  %d個  1個%dG", GetRelicTypeName(type), m_storedRelics[i], GetRelicSellValue(type));
+        ImGui::SameLine();
+        if (ImGui::SmallButton(u8"1個売却"))
+        {
+            --m_storedRelics[i];
+            m_money += GetRelicSellValue(type);
+            m_loadoutRelics[i] = std::min(m_loadoutRelics[i], m_storedRelics[i]);
+        }
+        ImGui::PopID();
+    }
+    if (!hasSellableRelic) ImGui::TextDisabled(u8"売却できる遺物はありません。");
+    ImGui::TextDisabled(u8"食料は売却できません。");
+    ImGui::Separator();
+    if (ImGui::Button(u8"自宅へ")) m_mode = Mode::Home;
+    ImGui::SameLine();
+    if (ImGui::Button(u8"武具屋へ")) m_mode = Mode::Armory;
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawArmory()
+{
+    static const int armorDiscountPrices[][2] = { { 10, 15 }, { 15, 20 }, { 20, 30 }, { 25, 35 }, { 35, 40 }, { 50, 60 } };
+    static const int armorMoneyPrices[][2] = { { 10, 15 }, { 30, 40 }, { 40, 60 }, { 50, 70 }, { 70, 80 }, { 100, 120 } };
+    static const int armorArmamentCosts[] = { 0, 0, 1, 2, 2, 3 };
+    static const int armorMaterialCosts[] = { 0, 0, 1, 1, 2, 5 };
+    static const int weaponDiscountPrices[] = { 5, 10, 25, 50, 150 };
+    static const int weaponMoneyPrices[] = { 5, 10, 25, 50, 400 };
+    static const int weaponArmamentCosts[] = { 0, 0, 0, 0, 2 };
+    static const int weaponMaterialCosts[] = { 0, 0, 0, 0, 3 };
+
+    ImGui::SetNextWindowPos(ImVec2(220.0f, 50.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(900.0f, 720.0f), ImGuiCond_FirstUseEver);
+    ImGui::Begin(u8"武具屋", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Text(u8"所持金: %d", m_money);
+    ImGui::Text(u8"素材  武具:%d  武器:%d  装備:%d",
+        m_storedRelics[static_cast<std::size_t>(RelicType::ArmamentUpgrade)],
+        m_storedRelics[static_cast<std::size_t>(RelicType::WeaponUpgrade)],
+        m_storedRelics[static_cast<std::size_t>(RelicType::ArmorUpgrade)]);
+    ImGui::Separator();
+
+    ImGui::Text(u8"頭・胴装備");
+    for (std::size_t i = 0; i < static_cast<std::size_t>(ArmorTier::Count); ++i)
+    {
+        const ArmorTier tier = static_cast<ArmorTier>(i);
+        ImGui::PushID(static_cast<int>(i));
+        ImGui::Text(u8"%s", GetArmorName(tier));
+        ImGui::TextDisabled(u8"割引 頭%dG/胴%dG（武具%d・装備%d）  金のみ 頭%dG/胴%dG",
+            armorDiscountPrices[i][0], armorDiscountPrices[i][1], armorArmamentCosts[i], armorMaterialCosts[i],
+            armorMoneyPrices[i][0], armorMoneyPrices[i][1]);
+        if (m_ownedHeadArmor[i]) ImGui::TextDisabled(u8"頭:所有済み");
+        else
+        {
+            if (ImGui::SmallButton(u8"頭 割引購入")) TryBuyArmor(tier, true, true);
+            ImGui::SameLine();
+            if (ImGui::SmallButton(u8"頭 金のみ")) TryBuyArmor(tier, true, false);
+        }
+        if (m_ownedBodyArmor[i]) ImGui::TextDisabled(u8"胴:所有済み");
+        else
+        {
+            if (ImGui::SmallButton(u8"胴 割引購入")) TryBuyArmor(tier, false, true);
+            ImGui::SameLine();
+            if (ImGui::SmallButton(u8"胴 金のみ")) TryBuyArmor(tier, false, false);
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::Separator();
+    ImGui::Text(u8"武器");
+    for (std::size_t i = 0; i < static_cast<std::size_t>(WeaponTier::Count); ++i)
+    {
+        const WeaponTier tier = static_cast<WeaponTier>(i);
+        ImGui::PushID(100 + static_cast<int>(i));
+        ImGui::Text(u8"%s", GetWeaponName(tier));
+        ImGui::TextDisabled(u8"割引 %dG（武具%d・武器%d）  金のみ %dG",
+            weaponDiscountPrices[i], weaponArmamentCosts[i], weaponMaterialCosts[i], weaponMoneyPrices[i]);
+        if (m_ownedWeapons[i]) ImGui::TextDisabled(u8"所有済み");
+        else
+        {
+            if (ImGui::SmallButton(u8"割引購入")) TryBuyWeapon(tier, true);
+            ImGui::SameLine();
+            if (ImGui::SmallButton(u8"金のみで購入")) TryBuyWeapon(tier, false);
+        }
+        ImGui::PopID();
+    }
+
+    ImGui::Separator();
+    if (ImGui::Button(u8"自宅へ")) m_mode = Mode::Home;
+    ImGui::SameLine();
+    if (ImGui::Button(u8"商店へ")) m_mode = Mode::GeneralShop;
     ImGui::End();
 }
 
@@ -2104,17 +3727,18 @@ void SceneNarakuProto::DrawMapControls()
     if (ImGui::Button("Reset"))
     {
         m_mapZoom = 2.0f;
+        m_mapScrollOffset = { 0.0f, 0.0f };
     }
 
     // ミニマップ描画領域の左上座標を取得します。
     Vec2 canvasPos = { ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y };
 
     // ミニマップ描画領域のサイズを決めます。
-    Vec2 canvasSize = { ImGui::GetContentRegionAvail().x, 260.0f };
+    Vec2 canvasSize = { ImGui::GetContentRegionAvail().x, 460.0f };
 
     // ImGuiの直接描画リストを取得します。
     ImDrawList* draw = ImGui::GetWindowDrawList();
-    const Vec2 mapFocus = m_player.pos;
+    const Vec2 mapFocus = { m_player.pos.x + m_mapScrollOffset.x, m_player.pos.y + m_mapScrollOffset.y };
 
     // ミニマップ背景を塗ります。
     draw->AddRectFilled(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y), IM_COL32(24, 28, 28, 255));
@@ -2205,6 +3829,32 @@ void SceneNarakuProto::DrawMapControls()
     // マウスがミニマップ領域内にあるか調べます。
     bool hovered = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(ImVec2(canvasPos.x, canvasPos.y), ImVec2(canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y));
 
+    // 右クリックの長押しドラッグによるマップ移動
+    static bool s_isDraggingMap = false;
+    if (ImGui::IsMouseClicked(1) && hovered)
+    {
+        s_isDraggingMap = true;
+    }
+    if (!ImGui::IsMouseDown(1))
+    {
+        s_isDraggingMap = false;
+    }
+
+    if (s_isDraggingMap)
+    {
+        ImVec2 delta = ImGui::GetIO().MouseDelta;
+        if (delta.x != 0.0f || delta.y != 0.0f)
+        {
+            float scaleX = (canvasSize.x / (m_worldHalfSize * 2.0f)) * m_mapZoom;
+            float scaleY = (canvasSize.y / (m_worldHalfSize * 2.0f)) * m_mapZoom;
+            if (std::fabs(scaleX) > 0.001f && std::fabs(scaleY) > 0.001f)
+            {
+                m_mapScrollOffset.x -= delta.x / scaleX;
+                m_mapScrollOffset.y += delta.y / scaleY;
+            }
+        }
+    }
+
     // マウスホイールによるスクロール拡縮
     if (hovered)
     {
@@ -2215,8 +3865,8 @@ void SceneNarakuProto::DrawMapControls()
         }
     }
 
-    // ミニマップ上で右クリックされたらピン設置/削除を行います。
-    if (hovered && IsMouseRightTrigger())
+    // ミニマップ上で左クリックされたらピン設置/削除を行います。
+    if (hovered && ImGui::IsMouseClicked(0))
     {
         // 現在のマウス座標を取得します。
         ImVec2 mouse = ImGui::GetIO().MousePos;
@@ -2229,7 +3879,7 @@ void SceneNarakuProto::DrawMapControls()
     ImGui::Dummy(ImVec2(canvasSize.x, canvasSize.y));
 
     // ピン操作説明を表示します。
-    ImGui::Text(u8"右クリック: ピン設置/削除   ホイール: 拡大縮小");
+    ImGui::Text(u8"右ドラッグ: マップ移動   左クリック: ピン設置/削除   ホイール: 拡大縮小");
 
     // マップピンウィンドウを閉じます。
     ImGui::End();
@@ -2250,6 +3900,76 @@ void SceneNarakuProto::ResetDebugPlayerParams()
     m_debugPlayerParams.jumpCost = 5.0f;
     m_debugPlayerParams.staminaRecoverPerSecond = 2.0f;
     m_debugPlayerParams.upperLayerAlpha = 0.06f;
+    m_cameraDistance = kCameraDefaultDistance;
+    m_cameraMinPitchDegrees = kCameraDefaultMinPitchDegrees;
+    m_cameraMaxPitchDegrees = kCameraDefaultMaxPitchDegrees;
+    NormalizeCameraSettings();
+}
+
+bool SceneNarakuProto::LoadDebugPlayerParams()
+{
+    std::ifstream stream(kPlaytestConfigPath, std::ios::binary);
+    if (!stream)
+    {
+        return false;
+    }
+    std::ostringstream buffer;
+    buffer << stream.rdbuf();
+    const std::string json = buffer.str();
+
+    TryReadJsonFloat(json, "walkSpeed", m_debugPlayerParams.walkSpeed);
+    TryReadJsonFloat(json, "runSpeed", m_debugPlayerParams.runSpeed);
+    TryReadJsonFloat(json, "ropeSpeed", m_debugPlayerParams.ropeSpeed);
+    TryReadJsonFloat(json, "attackPower", m_debugPlayerParams.attackPower);
+    TryReadJsonFloat(json, "runCostPerSecond", m_debugPlayerParams.runCostPerSecond);
+    TryReadJsonFloat(json, "ropeCostPerSecond", m_debugPlayerParams.ropeCostPerSecond);
+    TryReadJsonFloat(json, "attackCost", m_debugPlayerParams.attackCost);
+    TryReadJsonFloat(json, "miningCost", m_debugPlayerParams.miningCost);
+    TryReadJsonFloat(json, "stepCost", m_debugPlayerParams.stepCost);
+    TryReadJsonFloat(json, "jumpCost", m_debugPlayerParams.jumpCost);
+    TryReadJsonFloat(json, "staminaRecoverPerSecond", m_debugPlayerParams.staminaRecoverPerSecond);
+    TryReadJsonFloat(json, "upperLayerAlpha", m_debugPlayerParams.upperLayerAlpha);
+    TryReadJsonFloat(json, "minimapPosX", m_debugPlayerParams.minimapPosX);
+    TryReadJsonFloat(json, "minimapPosY", m_debugPlayerParams.minimapPosY);
+    TryReadJsonFloat(json, "minimapSize", m_debugPlayerParams.minimapSize);
+    TryReadJsonFloat(json, "showMinimap", m_debugPlayerParams.showMinimap);
+    TryReadJsonFloat(json, "cameraDistance", m_cameraDistance);
+    TryReadJsonFloat(json, "cameraMinPitchDegrees", m_cameraMinPitchDegrees);
+    TryReadJsonFloat(json, "cameraMaxPitchDegrees", m_cameraMaxPitchDegrees);
+    ClampDebugPlayerParams();
+    NormalizeCameraSettings();
+    return true;
+}
+
+bool SceneNarakuProto::SaveDebugPlayerParams() const
+{
+    std::ofstream stream(kPlaytestConfigPath, std::ios::binary | std::ios::trunc);
+    if (!stream)
+    {
+        return false;
+    }
+    stream << "{\n"
+        << "  \"walkSpeed\": " << m_debugPlayerParams.walkSpeed << ",\n"
+        << "  \"runSpeed\": " << m_debugPlayerParams.runSpeed << ",\n"
+        << "  \"ropeSpeed\": " << m_debugPlayerParams.ropeSpeed << ",\n"
+        << "  \"attackPower\": " << m_debugPlayerParams.attackPower << ",\n"
+        << "  \"runCostPerSecond\": " << m_debugPlayerParams.runCostPerSecond << ",\n"
+        << "  \"ropeCostPerSecond\": " << m_debugPlayerParams.ropeCostPerSecond << ",\n"
+        << "  \"attackCost\": " << m_debugPlayerParams.attackCost << ",\n"
+        << "  \"miningCost\": " << m_debugPlayerParams.miningCost << ",\n"
+        << "  \"stepCost\": " << m_debugPlayerParams.stepCost << ",\n"
+        << "  \"jumpCost\": " << m_debugPlayerParams.jumpCost << ",\n"
+        << "  \"staminaRecoverPerSecond\": " << m_debugPlayerParams.staminaRecoverPerSecond << ",\n"
+        << "  \"upperLayerAlpha\": " << m_debugPlayerParams.upperLayerAlpha << ",\n"
+        << "  \"minimapPosX\": " << m_debugPlayerParams.minimapPosX << ",\n"
+        << "  \"minimapPosY\": " << m_debugPlayerParams.minimapPosY << ",\n"
+        << "  \"minimapSize\": " << m_debugPlayerParams.minimapSize << ",\n"
+        << "  \"showMinimap\": " << m_debugPlayerParams.showMinimap << ",\n"
+        << "  \"cameraDistance\": " << m_cameraDistance << ",\n"
+        << "  \"cameraMinPitchDegrees\": " << m_cameraMinPitchDegrees << ",\n"
+        << "  \"cameraMaxPitchDegrees\": " << m_cameraMaxPitchDegrees << "\n"
+        << "}\n";
+    return stream.good();
 }
 
 void SceneNarakuProto::ClampDebugPlayerParams()
@@ -2269,6 +3989,203 @@ void SceneNarakuProto::ClampDebugPlayerParams()
     m_debugPlayerParams.upperLayerAlpha = std::max(0.0f, std::min(m_debugPlayerParams.upperLayerAlpha, 0.30f));
 }
 
+float SceneNarakuProto::GetMiningSpeedMultiplier() const
+{
+    switch (m_equippedWeapon)
+    {
+    case WeaponTier::NormalPickaxe: return 1.35f;
+    case WeaponTier::SturdyPickaxe: return 1.80f;
+    case WeaponTier::SharpPickaxe: return 2.00f;
+    case WeaponTier::RelicPickaxe: return 2.50f;
+    default: return 1.00f;
+    }
+}
+
+const char* SceneNarakuProto::GetRelicTypeName(RelicType type) const
+{
+    switch (type)
+    {
+    case RelicType::ArmamentUpgrade: return u8"武具強化遺物";
+    case RelicType::WeaponUpgrade: return u8"武器強化遺物";
+    case RelicType::ArmorUpgrade: return u8"装備強化遺物";
+    case RelicType::Offensive: return u8"攻撃的遺物";
+    case RelicType::Survival: return u8"生存的遺物";
+    case RelicType::Cash: return u8"換金用遺物";
+    case RelicType::MentalRecovery: return u8"精神力回復遺物";
+    default: return u8"不明な遺物";
+    }
+}
+
+const char* SceneNarakuProto::GetRelicDisplayName(const RelicItem& item) const
+{
+    const std::size_t index = static_cast<std::size_t>(item.type);
+    return index < m_identifiedRelics.size() && m_identifiedRelics[index]
+        ? GetRelicTypeName(item.type)
+        : u8"未鑑定の遺物";
+}
+
+float SceneNarakuProto::GetRelicWeight(RelicType type) const
+{
+    switch (type)
+    {
+    case RelicType::ArmamentUpgrade:
+    case RelicType::WeaponUpgrade:
+    case RelicType::ArmorUpgrade: return 5.0f;
+    case RelicType::Offensive: return 8.0f;
+    case RelicType::Survival: return 3.0f;
+    case RelicType::Cash: return 10.0f;
+    case RelicType::MentalRecovery: return 2.0f;
+    default: return 0.0f;
+    }
+}
+
+int SceneNarakuProto::GetRelicSellValue(RelicType type) const
+{
+    switch (type)
+    {
+    case RelicType::ArmamentUpgrade: return 10;
+    case RelicType::WeaponUpgrade:
+    case RelicType::ArmorUpgrade: return 15;
+    case RelicType::Offensive: return 50;
+    case RelicType::Survival: return 60;
+    case RelicType::Cash: return 30;
+    case RelicType::MentalRecovery: return 5;
+    default: return 0;
+    }
+}
+
+SceneNarakuProto::RelicItem SceneNarakuProto::CreateRelic(RelicType type, const std::string& sourceName) const
+{
+    RelicItem item;
+    item.name = sourceName;
+    item.type = type;
+    item.weight = GetRelicWeight(type);
+    item.value = GetRelicSellValue(type);
+    return item;
+}
+
+SceneNarakuProto::RelicItem SceneNarakuProto::CreateRandomRelic(const std::string& sourceName) const
+{
+    static std::mt19937 randomEngine(std::random_device{}());
+    static std::uniform_int_distribution<int> distribution(0, static_cast<int>(RelicType::Count) - 1);
+    return CreateRelic(static_cast<RelicType>(distribution(randomEngine)), sourceName);
+}
+
+void SceneNarakuProto::UseFood()
+{
+    if (m_foodCount <= 0)
+    {
+        AddMessage(u8"食料を持っていません。");
+        ShowCenterNotification(u8"食料がない！");
+        return;
+    }
+    if (m_player.hp >= 10.0f)
+    {
+        AddMessage(u8"体力が満タンのため食料を使いませんでした。");
+        return;
+    }
+    --m_foodCount;
+    m_player.hp = std::min(10.0f, m_player.hp + 2.0f);
+    AddMessage(u8"食料を使い、体力を2回復しました。");
+}
+
+const char* SceneNarakuProto::GetArmorName(ArmorTier tier) const
+{
+    switch (tier)
+    {
+    case ArmorTier::Leather: return u8"革装備";
+    case ArmorTier::Iron: return u8"鉄装備";
+    case ArmorTier::RelicCovered: return u8"遺物で覆われたシリーズ";
+    case ArmorTier::RelicHardened: return u8"遺物で固めたシリーズ";
+    case ArmorTier::RelicEnhanced: return u8"遺物で強化されたシリーズ";
+    case ArmorTier::Relic: return u8"遺物装備";
+    default: return u8"不明な装備";
+    }
+}
+
+bool SceneNarakuProto::HasRelicArmorSetEffect() const
+{
+    return m_equippedHeadArmor == ArmorTier::Relic &&
+        m_equippedBodyArmor == ArmorTier::Relic;
+}
+
+const char* SceneNarakuProto::GetWeaponName(WeaponTier tier) const
+{
+    switch (tier)
+    {
+    case WeaponTier::RustyPickaxe: return u8"錆びれたつるはし";
+    case WeaponTier::NormalPickaxe: return u8"普通のつるはし";
+    case WeaponTier::SturdyPickaxe: return u8"丈夫なつるはし";
+    case WeaponTier::SharpPickaxe: return u8"鋭利なつるはし";
+    case WeaponTier::RelicPickaxe: return u8"遺物付きのつるはし";
+    default: return u8"不明な武器";
+    }
+}
+
+bool SceneNarakuProto::TryBuyArmor(ArmorTier tier, bool headSlot, bool useMaterials)
+{
+    static const int materialPrices[][2] = { { 10, 15 }, { 15, 20 }, { 20, 30 }, { 25, 35 }, { 35, 40 }, { 50, 60 } };
+    static const int moneyPrices[][2] = { { 10, 15 }, { 30, 40 }, { 40, 60 }, { 50, 70 }, { 70, 80 }, { 100, 120 } };
+    static const int armamentCosts[] = { 0, 0, 1, 2, 2, 3 };
+    static const int armorCosts[] = { 0, 0, 1, 1, 2, 5 };
+    const std::size_t tierIndex = static_cast<std::size_t>(tier);
+    const int slotIndex = headSlot ? 0 : 1;
+    std::array<bool, static_cast<std::size_t>(ArmorTier::Count)>& owned = headSlot ? m_ownedHeadArmor : m_ownedBodyArmor;
+    if (owned[tierIndex]) return false;
+
+    const int price = useMaterials ? materialPrices[tierIndex][slotIndex] : moneyPrices[tierIndex][slotIndex];
+    const std::size_t armamentIndex = static_cast<std::size_t>(RelicType::ArmamentUpgrade);
+    const std::size_t armorIndex = static_cast<std::size_t>(RelicType::ArmorUpgrade);
+    if (m_money < price || (useMaterials && (m_storedRelics[armamentIndex] < armamentCosts[tierIndex] || m_storedRelics[armorIndex] < armorCosts[tierIndex])))
+    {
+        AddMessage(u8"購入に必要な金額または遺物が不足しています。");
+        return false;
+    }
+
+    m_money -= price;
+    if (useMaterials)
+    {
+        m_storedRelics[armamentIndex] -= armamentCosts[tierIndex];
+        m_storedRelics[armorIndex] -= armorCosts[tierIndex];
+        m_loadoutRelics[armamentIndex] = std::min(m_loadoutRelics[armamentIndex], m_storedRelics[armamentIndex]);
+        m_loadoutRelics[armorIndex] = std::min(m_loadoutRelics[armorIndex], m_storedRelics[armorIndex]);
+    }
+    owned[tierIndex] = true;
+    AddMessage(u8"装備を購入しました。");
+    return true;
+}
+
+bool SceneNarakuProto::TryBuyWeapon(WeaponTier tier, bool useMaterials)
+{
+    static const int materialPrices[] = { 5, 10, 25, 50, 150 };
+    static const int moneyPrices[] = { 5, 10, 25, 50, 400 };
+    static const int armamentCosts[] = { 0, 0, 0, 0, 2 };
+    static const int weaponCosts[] = { 0, 0, 0, 0, 3 };
+    const std::size_t tierIndex = static_cast<std::size_t>(tier);
+    if (m_ownedWeapons[tierIndex]) return false;
+
+    const int price = useMaterials ? materialPrices[tierIndex] : moneyPrices[tierIndex];
+    const std::size_t armamentIndex = static_cast<std::size_t>(RelicType::ArmamentUpgrade);
+    const std::size_t weaponIndex = static_cast<std::size_t>(RelicType::WeaponUpgrade);
+    if (m_money < price || (useMaterials && (m_storedRelics[armamentIndex] < armamentCosts[tierIndex] || m_storedRelics[weaponIndex] < weaponCosts[tierIndex])))
+    {
+        AddMessage(u8"購入に必要な金額または遺物が不足しています。");
+        return false;
+    }
+
+    m_money -= price;
+    if (useMaterials)
+    {
+        m_storedRelics[armamentIndex] -= armamentCosts[tierIndex];
+        m_storedRelics[weaponIndex] -= weaponCosts[tierIndex];
+        m_loadoutRelics[armamentIndex] = std::min(m_loadoutRelics[armamentIndex], m_storedRelics[armamentIndex]);
+        m_loadoutRelics[weaponIndex] = std::min(m_loadoutRelics[weaponIndex], m_storedRelics[weaponIndex]);
+    }
+    m_ownedWeapons[tierIndex] = true;
+    AddMessage(u8"武器を購入しました。");
+    return true;
+}
+
 float SceneNarakuProto::GetCurrentWeight() const
 {
     // 初期装備のつるはし重量10から計算を始めます。
@@ -2277,14 +4194,26 @@ float SceneNarakuProto::GetCurrentWeight() const
     // 所持している旧器の重量をすべて足します。
     for (const RelicItem& item : m_inventory) weight += item.weight;
 
+    // 食料は1個につき重量1として扱います。
+    weight += static_cast<float>(m_foodCount);
+
     // 合計重量を返します。
     return weight;
 }
 
+float SceneNarakuProto::GetMaxWeight() const
+{
+    return HasRelicArmorSetEffect() ? 200.0f : kMaxWeight;
+}
+
+float SceneNarakuProto::GetPickupWeightLimit() const
+{
+    return std::max(kPickupWeightLimit, GetMaxWeight());
+}
+
 float SceneNarakuProto::GetWeightRate() const
 {
-    // 最大重量100に対する割合を返します。
-    return GetCurrentWeight() / kMaxWeight;
+    return GetCurrentWeight() / GetMaxWeight();
 }
 
 float SceneNarakuProto::GetMoveSpeed() const
@@ -2294,6 +4223,8 @@ float SceneNarakuProto::GetMoveSpeed() const
 
     // 重量70%以上では移動速度を25%下げます。
     if (GetWeightRate() >= 0.70f) speed *= 0.75f;
+
+    if (HasRelicArmorSetEffect()) speed *= kRelicArmorWalkMultiplier;
 
     // 重量補正済みの歩行速度を返します。
     return speed;
@@ -2551,8 +4482,10 @@ int SceneNarakuProto::FindNearestRopeIndex(float range) const
     // 全ロープを調べ、範囲内で一番近いものを探します。
     for (int i = 0; i < static_cast<int>(m_ropePoints.size()); ++i)
     {
-        // プレイヤーとロープ位置の平面距離を計算します。
-        const float d = Distance(m_player.pos, m_ropePoints[i].pos);
+        const RopePoint& rope = m_ropePoints[i];
+        const float topDistance = std::fabs(m_player.depth - rope.topDepth) <= 0.35f ? Distance(m_player.pos, rope.topPos) : range + 1.0f;
+        const float bottomDistance = std::fabs(m_player.depth - rope.bottomDepth) <= 0.35f ? Distance(m_player.pos, rope.bottomPos) : range + 1.0f;
+        const float d = std::min(topDistance, bottomDistance);
 
         // 現在の候補より近ければ採用します。
         if (d <= bestDistance)
@@ -2577,11 +4510,11 @@ bool SceneNarakuProto::TryLeaveRopeSide(int ropeIndex, float leaveSign, const Ve
     // 対象ロープを取得します。
     const RopePoint& rope = m_ropePoints[ropeIndex];
 
-    // 現在深度の床へ横に降りる候補位置を作ります。
-    const Vec2 leavePos = Add(rope.pos, Mul(cameraRight, leaveSign * 0.80f));
+    const Vec2 ropePos = GetRopePosition(ropeIndex, m_ropeProgress);
+    const Vec2 leavePos = Add(ropePos, Mul(cameraRight, leaveSign * 0.80f));
 
     // 候補位置に床があり、地形条件も満たすならそこへ降ります。
-    if (CanTraverseGround(rope.pos, leavePos, m_player.depth))
+    if (CanTraverseGround(ropePos, leavePos, m_player.depth))
     {
         m_player.pos = leavePos;
         m_player.onRope = false;
@@ -2597,11 +4530,14 @@ bool SceneNarakuProto::TryLeaveRopeSide(int ropeIndex, float leaveSign, const Ve
     }
 
     // 深度が端にかなり近い場合は端深度へ吸着して、降りられるかをもう一度試します。
-    const float endpointDepth = std::fabs(m_player.depth - rope.bottomDepth) < std::fabs(m_player.depth - rope.topDepth) ? rope.bottomDepth : rope.topDepth;
-    if (std::fabs(m_player.depth - endpointDepth) <= 0.35f && CanTraverseGround(rope.pos, leavePos, endpointDepth))
+    const bool useBottom = m_ropeProgress >= 0.5f;
+    const float endpointDepth = useBottom ? rope.bottomDepth : rope.topDepth;
+    const Vec2 endpointPos = useBottom ? rope.bottomPos : rope.topPos;
+    const Vec2 endpointLeavePos = Add(endpointPos, Mul(cameraRight, leaveSign * 0.80f));
+    if ((m_ropeProgress <= 0.05f || m_ropeProgress >= 0.95f) && CanTraverseGround(endpointPos, endpointLeavePos, endpointDepth))
     {
         m_player.depth = endpointDepth;
-        m_player.pos = leavePos;
+        m_player.pos = endpointLeavePos;
         m_player.onRope = false;
         m_activeRope = -1;
         m_player.grounded = true;
@@ -2625,6 +4561,12 @@ void SceneNarakuProto::AddMessage(const std::string& message)
 
     // ログが増えすぎないよう古いものを削除します。
     if (m_messages.size() > 24) m_messages.erase(m_messages.begin());
+}
+
+void SceneNarakuProto::ShowCenterNotification(const std::string& message)
+{
+    m_centerNotification = message;
+    m_centerNotificationTimer = 1.5f;
 }
 
 void SceneNarakuProto::DiscoverNearbyMiningPoints()
@@ -2687,8 +4629,8 @@ void SceneNarakuProto::TogglePinAt(const Vec2& worldPos)
 
 SceneNarakuProto::Vec2 SceneNarakuProto::ScreenToWorld(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& mousePos, float zoom, const Vec2& focusPos) const
 {
-    float scaleX = (canvasSize.x / (kWorldHalfSize * 2.0f)) * zoom;
-    float scaleY = (canvasSize.y / (kWorldHalfSize * 2.0f)) * zoom;
+    float scaleX = (canvasSize.x / (m_worldHalfSize * 2.0f)) * zoom;
+    float scaleY = (canvasSize.y / (m_worldHalfSize * 2.0f)) * zoom;
 
     if (std::fabs(scaleX) < 0.001f) scaleX = 1.0f;
     if (std::fabs(scaleY) < 0.001f) scaleY = 1.0f;
@@ -2704,8 +4646,8 @@ SceneNarakuProto::Vec2 SceneNarakuProto::ScreenToWorld(const Vec2& canvasPos, co
 
 SceneNarakuProto::Vec2 SceneNarakuProto::WorldToCanvas(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& worldPos, float zoom, const Vec2& focusPos) const
 {
-    float scaleX = (canvasSize.x / (kWorldHalfSize * 2.0f)) * zoom;
-    float scaleY = (canvasSize.y / (kWorldHalfSize * 2.0f)) * zoom;
+    float scaleX = (canvasSize.x / (m_worldHalfSize * 2.0f)) * zoom;
+    float scaleY = (canvasSize.y / (m_worldHalfSize * 2.0f)) * zoom;
 
     float centerX = canvasPos.x + canvasSize.x * 0.5f;
     float centerY = canvasPos.y + canvasSize.y * 0.5f;
@@ -2818,18 +4760,31 @@ float SceneNarakuProto::GetPlayerAirborneOffset() const
     return std::max(0.0f, m_player.feetWorldY - GetGroundWorldY(m_player.pos, m_player.depth));
 }
 
-float SceneNarakuProto::GetRopeWorldY(int ropeIndex, float depth) const
+SceneNarakuProto::Vec2 SceneNarakuProto::GetRopePosition(int ropeIndex, float progress) const
 {
     if (ropeIndex < 0 || ropeIndex >= static_cast<int>(m_ropePoints.size()))
     {
-        return GetGroundWorldY(m_player.pos, depth);
+        return m_player.pos;
     }
 
     const RopePoint& rope = m_ropePoints[ropeIndex];
-    const float topWorldY = GetGroundWorldY(rope.pos, rope.topDepth);
-    const float bottomWorldY = GetGroundWorldY(rope.pos, rope.bottomDepth);
-    const float range = std::max(0.001f, rope.bottomDepth - rope.topDepth);
-    const float t = std::max(0.0f, std::min((depth - rope.topDepth) / range, 1.0f));
+    const float t = std::max(0.0f, std::min(progress, 1.0f));
+    return {
+        rope.topPos.x + (rope.bottomPos.x - rope.topPos.x) * t,
+        rope.topPos.y + (rope.bottomPos.y - rope.topPos.y) * t };
+}
+
+float SceneNarakuProto::GetRopeWorldY(int ropeIndex, float progress) const
+{
+    if (ropeIndex < 0 || ropeIndex >= static_cast<int>(m_ropePoints.size()))
+    {
+        return GetGroundWorldY(m_player.pos, m_player.depth);
+    }
+
+    const RopePoint& rope = m_ropePoints[ropeIndex];
+    const float topWorldY = GetGroundWorldY(rope.topPos, rope.topDepth);
+    const float bottomWorldY = GetGroundWorldY(rope.bottomPos, rope.bottomDepth);
+    const float t = std::max(0.0f, std::min(progress, 1.0f));
     return topWorldY + (bottomWorldY - topWorldY) * t;
 }
 DirectX::XMFLOAT3 SceneNarakuProto::GetTerrainVertexWorld3D(const NarakuMap::TerrainLayer& layer, int gridX, int gridZ, float heightOffset) const
@@ -2895,54 +4850,6 @@ void SceneNarakuProto::DrawDebugSphere3D(const DirectX::XMFLOAT3& pos, float rad
     Geometory::DrawSphere();
 }
 
-void SceneNarakuProto::DrawTransparentFloor3D(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT2& size, const DirectX::XMFLOAT4& color) const
-{
-    using namespace DirectX;
-
-    // 白テクスチャが作れていない場合は描画できないので抜けます。
-    if (!m_debugWhiteTexture)
-    {
-        return;
-    }
-
-    // Spriteのデフォルトシェーダーを使うように戻します。
-    Sprite::SetVertexShader(nullptr);
-    Sprite::SetPixelShader(nullptr);
-
-    // 半透明床は1x1白テクスチャに色を掛けて描きます。
-    Sprite::SetTexture(m_debugWhiteTexture);
-
-    // Spriteのローカルサイズを床サイズに合わせます。
-    Sprite::SetSize(size);
-
-    // Spriteの中心をローカル原点に置きます。
-    Sprite::SetOffset({ 0.0f, 0.0f });
-
-    // 1x1白テクスチャ全体を使います。
-    Sprite::SetUVPos({ 0.0f, 0.0f });
-    Sprite::SetUVScale({ 1.0f, 1.0f });
-
-    // 呼び出し側から受け取ったRGBA色を適用します。
-    Sprite::SetColor(color);
-
-    // SpriteはXY平面なので、X軸回転でXZ水平面へ倒します。
-    const XMMATRIX rotation = XMMatrixRotationX(XMConvertToRadians(90.0f));
-
-    // 指定位置へ移動する行列を作ります。
-    const XMMATRIX translation = XMMatrixTranslation(center.x, center.y, center.z);
-
-    // 回転してから移動するワールド行列を作ります。
-    const XMMATRIX worldMatrix = rotation * translation;
-
-    // 既存Spriteも行列を転置して渡す前提なので、転置して保存します。
-    XMFLOAT4X4 world;
-    XMStoreFloat4x4(&world, XMMatrixTranspose(worldMatrix));
-    Sprite::SetWorld(world);
-
-    // 現在のGeometory用ビュー/射影と同じものがSpriteにも入っている前提で描画します。
-    Sprite::Draw();
-}
-
 SceneNarakuProto::Vec2 SceneNarakuProto::WorldToObliqueCanvas(const Vec2& canvasPos, const Vec2& canvasSize, const Vec2& worldPos, float depthOffset) const
 {
     // 斜め見下ろし用にワールド座標を45度回したX成分へ変換します。
@@ -2955,10 +4862,10 @@ SceneNarakuProto::Vec2 SceneNarakuProto::WorldToObliqueCanvas(const Vec2& canvas
     projectedY += depthOffset * 0.35f;
 
     // 投影後のXをキャンバス幅に収まるよう0-1へ正規化します。
-    float nx = (projectedX / (kWorldHalfSize * 2.0f) + 1.0f) * 0.5f;
+    float nx = (projectedX / (m_worldHalfSize * 2.0f) + 1.0f) * 0.5f;
 
     // 投影後のYをキャンバス高さに収まるよう0-1へ正規化します。
-    float ny = (projectedY / (kWorldHalfSize * 1.35f) + 1.0f) * 0.5f;
+    float ny = (projectedY / (m_worldHalfSize * 1.35f) + 1.0f) * 0.5f;
 
     // 正規化座標をキャンバス上のスクリーン座標へ変換します。
     return { canvasPos.x + nx * canvasSize.x, canvasPos.y + ny * canvasSize.y };
@@ -2993,8 +4900,9 @@ void SceneNarakuProto::DrawMiniMap()
 
     for (const RopePoint& rope : m_ropePoints)
     {
-        Vec2 p = WorldToCanvas(canvasPos, canvasSize, rope.pos, m_mapZoom, m_player.pos);
-        draw->AddRectFilled(ImVec2(p.x - 2.0f, p.y - 2.0f), ImVec2(p.x + 2.0f, p.y + 2.0f), IM_COL32(170, 120, 70, 255));
+        const Vec2 top = WorldToCanvas(canvasPos, canvasSize, rope.topPos, m_mapZoom, m_player.pos);
+        const Vec2 bottom = WorldToCanvas(canvasPos, canvasSize, rope.bottomPos, m_mapZoom, m_player.pos);
+        draw->AddLine(ImVec2(top.x, top.y), ImVec2(bottom.x, bottom.y), IM_COL32(170, 120, 70, 255), 3.0f);
     }
 
     for (const MiningPoint& point : m_miningPoints)
@@ -3052,16 +4960,34 @@ void SceneNarakuProto::DrawPlayerPositionDebug()
         ImGui::Text(u8"現在深度: %.2f", m_player.depth);
         ImGui::Separator();
 
-        // プレイヤーのグリッド座標を計算
+        // 生成済みマップから小ステージのグリッド座標を計算
         int gridX = -1;
-        if (m_player.pos.x >= -45.0f && m_player.pos.x < -15.0f) gridX = 0;
-        else if (m_player.pos.x >= -15.0f && m_player.pos.x < 15.0f) gridX = 1;
-        else if (m_player.pos.x >= 15.0f && m_player.pos.x <= 45.0f) gridX = 2;
-
         int gridZ = -1;
-        if (m_player.pos.y >= -45.0f && m_player.pos.y < -15.0f) gridZ = 0;
-        else if (m_player.pos.y >= -15.0f && m_player.pos.y < 15.0f) gridZ = 1;
-        else if (m_player.pos.y >= 15.0f && m_player.pos.y <= 45.0f) gridZ = 2;
+        int stageGridSize = 0;
+        if (!m_runtimeMap.pieceNames.empty() && !m_runtimeMap.terrainLayers.empty())
+        {
+            stageGridSize = static_cast<int>(std::sqrt(static_cast<float>(m_runtimeMap.pieceNames.size())));
+            if (stageGridSize * stageGridSize == static_cast<int>(m_runtimeMap.pieceNames.size()))
+            {
+                const NarakuMap::TerrainLayer& firstLayer = m_runtimeMap.terrainLayers.front();
+                const float stageWidth = static_cast<float>(firstLayer.gridWidth - 1) * firstLayer.cellSize;
+                const float stageHeight = static_cast<float>(firstLayer.gridHeight - 1) * firstLayer.cellSize;
+                const float mapHalfWidth = stageWidth * static_cast<float>(stageGridSize) * 0.5f;
+                const float mapHalfHeight = stageHeight * static_cast<float>(stageGridSize) * 0.5f;
+                if (stageWidth > 0.0f && m_player.pos.x >= -mapHalfWidth && m_player.pos.x <= mapHalfWidth)
+                {
+                    gridX = std::min(
+                        stageGridSize - 1,
+                        static_cast<int>((m_player.pos.x + mapHalfWidth) / stageWidth));
+                }
+                if (stageHeight > 0.0f && m_player.pos.y >= -mapHalfHeight && m_player.pos.y <= mapHalfHeight)
+                {
+                    gridZ = std::min(
+                        stageGridSize - 1,
+                        static_cast<int>((m_player.pos.y + mapHalfHeight) / stageHeight));
+                }
+            }
+        }
 
         ImGui::Text(u8"グリッド座標: (%d, %d)", gridX, gridZ);
 
@@ -3070,9 +4996,9 @@ void SceneNarakuProto::DrawPlayerPositionDebug()
         {
             pieceName = u8"未生成(再生成してください)";
         }
-        else if (gridX >= 0 && gridX < 3 && gridZ >= 0 && gridZ < 3)
+        else if (gridX >= 0 && gridX < stageGridSize && gridZ >= 0 && gridZ < stageGridSize)
         {
-            size_t index = static_cast<size_t>(gridZ * 3 + gridX);
+            size_t index = static_cast<size_t>(gridZ * stageGridSize + gridX);
             if (index < m_runtimeMap.pieceNames.size())
             {
                 pieceName = m_runtimeMap.pieceNames[index];
@@ -3121,13 +5047,15 @@ void SceneNarakuProto::DrawMiningProgressBar()
 {
     if (m_miningIndex < 0) return;
 
-    float screenW = static_cast<float>(SCREEN_WIDTH);
-    float screenH = static_cast<float>(SCREEN_HEIGHT);
-
     float barWidth = 260.0f;
     float barHeight = 45.0f;
 
-    ImGui::SetNextWindowPos(ImVec2((screenW - barWidth) * 0.5f, (screenH - barHeight) * 0.5f), ImGuiCond_Always);
+    // OS画面ではなく、メインウィンドウの作業領域中央を配置基準にします。
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImVec2 center(
+        viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+        viewport->WorkPos.y + viewport->WorkSize.y * 0.5f);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(barWidth, barHeight), ImGuiCond_Always);
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -3142,8 +5070,36 @@ void SceneNarakuProto::DrawMiningProgressBar()
         ImGui::SetCursorPosX((barWidth - textWidth) * 0.5f);
         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), text.c_str());
 
-        float progress = std::max(0.0f, std::min(1.0f, 1.0f - (m_miningTimer / kMiningTime)));
+        float progress = std::max(0.0f, std::min(1.0f, 1.0f - (m_miningTimer / m_miningDuration)));
         ImGui::ProgressBar(progress, ImVec2(-1.0f, 18.0f), "");
+    }
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawCenterNotification()
+{
+    if (m_centerNotificationTimer <= 0.0f || m_centerNotification.empty()) return;
+
+    constexpr float overlayWidth = 420.0f;
+    constexpr float overlayHeight = 48.0f;
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImVec2 center(
+        viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
+        viewport->WorkPos.y + viewport->WorkSize.y * 0.5f);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(overlayWidth, overlayHeight), ImGuiCond_Always);
+
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs;
+
+    if (ImGui::Begin("CenterNotification##Overlay", nullptr, flags))
+    {
+        const ImVec2 textSize = ImGui::CalcTextSize(m_centerNotification.c_str());
+        ImGui::SetCursorPos(ImVec2(
+            std::max(0.0f, (overlayWidth - textSize.x) * 0.5f),
+            std::max(0.0f, (overlayHeight - textSize.y) * 0.5f)));
+        ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.22f, 1.0f), "%s", m_centerNotification.c_str());
     }
     ImGui::End();
 }
