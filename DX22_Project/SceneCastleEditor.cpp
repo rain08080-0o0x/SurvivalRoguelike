@@ -1,4 +1,5 @@
 ﻿#include "SceneCastleEditor.h"
+#include "EditorPerformanceProfiler.h"
 
 #include "CastleSaveData.h"
 #include "DirectX.h"
@@ -36,6 +37,7 @@ namespace
 
     void TrimString(std::string& text)
     {
+        EDITOR_PROFILE_FUNCTION();
         const char* whitespace = " \t\r\n";
         const size_t begin = text.find_first_not_of(whitespace);
         if (begin == std::string::npos)
@@ -50,6 +52,7 @@ namespace
 
     bool TryParseInt(const std::unordered_map<std::string, std::string>& values, const char* key, int& outValue)
     {
+        EDITOR_PROFILE_FUNCTION();
         const auto it = values.find(key);
         if (it == values.end())
         {
@@ -69,6 +72,7 @@ namespace
 
     bool TryParseFloat(const std::unordered_map<std::string, std::string>& values, const char* key, float& outValue)
     {
+        EDITOR_PROFILE_FUNCTION();
         const auto it = values.find(key);
         if (it == values.end())
         {
@@ -88,6 +92,7 @@ namespace
 
     std::vector<SceneCastleEditor::AssetInfo> BuildDefaultAssetCatalog()
     {
+        EDITOR_PROFILE_FUNCTION();
         return {
             { "brick", "Brick", "Assets/Model/Castle/Brick.fbx", 1.0f, 0.0f },
             { "wall", "Wall", "Assets/Model/Castle/Wall.fbx", 1.0f, 0.0f },
@@ -96,6 +101,7 @@ namespace
 
     std::string ExtractFileStem(const std::string& path)
     {
+        EDITOR_PROFILE_FUNCTION();
         if (path.empty())
         {
             return {};
@@ -114,12 +120,14 @@ namespace
 
     std::string NormalizePathSlashes(std::string path)
     {
+        EDITOR_PROFILE_FUNCTION();
         std::replace(path.begin(), path.end(), '\\', '/');
         return path;
     }
 
     std::string LowercaseAscii(std::string text)
     {
+        EDITOR_PROFILE_FUNCTION();
         std::transform(
             text.begin(),
             text.end(),
@@ -130,6 +138,7 @@ namespace
 
     std::string NormalizeCatalogPath(const std::string& inputPath)
     {
+        EDITOR_PROFILE_FUNCTION();
         if (inputPath.empty())
         {
             return {};
@@ -169,6 +178,7 @@ namespace
 
     std::string NormalizeAssetIdToken(const std::string& source)
     {
+        EDITOR_PROFILE_FUNCTION();
         std::string result;
         result.reserve(source.size());
         for (unsigned char ch : source)
@@ -196,6 +206,7 @@ namespace
         const std::string& path,
         const std::unordered_set<std::string>& usedIds)
     {
+        EDITOR_PROFILE_FUNCTION();
         std::string base = NormalizeAssetIdToken(!displayName.empty() ? displayName : ExtractFileStem(path));
         if (base.empty())
         {
@@ -213,6 +224,7 @@ namespace
 
     bool LoadAssetCatalogFromFile(const char* path, std::vector<SceneCastleEditor::AssetInfo>& outInfos, std::string& outError)
     {
+        EDITOR_PROFILE_FUNCTION();
         std::ifstream ifs(path);
         if (!ifs.is_open())
         {
@@ -337,6 +349,7 @@ namespace
 
     bool SaveAssetCatalogToFile(const char* path, const std::vector<SceneCastleEditor::AssetInfo>& infos, std::string& outError)
     {
+        EDITOR_PROFILE_FUNCTION();
         std::ofstream ofs(path, std::ios::trunc);
         if (!ofs.is_open())
         {
@@ -383,6 +396,7 @@ namespace
         const DirectX::XMFLOAT3& scale,
         const DirectX::XMFLOAT3& anchor)
     {
+        EDITOR_PROFILE_FUNCTION();
         using namespace DirectX;
 
         const XMMATRIX localOffset = XMMatrixTranslation(-anchor.x, -anchor.y, -anchor.z);
@@ -407,6 +421,7 @@ namespace
 
     float ClampFloat(float value, float minValue, float maxValue)
     {
+        EDITOR_PROFILE_FUNCTION();
         if (value < minValue) return minValue;
         if (value > maxValue) return maxValue;
         return value;
@@ -419,6 +434,7 @@ namespace
         const DirectX::XMFLOAT3& scale,
         const DirectX::XMFLOAT3& anchor)
     {
+        EDITOR_PROFILE_FUNCTION();
         using namespace DirectX;
 
         const XMMATRIX world = MakePlacementWorldMatrix(pos, rotate, scale, anchor);
@@ -436,6 +452,7 @@ namespace
         float& outDistance,
         DirectX::XMFLOAT3& outHitPoint)
     {
+        EDITOR_PROFILE_FUNCTION();
         float tMin = 0.0f;
         float tMax = FLT_MAX;
 
@@ -495,6 +512,7 @@ namespace
         const DirectX::XMFLOAT3& minValue,
         const DirectX::XMFLOAT3& maxValue)
     {
+        EDITOR_PROFILE_FUNCTION();
         const float distances[6] = {
             std::fabs(hitPoint.x - minValue.x),
             std::fabs(hitPoint.x - maxValue.x),
@@ -528,6 +546,7 @@ namespace
 
     DirectX::XMINT3 QuantizeNormalToGridOffset(const DirectX::XMFLOAT3& normal)
     {
+        EDITOR_PROFILE_FUNCTION();
         const float absX = std::fabs(normal.x);
         const float absY = std::fabs(normal.y);
         const float absZ = std::fabs(normal.z);
@@ -595,21 +614,25 @@ SceneCastleEditor::SceneCastleEditor()
     , m_selectFillPreviewGridZ(0)
     , m_shiftVerticalFillMode(false)
 {
+    EDITOR_PROFILE_FUNCTION();
     LoadAssets();
     ResetCamera();
 }
 
 SceneCastleEditor::~SceneCastleEditor()
 {
+    EDITOR_PROFILE_FUNCTION();
     ReleaseAssets();
 }
 
 void SceneCastleEditor::Update()
 {
+    EDITOR_PROFILE_FUNCTION();
 }
 
 void SceneCastleEditor::Draw()
 {
+    EDITOR_PROFILE_FUNCTION();
     using namespace DirectX;
 
     const XMMATRIX view = XMMatrixLookAtLH(
@@ -712,43 +735,51 @@ void SceneCastleEditor::Draw()
 
 int SceneCastleEditor::GetAssetCount() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return static_cast<int>(m_assets.size());
 }
 
 const SceneCastleEditor::AssetInfo* SceneCastleEditor::GetAssetInfo(int index) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (index < 0 || index >= static_cast<int>(m_assets.size())) return nullptr;
     return &m_assets[index].info;
 }
 
 int SceneCastleEditor::GetSelectedAssetIndex() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_selectedAssetIndex;
 }
 
 const char* SceneCastleEditor::GetAssetCatalogPath() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return kAssetCatalogPath;
 }
 
 const char* SceneCastleEditor::GetAssetCatalogStatusMessage() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_assetCatalogStatusMessage.c_str();
 }
 
 bool SceneCastleEditor::IsAssetCatalogStatusError() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_assetCatalogStatusIsError;
 }
 
 void SceneCastleEditor::SetAssetCatalogStatus(const std::string& message, bool isError)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_assetCatalogStatusMessage = message;
     m_assetCatalogStatusIsError = isError;
 }
 
 int SceneCastleEditor::FindAssetIndexById(const std::string& assetId) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (assetId.empty())
     {
         return -1;
@@ -767,6 +798,7 @@ int SceneCastleEditor::FindAssetIndexById(const std::string& assetId) const
 
 bool SceneCastleEditor::LoadAssetCatalogInfos(std::vector<AssetInfo>& outAssetInfos, std::string& outError) const
 {
+    EDITOR_PROFILE_FUNCTION();
     std::ifstream ifs(kAssetCatalogPath);
     if (!ifs.is_open())
     {
@@ -779,11 +811,13 @@ bool SceneCastleEditor::LoadAssetCatalogInfos(std::vector<AssetInfo>& outAssetIn
 
 bool SceneCastleEditor::SaveAssetCatalogInfos(const std::vector<AssetInfo>& assetInfos, std::string& outError) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return SaveAssetCatalogToFile(kAssetCatalogPath, assetInfos, outError);
 }
 
 bool SceneCastleEditor::IsAssetReferencedBySessionId(const std::string& assetId) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (assetId.empty())
     {
         return false;
@@ -839,6 +873,7 @@ bool SceneCastleEditor::IsAssetReferencedBySessionId(const std::string& assetId)
 
 bool SceneCastleEditor::CanRemoveAsset(int index) const
 {
+    EDITOR_PROFILE_FUNCTION();
     const AssetInfo* asset = GetAssetInfo(index);
     if (!asset)
     {
@@ -850,6 +885,7 @@ bool SceneCastleEditor::CanRemoveAsset(int index) const
 
 bool SceneCastleEditor::AddAssetFromPath(const char* displayName, const char* path)
 {
+    EDITOR_PROFILE_FUNCTION();
     std::string name = displayName ? displayName : "";
     std::string assetPath = path ? path : "";
     TrimString(name);
@@ -923,6 +959,7 @@ bool SceneCastleEditor::AddAssetFromPath(const char* displayName, const char* pa
 
 bool SceneCastleEditor::RemoveAsset(int index)
 {
+    EDITOR_PROFILE_FUNCTION();
     const AssetInfo* asset = GetAssetInfo(index);
     if (!asset)
     {
@@ -969,6 +1006,7 @@ bool SceneCastleEditor::RemoveAsset(int index)
 
 bool SceneCastleEditor::ReloadAssetCatalog()
 {
+    EDITOR_PROFILE_FUNCTION();
     std::vector<AssetInfo> assetInfos;
     std::string error;
     if (!LoadAssetCatalogInfos(assetInfos, error))
@@ -989,6 +1027,7 @@ bool SceneCastleEditor::ReloadAssetCatalog()
 
 void SceneCastleEditor::SetSelectedAssetIndex(int index)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (index < 0 || index >= static_cast<int>(m_assets.size())) return;
     m_selectedAssetIndex = index;
     if (m_toolMode == ToolMode::SelectSingle || m_toolMode == ToolMode::SelectFill)
@@ -1000,17 +1039,20 @@ void SceneCastleEditor::SetSelectedAssetIndex(int index)
 
 SceneCastleEditor::ToolMode SceneCastleEditor::GetToolMode() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_toolMode;
 }
 
 void SceneCastleEditor::SetToolMode(ToolMode mode)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_toolMode = mode;
     ClearPlacementToolState();
 }
 
 void* SceneCastleEditor::GetAssetThumbnailTextureId(int index, unsigned int size)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (index < 0 || index >= static_cast<int>(m_assets.size())) return nullptr;
     AssetState& asset = m_assets[index];
     if (!asset.model) return nullptr;
@@ -1021,12 +1063,14 @@ void* SceneCastleEditor::GetAssetThumbnailTextureId(int index, unsigned int size
 
 void* SceneCastleEditor::GetModelViewTextureId(unsigned int size)
 {
+    EDITOR_PROFILE_FUNCTION();
     RenderModelView(size);
     return m_modelViewRT ? reinterpret_cast<void*>(m_modelViewRT->GetResource()) : nullptr;
 }
 
 void SceneCastleEditor::HandleModelViewInput(bool hovered, bool rightDragging, float mouseDeltaX, float mouseDeltaY, float mouseWheel)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!hovered) return;
 
     if (rightDragging)
@@ -1042,6 +1086,7 @@ void SceneCastleEditor::HandleModelViewInput(bool hovered, bool rightDragging, f
 
 void SceneCastleEditor::ResetModelViewCamera()
 {
+    EDITOR_PROFILE_FUNCTION();
     m_modelViewYaw = DirectX::XMConvertToRadians(-25.0f);
     m_modelViewPitch = DirectX::XMConvertToRadians(15.0f);
     m_modelViewDistanceScale = 1.0f;
@@ -1049,56 +1094,67 @@ void SceneCastleEditor::ResetModelViewCamera()
 
 int SceneCastleEditor::GetPlacementCount() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_buildMap.GetPlacementCount();
 }
 
 const SceneCastleEditor::PlacementInfo* SceneCastleEditor::GetPlacement(int index) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_buildMap.GetPlacement(index);
 }
 
 int SceneCastleEditor::GetSelectedPlacementIndex() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_selection.GetSelectedPlacementIndex();
 }
 
 int SceneCastleEditor::GetSelectedPlacementCount() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_selection.GetSelectedPlacementCount();
 }
 
 int SceneCastleEditor::GetSelectedPlacementIndexAt(int order) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_selection.GetSelectedPlacementIndexAt(order);
 }
 
 bool SceneCastleEditor::IsPlacementSelected(int index) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_selection.IsSelected(index);
 }
 
 void SceneCastleEditor::ClearSelection()
 {
+    EDITOR_PROFILE_FUNCTION();
     m_selection.ClearSelection();
 }
 
 void SceneCastleEditor::SetSelectedPlacementIndex(int index)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_selection.SetSelectedPlacementIndex(index, m_buildMap.GetPlacementCount());
 }
 
 void SceneCastleEditor::AddSelectedPlacementIndex(int index)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_selection.AddSelectedPlacementIndex(index, m_buildMap.GetPlacementCount());
 }
 
 void SceneCastleEditor::ToggleSelectedPlacementIndex(int index)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_selection.ToggleSelectedPlacementIndex(index, m_buildMap.GetPlacementCount());
 }
 
 void SceneCastleEditor::DeleteSelectedPlacement()
 {
+    EDITOR_PROFILE_FUNCTION();
     const std::vector<int>& selectedIndices = m_selection.GetSelectedPlacementIndices();
     if (selectedIndices.empty()) return;
 
@@ -1147,6 +1203,7 @@ void SceneCastleEditor::DeleteSelectedPlacement()
 
 void SceneCastleEditor::UpdateSelectedPlacement(int gridX, int gridY, int gridZ, int rotationQuarterTurns)
 {
+    EDITOR_PROFILE_FUNCTION();
     const int selectedIndex = m_selection.GetSelectedPlacementIndex();
     if (selectedIndex < 0 || selectedIndex >= m_buildMap.GetPlacementCount()) return;
     if (!IsInsideGrid(gridX, gridY, gridZ)) return;
@@ -1187,16 +1244,19 @@ void SceneCastleEditor::UpdateSelectedPlacement(int gridX, int gridY, int gridZ,
 
 bool SceneCastleEditor::CanUndo() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return !m_undoStack.empty();
 }
 
 bool SceneCastleEditor::CanRedo() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return !m_redoStack.empty();
 }
 
 void SceneCastleEditor::Undo()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_undoStack.empty()) return;
 
     const HistoryEntry entry = m_undoStack.back();
@@ -1237,6 +1297,7 @@ void SceneCastleEditor::Undo()
 
 void SceneCastleEditor::Redo()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_redoStack.empty()) return;
 
     const HistoryEntry entry = m_redoStack.back();
@@ -1277,11 +1338,13 @@ void SceneCastleEditor::Redo()
 
 int SceneCastleEditor::GetActiveLayer() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_activeLayer;
 }
 
 void SceneCastleEditor::SetActiveLayer(int layer)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (layer < 0) layer = 0;
     if (layer > 16) layer = 16;
     m_activeLayer = layer;
@@ -1289,68 +1352,81 @@ void SceneCastleEditor::SetActiveLayer(int layer)
 
 float SceneCastleEditor::GetGridSize() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_gridSize;
 }
 
 int SceneCastleEditor::GetGridHalfExtent() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_gridHalfExtent;
 }
 
 void SceneCastleEditor::RotatePreview(int deltaQuarterTurns)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_previewRotationQuarterTurns = ((m_previewRotationQuarterTurns + deltaQuarterTurns) % 4 + 4) % 4;
 }
 
 bool SceneCastleEditor::HasPreview() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_hasPreview;
 }
 
 bool SceneCastleEditor::CanPlacePreview() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_hasPreview && m_canPlacePreview;
 }
 
 int SceneCastleEditor::GetPreviewRotationQuarterTurns() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_previewRotationQuarterTurns;
 }
 
 bool SceneCastleEditor::IsFillStartActive() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_fillStartActive;
 }
 
 bool SceneCastleEditor::IsSelectFillStartActive() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_selectFillStartActive;
 }
 
 DirectX::XMFLOAT3 SceneCastleEditor::GetCameraEye() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_cameraEye;
 }
 
 DirectX::XMFLOAT3 SceneCastleEditor::GetCameraLook() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_cameraLook;
 }
 
 void SceneCastleEditor::SetCameraEye(const DirectX::XMFLOAT3& eye)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_cameraEye = eye;
     SyncCameraAnglesFromPose();
 }
 
 void SceneCastleEditor::SetCameraLook(const DirectX::XMFLOAT3& look)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_cameraLook = look;
     SyncCameraAnglesFromPose();
 }
 
 void SceneCastleEditor::ResetCamera()
 {
+    EDITOR_PROFILE_FUNCTION();
     m_cameraLook = { 0.0f, 0.0f, 0.0f };
     m_cameraEye = { 8.0f, 10.0f, -8.0f };
     SyncCameraAnglesFromPose();
@@ -1358,21 +1434,25 @@ void SceneCastleEditor::ResetCamera()
 
 float SceneCastleEditor::GetGridHeightStep() const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_gridHeightStep;
 }
 
 bool SceneCastleEditor::SaveCastleData(const char* path) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return CastleSaveData::Save(*this, path);
 }
 
 bool SceneCastleEditor::LoadCastleData(const char* path)
 {
+    EDITOR_PROFILE_FUNCTION();
     return CastleSaveData::Load(*this, path);
 }
 
 bool SceneCastleEditor::ApplyAssetCatalog(const std::vector<AssetInfo>& assetInfos, std::string& outError)
 {
+    EDITOR_PROFILE_FUNCTION();
     std::vector<AssetInfo> normalizedInfos = assetInfos;
     std::unordered_set<std::string> usedIds;
     for (AssetInfo& info : normalizedInfos)
@@ -1601,6 +1681,7 @@ void SceneCastleEditor::HandleSceneViewInput(
     float mouseDeltaY,
     float mouseWheel)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (viewWidth > 1.0f && viewHeight > 1.0f)
     {
         m_cameraAspect = viewWidth / viewHeight;
@@ -1943,6 +2024,7 @@ void SceneCastleEditor::HandleSceneViewInput(
 
 void SceneCastleEditor::FinishPaintStroke()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!m_paintStrokeActive)
     {
         return;
@@ -1970,6 +2052,7 @@ void SceneCastleEditor::FinishPaintStroke()
 
 void SceneCastleEditor::ClearPlacementToolState()
 {
+    EDITOR_PROFILE_FUNCTION();
     m_paintStrokeActive = false;
     m_paintStrokeStartIndex = -1;
     m_paintStrokePreviousSelectedIndex = -1;
@@ -1983,6 +2066,7 @@ void SceneCastleEditor::ClearPlacementToolState()
 
 void SceneCastleEditor::ApplySelectionState(const std::vector<int>& indices)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!indices.empty())
     {
         m_selection.SetSelectedPlacementIndices(indices, m_buildMap.GetPlacementCount());
@@ -1995,6 +2079,7 @@ void SceneCastleEditor::ApplySelectionState(const std::vector<int>& indices)
 
 void SceneCastleEditor::SelectPlacementsInFillArea(int endGridX, int endGridY, int endGridZ, bool additive)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!m_selectFillStartActive)
     {
         return;
@@ -2027,6 +2112,7 @@ void SceneCastleEditor::SelectPlacementsInFillArea(int endGridX, int endGridY, i
 
 bool SceneCastleEditor::IsFillPlaneAllowed(FillPlane plane, bool verticalOnly) const
 {
+    EDITOR_PROFILE_FUNCTION();
     (void)verticalOnly;
     if (plane == FillPlane::None)
     {
@@ -2044,6 +2130,7 @@ SceneCastleEditor::FillPlane SceneCastleEditor::DetermineFillPlane(
     int endGridY,
     int endGridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (startGridY == endGridY) return FillPlane::XZ;
     if (startGridX == endGridX) return FillPlane::YZ;
     if (startGridZ == endGridZ) return FillPlane::XY;
@@ -2060,6 +2147,7 @@ void SceneCastleEditor::ForEachFillCell(
     int endGridZ,
     const std::function<void(int, int, int)>& visitor) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!visitor) return;
 
     const int minGridX = (startGridX < endGridX) ? startGridX : endGridX;
@@ -2112,6 +2200,7 @@ void SceneCastleEditor::ForEachBoxCell(
     int endGridZ,
     const std::function<void(int, int, int)>& visitor) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!visitor) return;
 
     const int minGridX = (startGridX < endGridX) ? startGridX : endGridX;
@@ -2141,6 +2230,7 @@ bool SceneCastleEditor::BuildMouseRay(
     DirectX::XMVECTOR& outOrigin,
     DirectX::XMVECTOR& outDirection) const
 {
+    EDITOR_PROFILE_FUNCTION();
     using namespace DirectX;
 
     if (viewWidth <= 1.0f || viewHeight <= 1.0f) return false;
@@ -2167,6 +2257,7 @@ bool SceneCastleEditor::ComputePlacementPreviewFromRay(
     int& outGridY,
     int& outGridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     using namespace DirectX;
 
     RayHitResult bestHit;
@@ -2217,6 +2308,7 @@ int SceneCastleEditor::FindPlacementByRay(
     const DirectX::XMVECTOR& rayOrigin,
     const DirectX::XMVECTOR& rayDirection) const
 {
+    EDITOR_PROFILE_FUNCTION();
     using namespace DirectX;
 
     float bestDistance = FLT_MAX;
@@ -2254,6 +2346,7 @@ int SceneCastleEditor::FindPlacementByRay(
 
 void SceneCastleEditor::LoadAssets()
 {
+    EDITOR_PROFILE_FUNCTION();
     std::vector<AssetInfo> assetInfos;
     std::string error;
     if (LoadAssetCatalogInfos(assetInfos, error) && ApplyAssetCatalog(assetInfos, error))
@@ -2285,6 +2378,7 @@ void SceneCastleEditor::LoadAssets()
 
 void SceneCastleEditor::ReleaseAssets()
 {
+    EDITOR_PROFILE_FUNCTION();
     SAFE_DELETE(m_modelViewDS);
     SAFE_DELETE(m_modelViewRT);
     for (AssetState& asset : m_assets)
@@ -2299,6 +2393,7 @@ void SceneCastleEditor::ReleaseAssets()
 
 bool SceneCastleEditor::EnsureThumbnailTargets(AssetState& asset, unsigned int size)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (size < 32) size = 32;
     if (asset.thumbnailRT &&
         asset.thumbnailDS &&
@@ -2332,6 +2427,7 @@ bool SceneCastleEditor::EnsureThumbnailTargets(AssetState& asset, unsigned int s
 
 void SceneCastleEditor::RenderAssetThumbnail(AssetState& asset, unsigned int size)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!EnsureThumbnailTargets(asset, size)) return;
     if (!asset.thumbnailDirty && asset.thumbnailRT && asset.thumbnailRT->GetResource()) return;
 
@@ -2385,6 +2481,7 @@ void SceneCastleEditor::RenderAssetThumbnail(AssetState& asset, unsigned int siz
 
 bool SceneCastleEditor::EnsureModelViewTargets(unsigned int size)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (size < 64) size = 64;
     if (m_modelViewRT &&
         m_modelViewDS &&
@@ -2417,6 +2514,7 @@ bool SceneCastleEditor::EnsureModelViewTargets(unsigned int size)
 
 int SceneCastleEditor::GetModelViewAssetIndex() const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_selectedAssetIndex >= 0 && m_selectedAssetIndex < static_cast<int>(m_assets.size()))
     {
         return m_selectedAssetIndex;
@@ -2434,12 +2532,14 @@ int SceneCastleEditor::GetModelViewAssetIndex() const
 
 void SceneCastleEditor::PushHistory(const HistoryEntry& entry)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_undoStack.push_back(entry);
     m_redoStack.clear();
 }
 
 int SceneCastleEditor::InsertPlacementInternal(const PlacementInfo& placement, int index)
 {
+    EDITOR_PROFILE_FUNCTION();
     const int insertedIndex = m_buildMap.InsertPlacement(placement, index);
     m_selection.OnPlacementInserted(insertedIndex);
     return insertedIndex;
@@ -2447,18 +2547,21 @@ int SceneCastleEditor::InsertPlacementInternal(const PlacementInfo& placement, i
 
 void SceneCastleEditor::RemovePlacementInternal(int index)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_buildMap.RemovePlacement(index);
     m_selection.OnPlacementRemoved(index, m_buildMap.GetPlacementCount());
 }
 
 void SceneCastleEditor::UpdatePlacementInternal(int index, const PlacementInfo& placement)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_buildMap.UpdatePlacement(index, placement);
     m_selection.ClampSelection(m_buildMap.GetPlacementCount());
 }
 
 void SceneCastleEditor::RenderModelView(unsigned int size)
 {
+    EDITOR_PROFILE_FUNCTION();
     const int assetIndex = GetModelViewAssetIndex();
     if (assetIndex < 0 || assetIndex >= static_cast<int>(m_assets.size())) return;
     if (!EnsureModelViewTargets(size)) return;
@@ -2517,6 +2620,7 @@ void SceneCastleEditor::RenderModelView(unsigned int size)
 
 void SceneCastleEditor::DrawGrid() const
 {
+    EDITOR_PROFILE_FUNCTION();
     const float planeY = 0.0f;
     const float extent = static_cast<float>(m_gridHalfExtent) * m_gridSize;
     const DirectX::XMFLOAT4 baseColor(0.35f, 0.38f, 0.42f, 1.0f);
@@ -2535,6 +2639,7 @@ void SceneCastleEditor::DrawGrid() const
 
 void SceneCastleEditor::DrawPlacement(const PlacementInfo& placement, bool isPreview, bool isSelected) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (placement.assetIndex < 0 || placement.assetIndex >= static_cast<int>(m_assets.size())) return;
 
     const AssetState& asset = m_assets[placement.assetIndex];
@@ -2606,11 +2711,13 @@ void SceneCastleEditor::DrawPlacement(const PlacementInfo& placement, bool isPre
 
 void SceneCastleEditor::DrawSelectionFrame(const PlacementInfo& placement) const
 {
+    EDITOR_PROFILE_FUNCTION();
     DrawPlacementBounds(placement, { 0.25f, 0.85f, 1.0f, 1.0f }, 0.05f);
 }
 
 void SceneCastleEditor::DrawPlacementBounds(const PlacementInfo& placement, const DirectX::XMFLOAT4& color, float inflate) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (placement.assetIndex < 0 || placement.assetIndex >= static_cast<int>(m_assets.size())) return;
 
     const AssetState& asset = m_assets[placement.assetIndex];
@@ -2657,6 +2764,7 @@ void SceneCastleEditor::DrawPlacementBounds(const PlacementInfo& placement, cons
 
 void SceneCastleEditor::AddGridCellFrame(int gridX, int gridY, int gridZ, const DirectX::XMFLOAT4& color, float inset) const
 {
+    EDITOR_PROFILE_FUNCTION();
     const float halfSize = m_gridSize * 0.5f - inset;
     const float minY = static_cast<float>(gridY) * m_gridHeightStep + inset;
     const float maxY = static_cast<float>(gridY + 1) * m_gridHeightStep - inset;
@@ -2682,18 +2790,21 @@ void SceneCastleEditor::AddGridCellFrame(int gridX, int gridY, int gridZ, const 
 
 bool SceneCastleEditor::IsInsideGrid(int gridX, int gridY, int gridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (gridY < 0 || gridY > 16) return false;
     return std::abs(gridX) <= m_gridHalfExtent && std::abs(gridZ) <= m_gridHalfExtent;
 }
 
 int SceneCastleEditor::FindPlacementAt(int gridX, int gridY, int gridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return m_buildMap.FindPlacementIndexAt(gridX, gridY, gridZ);
 }
 
 
 bool SceneCastleEditor::RaycastToLayer(float localMouseX, float localMouseY, float viewWidth, float viewHeight, int layer, int& outGridX, int& outGridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     using namespace DirectX;
 
     if (viewWidth <= 1.0f || viewHeight <= 1.0f) return false;
@@ -2730,11 +2841,13 @@ bool SceneCastleEditor::RaycastToLayer(float localMouseX, float localMouseY, flo
 
 bool SceneCastleEditor::RaycastToActiveLayer(float localMouseX, float localMouseY, float viewWidth, float viewHeight, int& outGridX, int& outGridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return RaycastToLayer(localMouseX, localMouseY, viewWidth, viewHeight, m_activeLayer, outGridX, outGridZ);
 }
 
 DirectX::XMFLOAT3 SceneCastleEditor::GridToWorld(int gridX, int gridY, int gridZ, float yOffset) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return {
         static_cast<float>(gridX) * m_gridSize,
         static_cast<float>(gridY) * m_gridHeightStep + yOffset,
@@ -2744,6 +2857,7 @@ DirectX::XMFLOAT3 SceneCastleEditor::GridToWorld(int gridX, int gridY, int gridZ
 
 void SceneCastleEditor::OrbitCamera(float deltaX, float deltaY)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_cameraYaw += deltaX * 0.01f;
     m_cameraPitch = ClampFloat(m_cameraPitch - deltaY * 0.01f, -1.35f, 1.35f);
 
@@ -2762,6 +2876,7 @@ void SceneCastleEditor::OrbitCamera(float deltaX, float deltaY)
 
 void SceneCastleEditor::PanCamera(float deltaX, float deltaY)
 {
+    EDITOR_PROFILE_FUNCTION();
     using namespace DirectX;
 
     const XMVECTOR eye = XMLoadFloat3(&m_cameraEye);
@@ -2797,12 +2912,14 @@ void SceneCastleEditor::PanCamera(float deltaX, float deltaY)
 
 void SceneCastleEditor::ZoomCamera(float delta)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_cameraDistance = ClampFloat(m_cameraDistance - delta, 2.5f, 80.0f);
     OrbitCamera(0.0f, 0.0f);
 }
 
 void SceneCastleEditor::SyncCameraAnglesFromPose()
 {
+    EDITOR_PROFILE_FUNCTION();
     const float dx = m_cameraLook.x - m_cameraEye.x;
     const float dy = m_cameraLook.y - m_cameraEye.y;
     const float dz = m_cameraLook.z - m_cameraEye.z;

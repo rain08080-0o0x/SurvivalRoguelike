@@ -9,6 +9,7 @@
 
 #include "CastleSaveData.h"
 #include "DirectX.h"
+#include "EditorPerformanceProfiler.h"
 #include "Main.h"
 #include "SceneCastleEditor.h"
 #include "Texture.h"
@@ -668,6 +669,7 @@ void DrawTitleKeyConfigWindow(Transfer& tran)
 
 static bool BrowseCastleEditorModelPath(char* outPath, size_t outPathSize)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!outPath || outPathSize == 0) return false;
 
 	OPENFILENAMEA ofn{};
@@ -1493,11 +1495,13 @@ void DrawUpgradeSelectionOverlay(const Transfer& tran, bool showBossDebugHint)
 
 bool IsEngineEditorScene(SceneManager::SceneType sceneType)
 {
+	EDITOR_PROFILE_FUNCTION();
 	return sceneType == SceneManager::SceneType::SCENE_ENGINE_EDITOR;
 }
 
 static SceneCastleEditor* GetCastleEditorScene()
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!IsEngineEditorScene(SceneManager::GetCurrent())) return nullptr;
 	return dynamic_cast<SceneCastleEditor*>(SceneManager::GetScene());
 }
@@ -1512,6 +1516,7 @@ static bool g_showCastleEditorModelViewWindow = false;
 
 void ReleaseEngineEditorRenderTargets()
 {
+	EDITOR_PROFILE_FUNCTION();
 	SAFE_DELETE(g_pEngineEditorDS);
 	SAFE_DELETE(g_pEngineEditorRT);
 	g_engineEditorRTWidth = 0;
@@ -1520,6 +1525,7 @@ void ReleaseEngineEditorRenderTargets()
 
 static bool EnsureEngineEditorRenderTarget(UINT width, UINT height)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (width < 16 || height < 16) return false;
 	if (g_pEngineEditorRT &&
 		g_pEngineEditorDS &&
@@ -1551,6 +1557,7 @@ static bool EnsureEngineEditorRenderTarget(UINT width, UINT height)
 
 static void DrawCastleEditorToolControls(SceneCastleEditor* editor)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!editor) return;
 
 	const int selectedAssetIndex = editor->GetSelectedAssetIndex();
@@ -1587,6 +1594,7 @@ static void DrawCastleEditorToolControls(SceneCastleEditor* editor)
 
 static void DrawCastleEditorOperationGuide(SceneCastleEditor* editor)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!editor) return;
 
 	const int selectedAssetIndex = editor->GetSelectedAssetIndex();
@@ -1662,7 +1670,9 @@ static void DrawCastleEditorOperationGuide(SceneCastleEditor* editor)
 
 static void DrawCastleEditorModelViewWindow(SceneCastleEditor* editor)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!editor || !g_showCastleEditorModelViewWindow) return;
+	EDITOR_PROFILE_WINDOW(u8"ModelView");
 
 	ImGui::SetNextWindowSize(ImVec2(420.0f, 520.0f), ImGuiCond_FirstUseEver);
 	if (!ImGui::Begin(u8"ModelView", &g_showCastleEditorModelViewWindow))
@@ -1730,7 +1740,9 @@ static void DrawCastleEditorModelViewWindow(SceneCastleEditor* editor)
 
 static void DrawCastleEditorPaletteWindow(SceneCastleEditor* editor)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!editor) return;
+	EDITOR_PROFILE_WINDOW(u8"パレット");
 	static char addAssetName[128] = "";
 	static char addAssetPath[512] = "";
 	if (!ImGui::Begin(u8"パレット"))
@@ -1863,6 +1875,7 @@ static void DrawCastleEditorPaletteWindow(SceneCastleEditor* editor)
 
 	if (ImGui::BeginPopupModal(u8"モデル追加", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
 	{
+		EDITOR_PROFILE_WINDOW(u8"モデル追加");
 		ImGui::TextDisabled(u8"表示名が空欄ならファイル名から自動で作成します。");
 		ImGui::TextDisabled(u8"例: Assets/Model/Castle/Brick1.fbx / Assets/Model/Furina/furina.pmx");
 		ImGui::PushItemWidth(420.0f);
@@ -1930,7 +1943,9 @@ static void DrawCastleEditorPaletteWindow(SceneCastleEditor* editor)
 
 static void DrawCastleEditorHierarchyWindow(SceneCastleEditor* editor)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!editor) return;
+	EDITOR_PROFILE_WINDOW(u8"配置一覧");
 	if (!ImGui::Begin(u8"配置一覧"))
 	{
 		ImGui::End();
@@ -1979,7 +1994,9 @@ static void DrawCastleEditorHierarchyWindow(SceneCastleEditor* editor)
 
 static void DrawCastleEditorInspectorWindow(SceneCastleEditor* editor)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!editor) return;
+	EDITOR_PROFILE_WINDOW(u8"インスペクタ");
 	static int castleSaveStatus = 0;
 	if (!ImGui::Begin(u8"インスペクタ"))
 	{
@@ -2110,7 +2127,9 @@ static void DrawCastleEditorInspectorWindow(SceneCastleEditor* editor)
 
 static void DrawCastleEditorCameraWindow(SceneCastleEditor* editor)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!editor) return;
+	EDITOR_PROFILE_WINDOW(u8"カメラ");
 	if (!ImGui::Begin(u8"カメラ"))
 	{
 		ImGui::End();
@@ -2146,7 +2165,9 @@ static void DrawCastleEditorCameraWindow(SceneCastleEditor* editor)
 
 static void DrawEngineEditorSceneViewWindow(SceneCastleEditor* editor)
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!editor) return;
+	EDITOR_PROFILE_WINDOW(u8"シーンビュー");
 	if (!ImGui::Begin(u8"シーンビュー"))
 	{
 		ImGui::End();
@@ -2215,6 +2236,7 @@ static void DrawEngineEditorSceneViewWindow(SceneCastleEditor* editor)
 
 void DrawEngineEditorWindows()
 {
+	EDITOR_PROFILE_FUNCTION();
 	SceneCastleEditor* editor = GetCastleEditorScene();
 	if (!editor) return;
 
@@ -2271,6 +2293,7 @@ void DrawEngineEditorWindows()
 
 void DrawSceneToEngineEditorRenderTarget()
 {
+	EDITOR_PROFILE_FUNCTION();
 	if (!IsEngineEditorScene(SceneManager::GetCurrent())) return;
 	if (!EnsureEngineEditorRenderTarget(g_engineEditorRequestWidth, g_engineEditorRequestHeight)) return;
 	if (!g_pEngineEditorRT || !g_pEngineEditorDS) return;

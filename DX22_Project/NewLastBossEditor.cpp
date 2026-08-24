@@ -1,4 +1,5 @@
 ﻿#include "NewLastBossEditor.h"
+#include "EditorPerformanceProfiler.h"
 #include "Geometory.h"
 #include "Input.h"
 #include "CameraDebug.h"
@@ -17,6 +18,7 @@ namespace
 	// 2点間の距離を求める関数
 	DirectX::XMFLOAT2 Squared(DirectX::XMFLOAT2 x1, DirectX::XMFLOAT2 x2)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		return DirectX::XMFLOAT2(x2.x - x1.x, x2.y - x1.y);
 	}
 
@@ -24,6 +26,7 @@ namespace
 	// テクスチャ、位置、サイズを引数に渡す。
 	void DrawKawasaki(Texture* tex, DirectX::XMFLOAT3 pos, DirectX::XMFLOAT2 size)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		using namespace DirectX;
 
 		XMMATRIX mat = 
@@ -48,6 +51,7 @@ namespace
 
 void DrawCharSprite(Texture* texture, Camera* camera, const CharInfo& info, const DirectX::XMFLOAT4& color)
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (!texture)
 	{
 		return;
@@ -98,6 +102,7 @@ void DrawCharSprite(Texture* texture, Camera* camera, const CharInfo& info, cons
 
 void DrawCharCollision(CharInfo set,DirectX::XMFLOAT4 color)
 {
+    EDITOR_PROFILE_FUNCTION();
 	set.size.x /= 2.0f;
 	set.size.y /= 2.0f;
 	set.size.z /= 2.0f;
@@ -121,6 +126,7 @@ void DrawCharCollision(CharInfo set,DirectX::XMFLOAT4 color)
 
 void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width, DirectX::XMFLOAT4 color)
 {
+    EDITOR_PROFILE_FUNCTION();
 	DirectX::XMFLOAT3 vertex[4];
 	float angle = atan2f(end.z - start.z,end.x - start.x);
 	float
@@ -148,6 +154,7 @@ void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width
 /// <param name="progress">0.0f～1.0fで攻撃発生までの予兆</param>
 void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width, Texture* tex,float progress)
 {
+    EDITOR_PROFILE_FUNCTION();
 	using namespace DirectX;
 	float angle = atan2f(end.z - start.z, end.x - start.x);
 	DirectX::XMFLOAT2 start2D, end2D;
@@ -184,6 +191,7 @@ void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width
 }
 void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width, Texture* tex)
 {
+    EDITOR_PROFILE_FUNCTION();
 	using namespace DirectX;
 	float angle = atan2f(end.z - start.z, end.x - start.x);
 	DirectX::XMFLOAT2 start2D, end2D;
@@ -230,6 +238,7 @@ void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width
 /// <param name="progress">0.0f～1.0fで攻撃発生までの予兆</param>
 void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width, float height,Texture* tex,float progress)
 {
+    EDITOR_PROFILE_FUNCTION();
 	using namespace DirectX;
 	float angle = atan2f(end.z - start.z, end.x - start.x);
 	DirectX::XMFLOAT2 start2D, end2D;
@@ -266,6 +275,7 @@ void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width
 }
 void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width, float height,Texture* tex)
 {
+    EDITOR_PROFILE_FUNCTION();
 	using namespace DirectX;
 	float angle = atan2f(end.z - start.z, end.x - start.x);
 	DirectX::XMFLOAT2 start2D, end2D;
@@ -313,6 +323,7 @@ void DrawAttackRange(DirectX::XMFLOAT3 start, DirectX::XMFLOAT3 end, float width
 /// <param name=" angle : ">角度</param>
 void DrawAttackRange(DirectX::XMFLOAT3 pos,float width,float length,float angle)
 {
+    EDITOR_PROFILE_FUNCTION();
 	using namespace DirectX;
 	XMFLOAT3 vertex[4];
 	XMFLOAT2 start2D,end2D;
@@ -359,6 +370,7 @@ void DrawAttackRange(DirectX::XMFLOAT3 pos,float width,float length,float angle)
 /// <param name="   tex : ">テクスチャ</param>
 void DrawAttackRange(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 color, float width, float length, float angle, Texture* tex)
 {
+    EDITOR_PROFILE_FUNCTION();
 	using namespace DirectX;
 
 	XMMATRIX mat =
@@ -394,6 +406,7 @@ void DrawAttackRange(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 color, float width
 /// <param name="progress : ">予兆までの達成率</param>
 void DrawAttackRange(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 color, float width, float length, float angle,Texture* tex,float progress)
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (progress <= 0.0f || progress > 1.0f) return;
 
 	using namespace DirectX;;
@@ -428,6 +441,8 @@ void DrawAttackRange(DirectX::XMFLOAT3 pos, DirectX::XMFLOAT4 color, float width
 
 void NewLastBoss::DrawDebugGUI()
 {
+    EDITOR_PROFILE_FUNCTION();
+	EDITOR_PROFILE_WINDOW(u8"Main");
 	using namespace ImGui;
 	Begin("Main");
 	// Player
@@ -669,16 +684,19 @@ NewLastBoss::NewLastBoss()
 	, m_pPlayer(nullptr)
 	, m_pBoss(nullptr)
 {
+    EDITOR_PROFILE_FUNCTION();
 	Init();
 }
 
 NewLastBoss::~NewLastBoss()
 {
+    EDITOR_PROFILE_FUNCTION();
 	Uninit();
 }
 
 void NewLastBoss::Init()
 {
+    EDITOR_PROFILE_FUNCTION();
 	camera = new CameraDebug();
 	static_cast<CameraDebug*>(camera)->SetPose({ 0.0f, 18.25f, -8.0f }, { 0.0f, 0.0f, 0.0f });
 
@@ -765,6 +783,7 @@ void NewLastBoss::Init()
 
 void NewLastBoss::Uninit()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (m_pPlayer)
 	{
 		delete m_pPlayer;
@@ -802,6 +821,7 @@ void NewLastBoss::Uninit()
 
 void NewLastBoss::Update()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (camera)
 	{
 		camera->Update();
@@ -818,6 +838,7 @@ void NewLastBoss::Update()
 
 void NewLastBoss::Draw()
 {
+    EDITOR_PROFILE_FUNCTION();
 	Geometory::AddLine(player.pos, boss.pos, { 0, 1, 0, 1 });
 
 	DirectX::XMFLOAT4X4 world;
@@ -854,6 +875,7 @@ void NewLastBoss::Draw()
 
 void NewLastBoss::UpdatePlayer()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (IsKeyPress('A'))
 	{
 		player.pos.x -= playerSpeed;
@@ -879,10 +901,12 @@ void NewLastBoss::UpdatePlayer()
 
 void NewLastBoss::UpdateBoss()
 {
+    EDITOR_PROFILE_FUNCTION();
 }
 
 void NewLastBoss::DrawField()
 {
+    EDITOR_PROFILE_FUNCTION();
 	using namespace DirectX;
 	DirectX::XMMATRIX mat = XMMatrixRotationX(XMConvertToRadians(90)) *
 		XMMatrixTranslation(0, 0, 0);
@@ -900,6 +924,7 @@ void NewLastBoss::DrawField()
 
 void NewLastBoss::AddAttack()
 {
+    EDITOR_PROFILE_FUNCTION();
 	for (int i = 0; i < 10; i++)
 	{
 		//攻撃が発生している場合はスルー
@@ -920,6 +945,7 @@ void NewLastBoss::AddAttack()
 
 void NewLastBoss::RandomSlashUpdate()
 {
+    EDITOR_PROFILE_FUNCTION();
 	static int counter;
 	counter++;
 	// 30フレーム毎に攻撃を発生。合計10個生成で生成終了
@@ -959,6 +985,7 @@ void NewLastBoss::RandomSlashUpdate()
 
 void NewLastBoss::RandomSlashDraw()
 {
+    EDITOR_PROFILE_FUNCTION();
 
 	for (int i = 0; i < 10; i++)
 	{
@@ -973,6 +1000,7 @@ void NewLastBoss::RandomSlashDraw()
 
 void NewLastBoss::CrossUpdate()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (crossState == Max)return;
 	count++;
 	if (count >= 240)
@@ -984,6 +1012,7 @@ void NewLastBoss::CrossUpdate()
 
 void NewLastBoss::CrossDraw()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (count >= 120)return;
 		float width = 2.0f;
 		float len2 = sqrtf(2.0f);
@@ -1281,6 +1310,7 @@ void NewLastBoss::CrossDraw()
 
 void NewLastBoss::CircleCrossUpdate()
 {
+    EDITOR_PROFILE_FUNCTION();
 	switch (cc.state)
 	{
 	case None:	// 未使用
@@ -1350,6 +1380,7 @@ void NewLastBoss::CircleCrossUpdate()
 
 void DrawAtkCC(NewLastBoss::CircleCross cc,Texture* tex)
 {
+    EDITOR_PROFILE_FUNCTION();
 	// 最初の攻撃
 	if(cc.first.atkCount == 0)
 	{
@@ -1557,12 +1588,14 @@ void DrawAtkCC(NewLastBoss::CircleCross cc,Texture* tex)
 
 void NewLastBoss::CircleCrossDraw()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if(cc.state == AttackState::Using)
 		DrawAtkCC(cc, m_pAtkTex);
 }
 
 void NewLastBoss::CircleAttackUpdate()
 {
+    EDITOR_PROFILE_FUNCTION();
 }
 
 /// <summary>
@@ -1573,6 +1606,7 @@ void NewLastBoss::CircleAttackUpdate()
 /// <param name="side">N角形</param>
 void DebugCircleDraw(DirectX::XMFLOAT3 pos,float range,int side)
 {
+    EDITOR_PROFILE_FUNCTION();
 	DirectX::XMFLOAT3 start{}, end{};
 
 	for (int i = 0; i < side; i++)
@@ -1599,6 +1633,7 @@ void DebugCircleDraw(DirectX::XMFLOAT3 pos,float range,int side)
 /// <param name="tex">テクスチャ</param>
 void DCD(DirectX::XMFLOAT3 pos,float range,int side,Texture* tex,float sabun)
 {
+    EDITOR_PROFILE_FUNCTION();
 	using namespace DirectX;
 	XMMATRIX mat;
 	XMFLOAT4X4 world;
@@ -1639,6 +1674,7 @@ void DCD(DirectX::XMFLOAT3 pos,float range,int side,Texture* tex,float sabun)
 
 void NewLastBoss::CircleAttackDraw()
 {
+    EDITOR_PROFILE_FUNCTION();
 	DirectX::XMFLOAT3 pos = player.pos;
 	pos.y = 0.12f;
 

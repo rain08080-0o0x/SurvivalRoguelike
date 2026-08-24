@@ -1,4 +1,5 @@
 ﻿#include "SceneBossEditor.h"
+#include "EditorPerformanceProfiler.h"
 
 #include <algorithm>
 #include <cmath>
@@ -21,11 +22,35 @@ namespace
 	const float kZoneHeight = 0.10f;
 	const float kPlayerSpeed = 5.5f;
 
-	const char* SelectLabel(bool useJapanese, const char* en, const char* jp) { return useJapanese ? jp : en; }
-	float ClampFloat(float v, float lo, float hi) { return (v < lo) ? lo : ((v > hi) ? hi : v); }
-	int ClampIntValue(int v, int lo, int hi) { return (v < lo) ? lo : ((v > hi) ? hi : v); }
-	float Clamp01(float v) { return ClampFloat(v, 0.0f, 1.0f); }
-	float DegToRad(float deg) { return deg * (DirectX::XM_PI / 180.0f); }
+	const char* SelectLabel(bool useJapanese, const char* en, const char* jp)
+	{
+		EDITOR_PROFILE_FUNCTION();
+		return useJapanese ? jp : en;
+	}
+
+	float ClampFloat(float v, float lo, float hi)
+	{
+		EDITOR_PROFILE_FUNCTION();
+		return (v < lo) ? lo : ((v > hi) ? hi : v);
+	}
+
+	int ClampIntValue(int v, int lo, int hi)
+	{
+		EDITOR_PROFILE_FUNCTION();
+		return (v < lo) ? lo : ((v > hi) ? hi : v);
+	}
+
+	float Clamp01(float v)
+	{
+		EDITOR_PROFILE_FUNCTION();
+		return ClampFloat(v, 0.0f, 1.0f);
+	}
+
+	float DegToRad(float deg)
+	{
+		EDITOR_PROFILE_FUNCTION();
+		return deg * (DirectX::XM_PI / 180.0f);
+	}
 	DirectX::XMFLOAT3 RotateOffsetY(const DirectX::XMFLOAT3& v, float yawDeg);
 
 	float ComputeFacingYawDeg(const DirectX::XMFLOAT3& from, const DirectX::XMFLOAT3& to, float fallbackDeg = 0.0f)
@@ -51,6 +76,7 @@ namespace
 
 	bool IsFinalPreviewSpecialAttack(const BossAttackScript::Attack& attack)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		return attack.name == kFinalAttackLine
 			|| attack.name == kFinalAttackCross
 			|| attack.name == kFinalAttackRing
@@ -69,6 +95,7 @@ namespace
 		const DirectX::XMFLOAT3& playerPos,
 		float facingYawDeg)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		switch (mode)
 		{
 		case BossAttackScript::ColliderStartCurrent:
@@ -88,6 +115,7 @@ namespace
 
 	DirectX::XMFLOAT3 RotateOffsetY(const DirectX::XMFLOAT3& v, float yawDeg)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const float rad = DegToRad(yawDeg);
 		const float c = std::cos(rad);
 		const float s = std::sin(rad);
@@ -98,6 +126,7 @@ namespace
 		const DirectX::XMFLOAT3& to,
 		const DirectX::XMFLOAT3& fallback)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const float dx = to.x - from.x;
 		const float dz = to.z - from.z;
 		const float lenSq = dx * dx + dz * dz;
@@ -113,6 +142,7 @@ namespace
 		const DirectX::XMFLOAT3& center,
 		float diameter)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		SceneBossEditor::PreviewZone zone;
 		zone.center = center;
 		zone.center.y = std::max(zone.center.y, kZoneHeight);
@@ -129,6 +159,7 @@ namespace
 		const DirectX::XMFLOAT3& endPos,
 		float width)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		SceneBossEditor::PreviewZone zone;
 		zone.shape = BossAttackScript::ColliderShapeBox;
 		zone.startPos = startPos;
@@ -163,6 +194,7 @@ namespace
 		float thickness,
 		int count)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const int clampedCount = ClampIntValue(count, 8, 64);
 		const float safeRadius = std::max(ringRadius, thickness * 0.5f);
 		const float circumference = DirectX::XM_2PI * safeRadius;
@@ -198,6 +230,7 @@ namespace
 		int count,
 		float width)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const int clampedCount = ClampIntValue(count, 6, 32);
 		const float safeOuter = std::max(outerRadius, innerRadius + 0.20f);
 		const float safeInner = ClampFloat(innerRadius, 0.20f, safeOuter - 0.10f);
@@ -226,6 +259,7 @@ namespace
 		float width,
 		float baseYawDeg)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const int clampedCount = ClampIntValue(count, 2, 32);
 		for (int i = 0; i < clampedCount; ++i)
 		{
@@ -246,6 +280,7 @@ namespace
 		float length,
 		float width)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const int clampedCount = ClampIntValue(count, 1, 16);
 		if (clampedCount == 1)
 		{
@@ -266,6 +301,7 @@ namespace
 
 	void PrepareLineDraw(CameraDebug* camera)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		if (!camera) return;
 		DirectX::XMFLOAT4X4 identity{};
 		DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
@@ -297,6 +333,7 @@ namespace
 		const DirectX::XMFLOAT2& size,
 		const DirectX::XMFLOAT4& color)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		if (!texture) return;
 		using namespace DirectX;
 
@@ -329,6 +366,7 @@ namespace
 
 	void AddRectOutline(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT3& size, float yawDeg, const DirectX::XMFLOAT4& color)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const float hx = size.x * 0.5f;
 		const float hz = size.z * 0.5f;
 		DirectX::XMFLOAT3 corners[4] =
@@ -356,6 +394,7 @@ namespace
 		float thickness,
 		const DirectX::XMFLOAT4& color)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const float dx = endPos.x - startPos.x;
 		const float dz = endPos.z - startPos.z;
 		const float distanceSq = dx * dx + dz * dz;
@@ -413,6 +452,7 @@ namespace
 		float radius,
 		const DirectX::XMFLOAT4& color)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const float dx = endPos.x - startPos.x;
 		const float dz = endPos.z - startPos.z;
 		const float distanceSq = dx * dx + dz * dz;
@@ -439,6 +479,7 @@ namespace
 		const DirectX::XMFLOAT3& startPos,
 		const DirectX::XMFLOAT3& endPos)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const float segX = endPos.x - startPos.x;
 		const float segZ = endPos.z - startPos.z;
 		const float lenSq = segX * segX + segZ * segZ;
@@ -462,6 +503,7 @@ namespace
 
 	DirectX::XMFLOAT3 ClampArenaPos(const DirectX::XMFLOAT3& pos, const DirectX::XMFLOAT3& size)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		const float hx = size.x * 0.5f;
 		const float hz = size.z * 0.5f;
 		return {
@@ -477,6 +519,7 @@ namespace
 		const DirectX::XMFLOAT3& playerPos,
 		float facingYawDeg)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		SceneBossEditor::PreviewZone zone;
 		const float baseYawDeg = (collider.startMode == BossAttackScript::ColliderStartCurrent) ? facingYawDeg : 0.0f;
 		zone.shape = BossAttackScript::NormalizeColliderShape(collider.shape);
@@ -579,6 +622,7 @@ SceneBossEditor::SceneBossEditor(EditorMode mode)
 	, m_previewState(PreviewIdle)
 	, m_previewPlaying(false)
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (m_pCamera) m_pCamera->SetPose({ 0.0f, 9.5f, -9.0f }, { 0.0f, 0.0f, 0.0f });
 	if (m_pFloorTexture && FAILED(m_pFloorTexture->Create("Assets/Texture/Game/jimen.png"))) { delete m_pFloorTexture; m_pFloorTexture = nullptr; }
 	if (m_pMarkerTexture && FAILED(m_pMarkerTexture->Create("Assets/Texture/Star.png"))) { delete m_pMarkerTexture; m_pMarkerTexture = nullptr; }
@@ -594,6 +638,7 @@ SceneBossEditor::SceneBossEditor(EditorMode mode)
 
 SceneBossEditor::~SceneBossEditor()
 {
+    EDITOR_PROFILE_FUNCTION();
 	for (auto& entry : m_textureCache) delete entry.second;
 	delete m_pPlayerTexture;
 	delete m_pBossTexture;
@@ -605,26 +650,31 @@ SceneBossEditor::~SceneBossEditor()
 
 BossAttackScript::Profile* SceneBossEditor::GetSelectedProfile()
 {
+    EDITOR_PROFILE_FUNCTION();
 	return BossAttackScript::FindProfile(m_database, m_selectedProfile);
 }
 
 const BossAttackScript::Profile* SceneBossEditor::GetSelectedProfile() const
 {
+    EDITOR_PROFILE_FUNCTION();
 	return BossAttackScript::FindProfile(m_database, m_selectedProfile);
 }
 
 bool SceneBossEditor::IsFinalBossEditor() const
 {
+    EDITOR_PROFILE_FUNCTION();
 	return m_editorMode == ModeFinalBoss;
 }
 
 const char* SceneBossEditor::GetEditorPath() const
 {
+    EDITOR_PROFILE_FUNCTION();
 	return IsFinalBossEditor() ? BossAttackScript::GetFinalBossPath() : BossAttackScript::GetDefaultPath();
 }
 
 BossAttackScript::Database SceneBossEditor::MakeEditorDefaultDatabase() const
 {
+    EDITOR_PROFILE_FUNCTION();
 	BossAttackScript::Database database;
 	if (IsFinalBossEditor())
 	{
@@ -643,6 +693,7 @@ BossAttackScript::Database SceneBossEditor::MakeEditorDefaultDatabase() const
 
 Texture* SceneBossEditor::GetTextureForPath(const std::string& relativePath)
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (relativePath.empty() || relativePath.find("Assets/") != 0) return nullptr;
 	for (auto& entry : m_textureCache)
 	{
@@ -660,6 +711,7 @@ Texture* SceneBossEditor::GetTextureForPath(const std::string& relativePath)
 
 void SceneBossEditor::ClampSelection()
 {
+    EDITOR_PROFILE_FUNCTION();
 	BossAttackScript::Database filtered = MakeEditorDefaultDatabase();
 	for (BossAttackScript::Profile& defaultProfile : filtered.profiles)
 	{
@@ -700,6 +752,7 @@ void SceneBossEditor::ClampSelection()
 
 void SceneBossEditor::ResetPreview(bool resetPlayer)
 {
+    EDITOR_PROFILE_FUNCTION();
 	m_previewPlaying = false;
 	m_previewZones.clear();
 	m_previewVisuals.clear();
@@ -717,6 +770,7 @@ void SceneBossEditor::ResetPreview(bool resetPlayer)
 
 void SceneBossEditor::UpdatePreviewPlayer(float dt)
 {
+    EDITOR_PROFILE_FUNCTION();
 	float moveX = 0.0f;
 	float moveZ = 0.0f;
 	if (IsRawKeyPress('A')) moveX -= 1.0f;
@@ -745,6 +799,7 @@ void SceneBossEditor::BuildPreviewZones(const BossAttackScript::Attack& attack,
 	DirectX::XMFLOAT3& outBossTargetPos,
 	float& outFacingYawDeg)
 {
+    EDITOR_PROFILE_FUNCTION();
 	outZones.clear();
 	const BossAttackScript::Profile* profile = GetSelectedProfile();
 	if (!profile)
@@ -952,6 +1007,7 @@ void SceneBossEditor::BuildPreviewZones(const BossAttackScript::Attack& attack,
 
 void SceneBossEditor::UpdatePreviewHit()
 {
+    EDITOR_PROFILE_FUNCTION();
 	for (const PreviewZone& zone : m_previewZones)
 	{
 		const float playerHalfHeight = m_previewPlayerSize.y * 0.5f;
@@ -996,6 +1052,7 @@ void SceneBossEditor::UpdatePreviewHit()
 
 void SceneBossEditor::BeginPreviewAttack(int attackIndex)
 {
+    EDITOR_PROFILE_FUNCTION();
 	const BossAttackScript::Profile* profile = GetSelectedProfile();
 	if (!profile || profile->attacks.empty())
 	{
@@ -1025,6 +1082,7 @@ void SceneBossEditor::BeginPreviewAttack(int attackIndex)
 
 void SceneBossEditor::AdvancePreviewAttack()
 {
+    EDITOR_PROFILE_FUNCTION();
 	const BossAttackScript::Profile* profile = GetSelectedProfile();
 	if (!profile || profile->attacks.empty())
 	{
@@ -1057,6 +1115,7 @@ void SceneBossEditor::AdvancePreviewAttack()
 
 void SceneBossEditor::UpdatePreviewVisuals(float dt)
 {
+    EDITOR_PROFILE_FUNCTION();
 	for (PreviewVisual& visual : m_previewVisuals)
 	{
 		visual.timer -= dt;
@@ -1070,6 +1129,7 @@ void SceneBossEditor::UpdatePreviewVisuals(float dt)
 
 void SceneBossEditor::UpdatePreviewPlayback(float dt)
 {
+    EDITOR_PROFILE_FUNCTION();
 	UpdatePreviewVisuals(dt);
 	if (!m_previewPlaying) return;
 	const BossAttackScript::Profile* profile = GetSelectedProfile();
@@ -1212,6 +1272,7 @@ void SceneBossEditor::UpdatePreviewPlayback(float dt)
 
 void SceneBossEditor::Update()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (IsMenuBackTrigger())
 	{
 		SceneManager::ChangeScene(SceneManager::SCENE_TITLE);
@@ -1226,6 +1287,7 @@ void SceneBossEditor::Update()
 
 void SceneBossEditor::DrawReferenceFloor() const
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (m_pFloorTexture)
 	{
 		DrawGroundSprite(m_pFloorTexture, { 0.0f, 0.0f, 0.0f }, { kStageSize, kStageSize }, { 0.55f, 0.55f, 0.55f, 0.45f });
@@ -1234,6 +1296,7 @@ void SceneBossEditor::DrawReferenceFloor() const
 
 void SceneBossEditor::DrawPreviewScene() const
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (!m_pCamera) return;
 	Sprite::SetView(m_pCamera->GetViewMatrix());
 	Sprite::SetProjection(m_pCamera->GetProjectionMatrix());
@@ -1467,12 +1530,15 @@ void SceneBossEditor::DrawPreviewScene() const
 
 void SceneBossEditor::Draw()
 {
+    EDITOR_PROFILE_FUNCTION();
 	DrawPreviewScene();
 	DrawDebugWindow();
 }
 
 void SceneBossEditor::DrawDebugWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+	EDITOR_PROFILE_WINDOW(IsFinalBossEditor() ? u8"ラスボス専用エディタ" : u8"通常ボス攻撃エディタ");
 	ImGui::SetNextWindowPos(ImVec2(24.0f, 24.0f), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(620.0f, 860.0f), ImGuiCond_FirstUseEver);
 	if (!ImGui::Begin(SelectLabel(

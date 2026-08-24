@@ -155,6 +155,7 @@
     <ClCompile Include="Collision.cpp" />
     <ClCompile Include="Dice.cpp" />
     <ClCompile Include="DirectX.cpp" />
+    <ClCompile Include="EditorPerformanceProfiler.cpp" />
     <ClCompile Include="Enemy.cpp" />
     <ClCompile Include="Fade.cpp" />
     <ClCompile Include="FadeBlack.cpp" />
@@ -173,6 +174,7 @@
     <ClCompile Include="MeshBuffer.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="NewLastBossEditor.cpp" />
+    <ClCompile Include="NarakuPieceEditorHistory.cpp" />
     <ClCompile Include="NarakuPieceData.cpp" />
     <ClCompile Include="NarakuStageGenerator.cpp" />
     <ClCompile Include="ParticleEffectPreset.cpp" />
@@ -189,6 +191,11 @@
     <ClCompile Include="SceneGame.cpp" />
     <ClCompile Include="SceneNarakuEditor.cpp" />
     <ClCompile Include="SceneNarakuPieceEditor.cpp" />
+    <ClCompile Include="SceneNarakuPieceEditorDocument.cpp" />
+    <ClCompile Include="SceneNarakuPieceEditorEditing.cpp" />
+    <ClCompile Include="SceneNarakuPieceEditorEnvironment.cpp" />
+    <ClCompile Include="SceneNarakuPieceEditorPreview.cpp" />
+    <ClCompile Include="SceneNarakuPieceEditorWindows.cpp" />
     <ClCompile Include="SceneManager.cpp" />
     <ClCompile Include="SceneNarakuProto.cpp" />
     <ClCompile Include="SceneResult.cpp" />
@@ -225,6 +232,7 @@
     <ClInclude Include="Dice.h" />
     <ClInclude Include="DirectX.h" />
     <ClInclude Include="Easing.h" />
+    <ClInclude Include="EditorPerformanceProfiler.h" />
     <ClInclude Include="Enemy.h" />
     <ClInclude Include="Fade.h" />
     <ClInclude Include="FadeBlack.h" />
@@ -245,6 +253,8 @@
     <ClInclude Include="MeshBuffer.h" />
     <ClInclude Include="Model.h" />
     <ClInclude Include="NarakuMapData.h" />
+    <ClInclude Include="NarakuPieceEditorHistory.h" />
+    <ClInclude Include="NarakuPieceEditorInternal.h" />
     <ClInclude Include="NarakuPieceData.h" />
     <ClInclude Include="NarakuStageGenerator.h" />
     <ClInclude Include="NewLastBossEditor.h" />

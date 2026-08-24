@@ -1,4 +1,5 @@
 ﻿#include "Scene3DEditor.h"
+#include "EditorPerformanceProfiler.h"
 #include "Geometory.h"
 #include "Transfer.h"
 #include "CameraDebug.h"
@@ -16,6 +17,7 @@
 /// <returns>XMFLOAT4X4が値として返却</returns>
 static DirectX::XMFLOAT4X4 TransformToFloat4x4(Scene3DEditor::Transform set)
 {
+    EDITOR_PROFILE_FUNCTION();
     using namespace DirectX;
     
     DirectX::XMFLOAT4X4 result;
@@ -34,6 +36,7 @@ static DirectX::XMFLOAT4X4 TransformToFloat4x4(Scene3DEditor::Transform set)
 
 static DirectX::XMFLOAT3 AdditionFloat3(DirectX::XMFLOAT3 A, DirectX::XMFLOAT3 B)
 {
+    EDITOR_PROFILE_FUNCTION();
     DirectX::XMFLOAT3 result;
     result.x = A.x + B.x;
     result.y = A.x + B.y;
@@ -48,11 +51,13 @@ namespace
 
     int NormalizeCameraMode(int mode)
     {
+        EDITOR_PROFILE_FUNCTION();
         return (mode == kCameraModeDebug) ? kCameraModeDebug : kCameraModeGame;
     }
 
     void ApplyCameraPose(CameraDebug* camera, const DirectX::XMFLOAT3& eye, const DirectX::XMFLOAT3& look)
     {
+        EDITOR_PROFILE_FUNCTION();
         if (camera)
         {
             camera->SetPose(eye, look);
@@ -61,6 +66,7 @@ namespace
 }
 void Scene3DEditor::RightArm(DirectX::XMFLOAT3 jointPos)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_armRight1.pos.x = cosf(-m_armRight1.rotate.y) * HALF(m_armRight1.scale.x) + jointPos.x;
     m_armRight1.pos.z = sinf(-m_armRight1.rotate.y) * HALF(m_armRight1.scale.x) + jointPos.z;
     m_armRight1.pos.y = m_armRight1.gpos.y;
@@ -75,6 +81,7 @@ void Scene3DEditor::RightArm(DirectX::XMFLOAT3 jointPos)
 
 void Scene3DEditor::LeftArm(DirectX::XMFLOAT3 jointPos)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_armLeft1.pos.x = cosf(-m_armLeft1.rotate.y) * HALF(m_armLeft1.scale.x) + jointPos.x;
     m_armLeft1.pos.z = sinf(-m_armLeft1.rotate.y) * HALF(m_armLeft1.scale.x) + jointPos.z;
     m_armLeft1.pos.y = m_armLeft1.gpos.y;
@@ -89,6 +96,7 @@ void Scene3DEditor::LeftArm(DirectX::XMFLOAT3 jointPos)
 
 void Scene3DEditor::RightLeg(DirectX::XMFLOAT3 jointPos)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_legRight1.pos.x = cosf(-m_legRight1.rotate.y) * HALF(m_legRight1.scale.x) + jointPos.x;
     m_legRight1.pos.z = sinf(-m_legRight1.rotate.y) * HALF(m_legRight1.scale.x) + jointPos.z;
     m_legRight1.pos.y = m_legRight1.gpos.y;
@@ -103,6 +111,7 @@ void Scene3DEditor::RightLeg(DirectX::XMFLOAT3 jointPos)
 
 void Scene3DEditor::LeftLeg(DirectX::XMFLOAT3 jointPos)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_legLeft1.pos.x = cosf(-m_legLeft1.rotate.y) * HALF(m_legLeft1.scale.x) + jointPos.x;
     m_legLeft1.pos.z = sinf(-m_legLeft1.rotate.y) * HALF(m_legLeft1.scale.x) + jointPos.z;
     m_legLeft1.pos.y = m_legLeft1.gpos.y;
@@ -118,6 +127,7 @@ void Scene3DEditor::LeftLeg(DirectX::XMFLOAT3 jointPos)
 #define AddBodyPos(set) AdditionFloat3(set,m_body.pos) 
 void Scene3DEditor::BodyTransformUpdate()
 {
+    EDITOR_PROFILE_FUNCTION();
     RightArm(AddBodyPos(m_body.jointRightArmPos));
     LeftArm(AddBodyPos(m_body.jointLeftArmPos));
     RightLeg(AddBodyPos(m_body.jointRightLegPos));
@@ -130,6 +140,7 @@ Scene3DEditor::Scene3DEditor()
     , m_pCameraDebug(nullptr)
     , m_cameraMode(0)
 {
+    EDITOR_PROFILE_FUNCTION();
     TRAN_INS;
     {
     // arm right 1
@@ -211,6 +222,7 @@ Scene3DEditor::Scene3DEditor()
 
 Scene3DEditor::~Scene3DEditor()
 {
+    EDITOR_PROFILE_FUNCTION();
     SAFE_DELETE(m_pCameraGame);
     SAFE_DELETE(m_pCameraDebug);
     m_pCamera = nullptr;
@@ -218,6 +230,7 @@ Scene3DEditor::~Scene3DEditor()
 
 void Scene3DEditor::Update()
 {
+    EDITOR_PROFILE_FUNCTION();
     SyncFromTransfer();
 
     TRAN_INS;
@@ -258,6 +271,7 @@ void Scene3DEditor::Update()
 
 void Scene3DEditor::Draw()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!m_pCamera) return;
 
     DirectX::XMFLOAT4X4 view = m_pCamera->GetViewMatrix();
@@ -301,6 +315,7 @@ void Scene3DEditor::Draw()
 
 void Scene3DEditor::SyncToTransfer()
 {
+    EDITOR_PROFILE_FUNCTION();
     TRAN_INS;
     // Arm Right 1
     tran.modelediter.armRight1.subAngle = m_armRight1.rotate;
@@ -346,6 +361,7 @@ void Scene3DEditor::SyncToTransfer()
 
 void Scene3DEditor::SyncFromTransfer()
 {
+    EDITOR_PROFILE_FUNCTION();
     TRAN_INS;
     // Arm Right 1
     m_armRight1.rotate = tran.modelediter.armRight1.subAngle;

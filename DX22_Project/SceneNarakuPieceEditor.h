@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "NarakuPieceData.h"
+#include "NarakuPieceEditorHistory.h"
 #include "Scene.h"
 
 class RenderTarget;
@@ -107,44 +108,13 @@ public:
     void SyncNativeMenuState(HMENU menuBar) const;
 
 private:
-    /**
-     * @brief 高さ編集で選択中の頂点座標を保持します。
-     */
-    struct VertexSelection
-    {
-        /** @brief 選択中頂点のX方向グリッド座標です。 */
-        int x = 0;
-
-        /** @brief 選択中頂点のZ方向グリッド座標です。 */
-        int z = 0;
-    };
-
-    /**
-     * @brief オブジェクト配置やセル選択で使用するセル座標を保持します。
-     */
-    struct CellSelection
-    {
-        /** @brief 対象セルのX方向グリッド座標です。 */
-        int x = 0;
-
-        /** @brief 対象セルのZ方向グリッド座標です。 */
-        int z = 0;
-    };
-
-    /**
-     * @brief エディタで有効な主編集モードです。
-     */
-    enum class EditMode
-    {
-        /** @brief 地形頂点やセルを対象に地形情報を編集するモードです。 */
-        Height,
-
-        /** @brief 採掘ポイントやロープなどのグリッドオブジェクトを編集するモードです。 */
-        GridObject,
-
-        /** @brief 登録モデルをセルへ配置して編集するモードです。 */
-        EnvironmentObject,
-    };
+    using VertexSelection = NarakuPieceEditorHistory::VertexSelection;
+    using CellSelection = NarakuPieceEditorHistory::CellSelection;
+    using EditMode = NarakuPieceEditorHistory::EditMode;
+    using TerrainSelectionMode = NarakuPieceEditorHistory::TerrainSelectionMode;
+    using GridObjectTool = NarakuPieceEditorHistory::GridObjectTool;
+    using GridObjectKind = NarakuPieceEditorHistory::GridObjectKind;
+    using EditorSnapshot = NarakuPieceEditorHistory::Snapshot;
 
     /** @brief Assetsウィンドウへ登録する環境モデル情報です。 */
     struct EnvironmentModelAsset
@@ -162,111 +132,6 @@ private:
         DepthStencil* thumbnailDepthStencil = nullptr;
         unsigned int thumbnailSize = 0;
         bool thumbnailDirty = true;
-    };
-
-    /**
-     * @brief 地形編集モード中に何を選択するかを表します。
-     */
-    enum class TerrainSelectionMode
-    {
-        /** @brief 頂点単位で選択し、高さ編集を行うモードです。 */
-        Vertex,
-
-        /** @brief セル単位で選択し、セル情報や配置判定に使うモードです。 */
-        Cell,
-    };
-
-    /**
-     * @brief グリッドオブジェクト配置ウィンドウで選択できる配置ツールです。
-     */
-    enum class GridObjectTool
-    {
-        /** @brief 選択セルに採掘ポイントを配置するツールです。 */
-        MiningPoint,
-
-        /** @brief ロープの上端セルを指定して配置するツールです。 */
-        RopeTop,
-
-        /** @brief ロープの下端セルを指定して配置するツールです。 */
-        RopeBottom,
-
-        /** @brief 開始・帰還地点を配置するツールです。 */
-        StartReturn,
-
-        /** @brief 層間口のロープ端点を配置するツールです。 */
-        LayerRopePoint,
-
-        /** @brief 層出口で下層生成を開始するロード地点を配置するツールです。 */
-        LayerLoadPoint,
-    };
-
-    /**
-     * @brief 現在選択中のグリッドオブジェクト種別を表します。
-     */
-    enum class GridObjectKind
-    {
-        /** @brief 何も選択されていない状態です。 */
-        None,
-
-        /** @brief 採掘ポイントが選択されている状態です。 */
-        MiningPoint,
-
-        /** @brief ロープが選択されている状態です。 */
-        Rope,
-
-        /** @brief 開始・帰還地点が選択されている状態です。 */
-        StartReturn,
-
-        /** @brief 層間口のロープ端点が選択されている状態です。 */
-        LayerRopePoint,
-
-        /** @brief 層間口のロード地点が選択されている状態です。 */
-        LayerLoadPoint,
-    };
-
-    /**
-     * @brief Undo/Redo用にエディタの編集状態を退避するスナップショットです。
-     */
-    struct EditorSnapshot
-    {
-        /** @brief 退避対象となる奈落ピース本体のデータです。 */
-        NarakuPiece::PieceData piece;
-
-        /** @brief 退避時点の単一選択頂点X座標です。 */
-        int selectedX = 0;
-
-        /** @brief 退避時点の単一選択頂点Z座標です。 */
-        int selectedZ = 0;
-
-        /** @brief 退避時点の複数選択頂点一覧です。 */
-        std::vector<VertexSelection> selectedVertices;
-
-        /** @brief 退避時点の主編集モードです。 */
-        EditMode editMode = EditMode::Height;
-
-        /** @brief 退避時点の地形選択単位です。 */
-        TerrainSelectionMode terrainSelectionMode = TerrainSelectionMode::Vertex;
-
-        /** @brief 退避時点の単一選択セルX座標です。 */
-        int selectedCellX = -1;
-
-        /** @brief 退避時点の単一選択セルZ座標です。 */
-        int selectedCellZ = -1;
-
-        /** @brief 退避時点の複数選択セル一覧です。 */
-        std::vector<CellSelection> selectedCells;
-
-        /** @brief 退避時点の配置ツール種別です。 */
-        GridObjectTool gridObjectTool = GridObjectTool::MiningPoint;
-
-        /** @brief 退避時点で選択されていたグリッドオブジェクト種別です。 */
-        GridObjectKind selectedGridObjectKind = GridObjectKind::None;
-
-        /** @brief 退避時点で選択されていた採掘ポイントの配列インデックスです。 */
-        int selectedMiningPointIndex = -1;
-
-        /** @brief 選択中の環境オブジェクト配列インデックスです。 */
-        int selectedEnvironmentObjectIndex = -1;
     };
 
     /**
@@ -304,6 +169,24 @@ private:
         /** @brief ファイル名順です。 */
         FileName,
     };
+
+    /** @brief 高さ編集モードの入力更新を処理します。 */
+    void UpdateHeightMode(bool deleteTriggered);
+
+    /** @brief グリッドオブジェクト編集モードの入力更新を処理します。 */
+    void UpdateGridObjectMode(bool deleteTriggered);
+
+    /** @brief 環境オブジェクト編集モードの入力更新を処理します。 */
+    void UpdateEnvironmentObjectMode(bool deleteTriggered);
+
+    /** @brief 選択中セルを削除状態へ変更します。 */
+    void DeleteSelectedCells();
+
+    /** @brief 選択中の環境オブジェクトを削除します。 */
+    void DeleteSelectedEnvironmentObject();
+
+    /** @brief 保留中のファイル操作ポップアップをImGuiへ通知します。 */
+    void OpenRequestedPopups();
 
     /**
      * @brief 頂点座標から高さ配列の一次元インデックスを取得します。
@@ -379,6 +262,15 @@ private:
      * @brief 地形編集用の操作UIを描画します。
      */
     void DrawTerrainEditWindow();
+
+    /** @brief 頂点選択時の地形編集UIを描画します。 */
+    void DrawVertexTerrainControls();
+
+    /** @brief セル選択時の地形編集UIを描画します。 */
+    void DrawCellTerrainControls();
+
+    /** @brief 主選択セルを基準に複数選択セルの属性編集UIを描画します。 */
+    void DrawSelectedCellControls(const NarakuPiece::CellData& primaryCell);
 
     /**
      * @brief グリッドオブジェクトの配置ツールUIを描画します。
@@ -642,6 +534,32 @@ private:
     /** @brief モデル設定モーダルの内容を登録簿へ反映します。 */
     void ApplyEnvironmentModelPopup();
 
+    /** @brief 環境モデル設定入力が登録可能か判定します。 */
+    bool IsEnvironmentModelPopupInputValid(const std::string& name, const std::string& path) const;
+
+    /** @brief ポップアップ入力から新しい環境モデルを一覧へ追加します。 */
+    bool AddEnvironmentModelFromPopup(const std::string& name, const std::string& path);
+
+    /** @brief 選択中の環境モデル設定を更新し、復元用の旧値を返します。 */
+    bool UpdateEnvironmentModelFromPopup(
+        const std::string& name,
+        std::string& outPreviousName,
+        DirectX::XMFLOAT3& outPreviousScale,
+        bool& outPreviousThumbnailDirty);
+
+    /** @brief カタログ保存失敗時にポップアップ適用前の状態へ戻します。 */
+    void RollbackEnvironmentModelPopup(
+        int previousSelectedIndex,
+        const std::string& previousName,
+        const DirectX::XMFLOAT3& previousScale,
+        bool previousThumbnailDirty);
+
+    /** @brief ポップアップのプレビュー用モデルを登録用として取得します。 */
+    Model* AcquireEnvironmentModelPopupModel(const std::string& path);
+
+    /** @brief 既存登録と衝突しない環境モデルIDを生成します。 */
+    std::string GenerateEnvironmentModelId() const;
+
     /** @brief 読み込み済みモデルの頂点境界とプレビュー基準点を計算します。 */
     void UpdateEnvironmentModelBounds(EnvironmentModelAsset& asset);
 
@@ -731,6 +649,39 @@ private:
      * @brief 地形編集モード中の選択操作と高さ変更入力を処理します。
      */
     void UpdateHeightEditing();
+
+    /** @brief セル選択モードの入力とドラッグ選択を更新します。 */
+    void UpdateCellHeightEditing();
+
+    /** @brief 頂点選択モードの入力、高さドラッグ、範囲選択を更新します。 */
+    void UpdateVertexHeightEditing();
+
+    /** @brief セルのドラッグ選択中状態を更新します。 */
+    void UpdateCellSelectionDrag(POINT mousePos);
+
+    /** @brief 頂点のドラッグ選択中状態を更新します。 */
+    void UpdateVertexSelectionDrag(POINT mousePos);
+
+    /** @brief ドラッグ距離から矩形選択開始を判定します。 */
+    void UpdateSelectionDragActivation();
+
+    /** @brief セルのクリック相当ドラッグ終了位置を選択へ反映します。 */
+    void SelectCellFromDragEndpoint();
+
+    /** @brief 頂点のクリック相当ドラッグ終了位置を選択へ反映します。 */
+    void SelectVertexFromDragEndpoint();
+
+    /** @brief 選択ドラッグ状態を開始します。 */
+    void BeginSelectionDrag(POINT mousePos, bool ctrlPressed, bool shiftPressed);
+
+    /** @brief 選択ドラッグ状態を終了します。 */
+    void EndSelectionDrag();
+
+    /** @brief 頂点の高さドラッグ操作を更新します。 */
+    void UpdateVertexHeightDrag(bool altPressed);
+
+    /** @brief プレビュー上のホバーセルを更新します。 */
+    void UpdateHoveredCell(POINT mousePos, bool allowPreviewInput);
 
     /**
      * @brief グリッドオブジェクト編集モード中の配置と選択入力を処理します。
@@ -877,6 +828,18 @@ private:
      * @param height 設定する高さ値です。
      */
     void SetSelectedVerticesHeight(float height);
+
+    /** @brief 選択頂点の高さを0へ戻します。 */
+    void ResetSelectedVertexHeights();
+
+    /** @brief 全頂点の高さを0へ戻します。 */
+    void ResetAllVertexHeights();
+
+    /** @brief 選択セルのbool属性を一括更新します。 */
+    void ApplySelectedCellFlag(bool NarakuPiece::CellData::* field, bool value);
+
+    /** @brief 選択セルの地面テクスチャIDを一括更新します。 */
+    void ApplySelectedCellGroundTextureId(int groundTextureId);
 
     /**
      * @brief 指定セル中心のワールド座標を取得します。
@@ -1043,11 +1006,6 @@ private:
      * @brief 現在の編集状態をUndo履歴へ追加します。
      */
     void PushUndoSnapshot();
-
-    /**
-     * @brief Undo履歴数が上限を超えないよう古い履歴を整理します。
-     */
-    void TrimUndoHistory();
 
     /**
      * @brief 保存済みスナップショットから編集状態を復元します。
@@ -1239,11 +1197,8 @@ private:
     /** @brief 画面へ通知する最新メッセージです。 */
     std::string m_message;
 
-    /** @brief Undo用に保持する編集履歴スタックです。 */
-    std::vector<EditorSnapshot> m_undoStack;
-
-    /** @brief Redo用に保持する編集履歴スタックです。 */
-    std::vector<EditorSnapshot> m_redoStack;
+    /** @brief Undo/Redo履歴の保存と上限管理を担当します。 */
+    NarakuPieceEditorHistory m_history;
 
     /** @brief プレビューカメラが注視するワールド座標です。 */
     DirectX::XMFLOAT3 m_cameraTarget = {};

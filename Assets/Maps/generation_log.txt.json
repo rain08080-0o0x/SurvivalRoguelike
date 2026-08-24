@@ -1,5 +1,5 @@
 --- Start Naraku Map Generation (4x4 area) ---
-Attempt 1: Start piece location: (1, 3)
+Attempt 1: Start piece location: (0, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -37,42 +37,36 @@ Attempt 1: Start piece location: (1, 3)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 1 failed at cell (0, 1).
-Attempt 2: Start piece location: (1, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
+[Cell (1, 1)] Constraints:
+  - North: Connect to "sample_north.json" South (plain_low)
   - South: Not Blocked
-  - West: Blocked (Left border)
+  - West: Connect to "start_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
+      - "sample_center005.json": layer transition piece is reserved for a required gate slot
+      - "sample_center006.json": layer transition piece is reserved for a required gate slot
+  -> SUCCESS: Found 5 compatible pieces. Selected: "piece_0001.json"
+[Cell (2, 1)] Constraints:
+  - North: Connect to "sample_north.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
+  - West: Connect to "piece_0001.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
+      - "piece_0001.json": Central piece is already used in this 4x4 map
+      - "sample_center005.json": layer transition piece is reserved for a required gate slot
+      - "sample_center006.json": layer transition piece is reserved for a required gate slot
+  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center002.json"
+[Cell (3, 1)] Constraints:
+  - North: Connect to "sample_north_east.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "sample_center002.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
+      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
+[Cell (0, 2)] Constraints:
+  - North: Connect to "start_west.json" South (plain_low)
   - South: Not Blocked
   - West: Blocked (Left border)
   - East: Not Blocked
@@ -80,90 +74,8 @@ Attempt 2: Start piece location: (1, 0)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 2 failed at cell (0, 1).
-Attempt 3: Start piece location: (2, 3)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 3 failed at cell (0, 1).
-Attempt 4: Start piece location: (2, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 4 failed at cell (0, 1).
-Attempt 5: Start piece location: (0, 1)
+Attempt 1 failed at cell (0, 2).
+Attempt 2: Start piece location: (0, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -220,11 +132,11 @@ Attempt 5: Start piece location: (0, 1)
       - "sample_center002.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "piece_0001.json"
+  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center001.json"
 [Cell (3, 1)] Constraints:
   - North: Connect to "sample_north_east.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "piece_0001.json" East (plain_low)
+  - West: Connect to "sample_center001.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
       - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -238,8 +150,131 @@ Attempt 5: Start piece location: (0, 1)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 5 failed at cell (0, 2).
-Attempt 6: Start piece location: (3, 2)
+Attempt 2 failed at cell (0, 2).
+Attempt 3: Start piece location: (3, 2)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 3 failed at cell (0, 1).
+Attempt 4: Start piece location: (0, 2)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 4 failed at cell (0, 1).
+Attempt 5: Start piece location: (0, 2)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 5 failed at cell (0, 1).
+Attempt 6: Start piece location: (2, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -280,7 +315,7 @@ Attempt 6: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 6 failed at cell (0, 1).
-Attempt 7: Start piece location: (2, 3)
+Attempt 7: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -321,7 +356,7 @@ Attempt 7: Start piece location: (2, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 7 failed at cell (0, 1).
-Attempt 8: Start piece location: (3, 1)
+Attempt 8: Start piece location: (2, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -343,12 +378,12 @@ Attempt 8: Start piece location: (3, 1)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -362,7 +397,7 @@ Attempt 8: Start piece location: (3, 1)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 8 failed at cell (0, 1).
-Attempt 9: Start piece location: (3, 1)
+Attempt 9: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -450,21 +485,21 @@ Attempt 10: Start piece location: (0, 1)
   Compatibility Check Results:
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
+  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center001.json"
 [Cell (2, 1)] Constraints:
   - North: Connect to "sample_north.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
+  - West: Connect to "sample_center001.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_center004.json": Central piece is already used in this 4x4 map
+      - "sample_center001.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center003.json"
+  -> SUCCESS: Found 4 compatible pieces. Selected: "piece_0001.json"
 [Cell (3, 1)] Constraints:
   - North: Connect to "sample_north_east.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
+  - West: Connect to "piece_0001.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
       - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -479,7 +514,7 @@ Attempt 10: Start piece location: (0, 1)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 10 failed at cell (0, 2).
-Attempt 11: Start piece location: (2, 0)
+Attempt 11: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -501,12 +536,12 @@ Attempt 11: Start piece location: (2, 0)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -520,7 +555,7 @@ Attempt 11: Start piece location: (2, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 11 failed at cell (0, 1).
-Attempt 12: Start piece location: (0, 2)
+Attempt 12: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -561,48 +596,7 @@ Attempt 12: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 12 failed at cell (0, 1).
-Attempt 13: Start piece location: (0, 2)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 13 failed at cell (0, 1).
-Attempt 14: Start piece location: (0, 1)
+Attempt 13: Start piece location: (0, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -649,14 +643,14 @@ Attempt 14: Start piece location: (0, 1)
   Compatibility Check Results:
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center001.json"
+  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
 [Cell (2, 1)] Constraints:
   - North: Connect to "sample_north.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center001.json" East (plain_low)
+  - West: Connect to "sample_center004.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_center001.json": Central piece is already used in this 4x4 map
+      - "sample_center004.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
   -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center003.json"
@@ -677,8 +671,49 @@ Attempt 14: Start piece location: (0, 1)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 14 failed at cell (0, 2).
-Attempt 15: Start piece location: (3, 1)
+Attempt 13 failed at cell (0, 2).
+Attempt 14: Start piece location: (0, 2)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 14 failed at cell (0, 1).
+Attempt 15: Start piece location: (2, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -719,7 +754,48 @@ Attempt 15: Start piece location: (3, 1)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 15 failed at cell (0, 1).
-Attempt 16: Start piece location: (0, 1)
+Attempt 16: Start piece location: (1, 3)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 16 failed at cell (0, 1).
+Attempt 17: Start piece location: (0, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -776,87 +852,11 @@ Attempt 16: Start piece location: (0, 1)
       - "sample_center003.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center004.json"
+  -> SUCCESS: Found 4 compatible pieces. Selected: "piece_0001.json"
 [Cell (3, 1)] Constraints:
   - North: Connect to "sample_north_east.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 16 failed at cell (0, 2).
-Attempt 17: Start piece location: (0, 1)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center004.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center003.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
+  - West: Connect to "piece_0001.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
       - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -871,7 +871,7 @@ Attempt 17: Start piece location: (0, 1)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 17 failed at cell (0, 2).
-Attempt 18: Start piece location: (3, 2)
+Attempt 18: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -885,12 +885,12 @@ Attempt 18: Start piece location: (3, 2)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -912,7 +912,7 @@ Attempt 18: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 18 failed at cell (0, 1).
-Attempt 19: Start piece location: (3, 1)
+Attempt 19: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -926,12 +926,12 @@ Attempt 19: Start piece location: (3, 1)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -994,7 +994,7 @@ Attempt 20: Start piece location: (1, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 20 failed at cell (0, 1).
-Attempt 21: Start piece location: (0, 1)
+Attempt 21: Start piece location: (2, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1016,12 +1016,12 @@ Attempt 21: Start piece location: (0, 1)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -1032,45 +1032,10 @@ Attempt 21: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center001.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center001.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center001.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center003.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 21 failed at cell (0, 2).
-Attempt 22: Start piece location: (0, 2)
+Attempt 21 failed at cell (0, 1).
+Attempt 22: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1111,7 +1076,7 @@ Attempt 22: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 22 failed at cell (0, 1).
-Attempt 23: Start piece location: (1, 0)
+Attempt 23: Start piece location: (2, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1125,20 +1090,20 @@ Attempt 23: Start piece location: (1, 0)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -1152,7 +1117,7 @@ Attempt 23: Start piece location: (1, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 23 failed at cell (0, 1).
-Attempt 24: Start piece location: (0, 2)
+Attempt 24: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1193,7 +1158,7 @@ Attempt 24: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 24 failed at cell (0, 1).
-Attempt 25: Start piece location: (0, 1)
+Attempt 25: Start piece location: (2, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1231,45 +1196,10 @@ Attempt 25: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center001.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center001.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center001.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center002.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center002.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 25 failed at cell (0, 2).
-Attempt 26: Start piece location: (2, 0)
+Attempt 25 failed at cell (0, 1).
+Attempt 26: Start piece location: (0, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1291,12 +1221,12 @@ Attempt 26: Start piece location: (2, 0)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -1310,7 +1240,7 @@ Attempt 26: Start piece location: (2, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 26 failed at cell (0, 1).
-Attempt 27: Start piece location: (1, 0)
+Attempt 27: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1324,12 +1254,12 @@ Attempt 27: Start piece location: (1, 0)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -1351,7 +1281,7 @@ Attempt 27: Start piece location: (1, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 27 failed at cell (0, 1).
-Attempt 28: Start piece location: (1, 3)
+Attempt 28: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1365,12 +1295,12 @@ Attempt 28: Start piece location: (1, 3)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -1392,7 +1322,7 @@ Attempt 28: Start piece location: (1, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 28 failed at cell (0, 1).
-Attempt 29: Start piece location: (3, 1)
+Attempt 29: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1474,7 +1404,7 @@ Attempt 30: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 30 failed at cell (0, 1).
-Attempt 31: Start piece location: (2, 3)
+Attempt 31: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1515,7 +1445,7 @@ Attempt 31: Start piece location: (2, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 31 failed at cell (0, 1).
-Attempt 32: Start piece location: (3, 2)
+Attempt 32: Start piece location: (0, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1556,7 +1486,7 @@ Attempt 32: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 32 failed at cell (0, 1).
-Attempt 33: Start piece location: (1, 3)
+Attempt 33: Start piece location: (2, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1597,7 +1527,7 @@ Attempt 33: Start piece location: (1, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 33 failed at cell (0, 1).
-Attempt 34: Start piece location: (1, 0)
+Attempt 34: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1611,12 +1541,12 @@ Attempt 34: Start piece location: (1, 0)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -1638,7 +1568,7 @@ Attempt 34: Start piece location: (1, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 34 failed at cell (0, 1).
-Attempt 35: Start piece location: (0, 1)
+Attempt 35: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1652,12 +1582,12 @@ Attempt 35: Start piece location: (0, 1)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -1676,45 +1606,10 @@ Attempt 35: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center004.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center003.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 35 failed at cell (0, 2).
-Attempt 36: Start piece location: (2, 0)
+Attempt 35 failed at cell (0, 1).
+Attempt 36: Start piece location: (0, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1736,12 +1631,12 @@ Attempt 36: Start piece location: (2, 0)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -1796,7 +1691,7 @@ Attempt 37: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 37 failed at cell (0, 1).
-Attempt 38: Start piece location: (3, 2)
+Attempt 38: Start piece location: (2, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1837,7 +1732,7 @@ Attempt 38: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 38 failed at cell (0, 1).
-Attempt 39: Start piece location: (1, 3)
+Attempt 39: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1851,12 +1746,12 @@ Attempt 39: Start piece location: (1, 3)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -1878,7 +1773,7 @@ Attempt 39: Start piece location: (1, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 39 failed at cell (0, 1).
-Attempt 40: Start piece location: (0, 2)
+Attempt 40: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1892,12 +1787,12 @@ Attempt 40: Start piece location: (0, 2)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -1919,7 +1814,7 @@ Attempt 40: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 40 failed at cell (0, 1).
-Attempt 41: Start piece location: (2, 3)
+Attempt 41: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1960,7 +1855,7 @@ Attempt 41: Start piece location: (2, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 41 failed at cell (0, 1).
-Attempt 42: Start piece location: (0, 1)
+Attempt 42: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -1998,45 +1893,10 @@ Attempt 42: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center003.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center003.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center004.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 42 failed at cell (0, 2).
-Attempt 43: Start piece location: (2, 0)
+Attempt 42 failed at cell (0, 1).
+Attempt 43: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2058,12 +1918,12 @@ Attempt 43: Start piece location: (2, 0)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -2077,7 +1937,7 @@ Attempt 43: Start piece location: (2, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 43 failed at cell (0, 1).
-Attempt 44: Start piece location: (3, 2)
+Attempt 44: Start piece location: (0, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2118,7 +1978,7 @@ Attempt 44: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 44 failed at cell (0, 1).
-Attempt 45: Start piece location: (2, 0)
+Attempt 45: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2140,12 +2000,12 @@ Attempt 45: Start piece location: (2, 0)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -2159,7 +2019,7 @@ Attempt 45: Start piece location: (2, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 45 failed at cell (0, 1).
-Attempt 46: Start piece location: (3, 2)
+Attempt 46: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2200,7 +2060,7 @@ Attempt 46: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 46 failed at cell (0, 1).
-Attempt 47: Start piece location: (0, 2)
+Attempt 47: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2288,90 +2148,14 @@ Attempt 48: Start piece location: (0, 1)
   Compatibility Check Results:
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center003.json"
+  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center002.json"
 [Cell (2, 1)] Constraints:
   - North: Connect to "sample_north.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
+  - West: Connect to "sample_center002.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_center003.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "piece_0001.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "piece_0001.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 48 failed at cell (0, 2).
-Attempt 49: Start piece location: (0, 1)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center001.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center001.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center001.json": Central piece is already used in this 4x4 map
+      - "sample_center002.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
   -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center004.json"
@@ -2392,8 +2176,8 @@ Attempt 49: Start piece location: (0, 1)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 49 failed at cell (0, 2).
-Attempt 50: Start piece location: (1, 0)
+Attempt 48 failed at cell (0, 2).
+Attempt 49: Start piece location: (2, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2407,12 +2191,53 @@ Attempt 50: Start piece location: (1, 0)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
   - West: Connect to "start_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 49 failed at cell (0, 1).
+Attempt 50: Start piece location: (2, 3)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -2434,7 +2259,7 @@ Attempt 50: Start piece location: (1, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 50 failed at cell (0, 1).
-Attempt 51: Start piece location: (0, 2)
+Attempt 51: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2475,7 +2300,7 @@ Attempt 51: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 51 failed at cell (0, 1).
-Attempt 52: Start piece location: (0, 2)
+Attempt 52: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2516,7 +2341,7 @@ Attempt 52: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 52 failed at cell (0, 1).
-Attempt 53: Start piece location: (1, 3)
+Attempt 53: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2557,7 +2382,7 @@ Attempt 53: Start piece location: (1, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 53 failed at cell (0, 1).
-Attempt 54: Start piece location: (3, 2)
+Attempt 54: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2598,7 +2423,7 @@ Attempt 54: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 54 failed at cell (0, 1).
-Attempt 55: Start piece location: (2, 3)
+Attempt 55: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2612,12 +2437,12 @@ Attempt 55: Start piece location: (2, 3)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -2680,7 +2505,7 @@ Attempt 56: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 56 failed at cell (0, 1).
-Attempt 57: Start piece location: (0, 2)
+Attempt 57: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2721,7 +2546,7 @@ Attempt 57: Start piece location: (0, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 57 failed at cell (0, 1).
-Attempt 58: Start piece location: (2, 0)
+Attempt 58: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2743,12 +2568,12 @@ Attempt 58: Start piece location: (2, 0)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -2762,7 +2587,7 @@ Attempt 58: Start piece location: (2, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 58 failed at cell (0, 1).
-Attempt 59: Start piece location: (3, 2)
+Attempt 59: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2803,7 +2628,7 @@ Attempt 59: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 59 failed at cell (0, 1).
-Attempt 60: Start piece location: (0, 1)
+Attempt 60: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2841,121 +2666,10 @@ Attempt 60: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center001.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center001.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center001.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center002.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center002.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 60 failed at cell (0, 2).
-Attempt 61: Start piece location: (0, 1)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center003.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center003.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center004.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 61 failed at cell (0, 2).
-Attempt 62: Start piece location: (1, 0)
+Attempt 60 failed at cell (0, 1).
+Attempt 61: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -2975,6 +2689,47 @@ Attempt 62: Start piece location: (1, 0)
   - North: Blocked (Top border)
   - South: Not Blocked
   - West: Connect to "start_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 61 failed at cell (0, 1).
+Attempt 62: Start piece location: (3, 2)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -2996,7 +2751,7 @@ Attempt 62: Start piece location: (1, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 62 failed at cell (0, 1).
-Attempt 63: Start piece location: (0, 1)
+Attempt 63: Start piece location: (2, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3034,45 +2789,10 @@ Attempt 63: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center004.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center003.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 63 failed at cell (0, 2).
-Attempt 64: Start piece location: (2, 0)
+Attempt 63 failed at cell (0, 1).
+Attempt 64: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3094,12 +2814,12 @@ Attempt 64: Start piece location: (2, 0)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -3113,7 +2833,7 @@ Attempt 64: Start piece location: (2, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 64 failed at cell (0, 1).
-Attempt 65: Start piece location: (1, 3)
+Attempt 65: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3127,12 +2847,12 @@ Attempt 65: Start piece location: (1, 3)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -3154,7 +2874,7 @@ Attempt 65: Start piece location: (1, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 65 failed at cell (0, 1).
-Attempt 66: Start piece location: (0, 1)
+Attempt 66: Start piece location: (2, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3176,12 +2896,12 @@ Attempt 66: Start piece location: (0, 1)
   - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (3, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -3192,45 +2912,10 @@ Attempt 66: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center004.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center003.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 66 failed at cell (0, 2).
-Attempt 67: Start piece location: (1, 0)
+Attempt 66 failed at cell (0, 1).
+Attempt 67: Start piece location: (2, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3244,12 +2929,12 @@ Attempt 67: Start piece location: (1, 0)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -3271,7 +2956,7 @@ Attempt 67: Start piece location: (1, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 67 failed at cell (0, 1).
-Attempt 68: Start piece location: (1, 3)
+Attempt 68: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3285,12 +2970,12 @@ Attempt 68: Start piece location: (1, 3)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -3353,376 +3038,7 @@ Attempt 69: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 69 failed at cell (0, 1).
-Attempt 70: Start piece location: (1, 3)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 70 failed at cell (0, 1).
-Attempt 71: Start piece location: (2, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 71 failed at cell (0, 1).
-Attempt 72: Start piece location: (2, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 72 failed at cell (0, 1).
-Attempt 73: Start piece location: (1, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 73 failed at cell (0, 1).
-Attempt 74: Start piece location: (2, 3)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 74 failed at cell (0, 1).
-Attempt 75: Start piece location: (0, 2)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 75 failed at cell (0, 1).
-Attempt 76: Start piece location: (1, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 76 failed at cell (0, 1).
-Attempt 77: Start piece location: (3, 1)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 77 failed at cell (0, 1).
-Attempt 78: Start piece location: (1, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 78 failed at cell (0, 1).
-Attempt 79: Start piece location: (0, 1)
+Attempt 70: Start piece location: (0, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3769,14 +3085,14 @@ Attempt 79: Start piece location: (0, 1)
   Compatibility Check Results:
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
+  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center001.json"
 [Cell (2, 1)] Constraints:
   - North: Connect to "sample_north.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
+  - West: Connect to "sample_center001.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_center004.json": Central piece is already used in this 4x4 map
+      - "sample_center001.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
   -> SUCCESS: Found 4 compatible pieces. Selected: "piece_0001.json"
@@ -3797,8 +3113,295 @@ Attempt 79: Start piece location: (0, 1)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 79 failed at cell (0, 2).
-Attempt 80: Start piece location: (2, 0)
+Attempt 70 failed at cell (0, 2).
+Attempt 71: Start piece location: (2, 3)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 71 failed at cell (0, 1).
+Attempt 72: Start piece location: (3, 2)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 72 failed at cell (0, 1).
+Attempt 73: Start piece location: (3, 1)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 73 failed at cell (0, 1).
+Attempt 74: Start piece location: (3, 2)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 74 failed at cell (0, 1).
+Attempt 75: Start piece location: (3, 1)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 75 failed at cell (0, 1).
+Attempt 76: Start piece location: (3, 1)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 76 failed at cell (0, 1).
+Attempt 77: Start piece location: (1, 0)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "start_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 77 failed at cell (0, 1).
+Attempt 78: Start piece location: (2, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3838,8 +3441,8 @@ Attempt 80: Start piece location: (2, 0)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 80 failed at cell (0, 1).
-Attempt 81: Start piece location: (3, 2)
+Attempt 78 failed at cell (0, 1).
+Attempt 79: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -3867,6 +3470,88 @@ Attempt 81: Start piece location: (3, 2)
   - North: Blocked (Top border)
   - South: Not Blocked
   - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 79 failed at cell (0, 1).
+Attempt 80: Start piece location: (1, 3)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 80 failed at cell (0, 1).
+Attempt 81: Start piece location: (2, 0)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
@@ -3921,89 +3606,7 @@ Attempt 82: Start piece location: (3, 1)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 82 failed at cell (0, 1).
-Attempt 83: Start piece location: (2, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 83 failed at cell (0, 1).
-Attempt 84: Start piece location: (3, 1)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 84 failed at cell (0, 1).
-Attempt 85: Start piece location: (0, 1)
+Attempt 83: Start piece location: (0, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4060,11 +3663,11 @@ Attempt 85: Start piece location: (0, 1)
       - "sample_center003.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "piece_0001.json"
+  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center002.json"
 [Cell (3, 1)] Constraints:
   - North: Connect to "sample_north_east.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "piece_0001.json" East (plain_low)
+  - West: Connect to "sample_center002.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
       - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -4078,8 +3681,8 @@ Attempt 85: Start piece location: (0, 1)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 85 failed at cell (0, 2).
-Attempt 86: Start piece location: (1, 0)
+Attempt 83 failed at cell (0, 2).
+Attempt 84: Start piece location: (2, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4093,12 +3696,94 @@ Attempt 86: Start piece location: (1, 0)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 84 failed at cell (0, 1).
+Attempt 85: Start piece location: (3, 1)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 85 failed at cell (0, 1).
+Attempt 86: Start piece location: (3, 2)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -4120,7 +3805,206 @@ Attempt 86: Start piece location: (1, 0)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 86 failed at cell (0, 1).
-Attempt 87: Start piece location: (0, 1)
+Attempt 87: Start piece location: (2, 0)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "start_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 87 failed at cell (0, 1).
+Attempt 88: Start piece location: (0, 1)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
+[Cell (1, 1)] Constraints:
+  - North: Connect to "sample_north.json" South (plain_low)
+  - South: Not Blocked
+  - West: Connect to "start_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_center005.json": layer transition piece is reserved for a required gate slot
+      - "sample_center006.json": layer transition piece is reserved for a required gate slot
+  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center002.json"
+[Cell (2, 1)] Constraints:
+  - North: Connect to "sample_north.json" South (plain_low)
+  - South: Not Blocked
+  - West: Connect to "sample_center002.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_center002.json": Central piece is already used in this 4x4 map
+      - "sample_center005.json": layer transition piece is reserved for a required gate slot
+      - "sample_center006.json": layer transition piece is reserved for a required gate slot
+  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center001.json"
+[Cell (3, 1)] Constraints:
+  - North: Connect to "sample_north_east.json" South (plain_low)
+  - South: Not Blocked
+  - West: Connect to "sample_center001.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
+[Cell (0, 2)] Constraints:
+  - North: Connect to "start_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 88 failed at cell (0, 2).
+Attempt 89: Start piece location: (1, 3)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 89 failed at cell (0, 1).
+Attempt 90: Start piece location: (2, 0)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "start_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 90 failed at cell (0, 1).
+Attempt 91: Start piece location: (0, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4195,171 +4079,7 @@ Attempt 87: Start piece location: (0, 1)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 87 failed at cell (0, 2).
-Attempt 88: Start piece location: (1, 3)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 88 failed at cell (0, 1).
-Attempt 89: Start piece location: (1, 3)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 89 failed at cell (0, 1).
-Attempt 90: Start piece location: (3, 2)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 90 failed at cell (0, 1).
-Attempt 91: Start piece location: (3, 2)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 91 failed at cell (0, 1).
+Attempt 91 failed at cell (0, 2).
 Attempt 92: Start piece location: (3, 2)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
@@ -4401,7 +4121,7 @@ Attempt 92: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 92 failed at cell (0, 1).
-Attempt 93: Start piece location: (0, 1)
+Attempt 93: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4439,45 +4159,10 @@ Attempt 93: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center003.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center003.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "sample_center004.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
-Attempt 93 failed at cell (0, 2).
-Attempt 94: Start piece location: (1, 3)
+Attempt 93 failed at cell (0, 1).
+Attempt 94: Start piece location: (1, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4491,12 +4176,12 @@ Attempt 94: Start piece location: (1, 3)
   - West: Connect to "sample_north_west.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
 [Cell (2, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
+  - West: Connect to "start_north.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
@@ -4518,7 +4203,7 @@ Attempt 94: Start piece location: (1, 3)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 94 failed at cell (0, 1).
-Attempt 95: Start piece location: (3, 1)
+Attempt 95: Start piece location: (1, 3)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4559,48 +4244,7 @@ Attempt 95: Start piece location: (3, 1)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 95 failed at cell (0, 1).
-Attempt 96: Start piece location: (3, 1)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 96 failed at cell (0, 1).
-Attempt 97: Start piece location: (2, 0)
+Attempt 96: Start piece location: (2, 0)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4640,8 +4284,49 @@ Attempt 97: Start piece location: (2, 0)
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
+Attempt 96 failed at cell (0, 1).
+Attempt 97: Start piece location: (1, 0)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "start_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
 Attempt 97 failed at cell (0, 1).
-Attempt 98: Start piece location: (3, 2)
+Attempt 98: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4682,7 +4367,7 @@ Attempt 98: Start piece location: (3, 2)
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
   -> FAILURE: No compatible pieces found under these constraints.
 Attempt 98 failed at cell (0, 1).
-Attempt 99: Start piece location: (0, 1)
+Attempt 99: Start piece location: (3, 1)
 [Cell (0, 0)] Constraints:
   - North: Blocked (Top border)
   - South: Not Blocked
@@ -4720,11 +4405,98 @@ Attempt 99: Start piece location: (0, 1)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_west.json"
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 99 failed at cell (0, 1).
+Attempt 100: Start piece location: (3, 1)
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> FAILURE: No compatible pieces found under these constraints.
+Attempt 100 failed at cell (0, 1).
+Normal placement failed after 100 attempts. Trying central fallback.
+Attempt 101: Start piece location: (2, 3) [central fallback enabled]
+[Cell (0, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
+[Cell (1, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north_west.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (2, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Not Blocked
+  Compatibility Check Results:
+      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
+[Cell (3, 0)] Constraints:
+  - North: Blocked (Top border)
+  - South: Not Blocked
+  - West: Connect to "sample_north.json" East (plain_low)
+  - East: Blocked (Right border)
+  Compatibility Check Results:
+  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
+[Cell (0, 1)] Constraints:
+  - North: Connect to "sample_north_west.json" South (plain_low)
+  - South: Not Blocked
+  - West: Blocked (Left border)
+  - East: Not Blocked
+  - Central fallback enabled because no edge-category-compatible candidate remained.
+  Compatibility Check Results:
+      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
+      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
+      - Central fallback "sample_center005.json": layer transition piece is reserved for a required gate slot
+      - Central fallback "sample_center006.json": layer transition piece is reserved for a required gate slot
+  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center003.json"
 [Cell (1, 1)] Constraints:
   - North: Connect to "sample_north.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "start_west.json" East (plain_low)
+  - West: Connect to "sample_center003.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
@@ -4749,128 +4521,6 @@ Attempt 99: Start piece location: (0, 1)
       - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
 [Cell (0, 2)] Constraints:
-  - North: Connect to "start_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 99 failed at cell (0, 2).
-Attempt 100: Start piece location: (2, 0)
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> FAILURE: No compatible pieces found under these constraints.
-Attempt 100 failed at cell (0, 1).
-Normal placement failed after 100 attempts. Trying central fallback.
-Attempt 101: Start piece location: (2, 0) [central fallback enabled]
-[Cell (0, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_west.json"
-[Cell (1, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north_west.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "start_north.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north.json"
-[Cell (2, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "sample_north.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_north.json": stageRole is not StartReturn (required for designated start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "start_north.json"
-[Cell (3, 0)] Constraints:
-  - North: Blocked (Top border)
-  - South: Not Blocked
-  - West: Connect to "start_north.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_north_east.json"
-[Cell (0, 1)] Constraints:
-  - North: Connect to "sample_north_west.json" South (plain_low)
-  - South: Not Blocked
-  - West: Blocked (Left border)
-  - East: Not Blocked
-  - Central fallback enabled because no edge-category-compatible candidate remained.
-  Compatibility Check Results:
-      - "sample_west.json": North edge category (plain_high) does not match North neighbor's South edge category (plain_low)
-      - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
-      - Central fallback "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - Central fallback "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center003.json"
-[Cell (1, 1)] Constraints:
-  - North: Connect to "sample_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
-[Cell (2, 1)] Constraints:
-  - North: Connect to "start_north.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "sample_center004.json" East (plain_low)
-  - East: Not Blocked
-  Compatibility Check Results:
-      - "sample_center004.json": Central piece is already used in this 4x4 map
-      - "sample_center005.json": layer transition piece is reserved for a required gate slot
-      - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 4 compatible pieces. Selected: "piece_0001.json"
-[Cell (3, 1)] Constraints:
-  - North: Connect to "sample_north_east.json" South (plain_low)
-  - South: Not Blocked
-  - West: Connect to "piece_0001.json" East (plain_low)
-  - East: Blocked (Right border)
-  Compatibility Check Results:
-      - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
-[Cell (0, 2)] Constraints:
   - North: Connect to "sample_center003.json" South (plain_low)
   - South: Not Blocked
   - West: Blocked (Left border)
@@ -4881,47 +4531,47 @@ Attempt 101: Start piece location: (2, 0) [central fallback enabled]
       - "start_west.json": stageRole is StartReturn (forbidden for non-start cell)
       - Central fallback "sample_center005.json": layer transition piece is reserved for a required gate slot
       - Central fallback "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center001.json"
+  -> SUCCESS: Found 5 compatible pieces. Selected: "sample_center004.json"
 [Cell (1, 2)] Constraints:
-  - North: Connect to "sample_center004.json" South (plain_low)
+  - North: Connect to "sample_center001.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center001.json" East (plain_low)
+  - West: Connect to "sample_center004.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "piece_0001.json": Central piece is already used in this 4x4 map
-      - "sample_center004.json": Central piece is already used in this 4x4 map
+      - "sample_center001.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 3 compatible pieces. Selected: "sample_center003.json"
+  -> SUCCESS: Found 3 compatible pieces. Selected: "sample_center004.json"
 [Cell (2, 2)] Constraints:
   - North: Connect to "piece_0001.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center003.json" East (plain_low)
+  - West: Connect to "sample_center004.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
       - "piece_0001.json": Central piece is already used in this 4x4 map
-      - "sample_center003.json": Central piece is already used in this 4x4 map
+      - "sample_center001.json": Central piece is already used in this 4x4 map
       - "sample_center004.json": Central piece is already used in this 4x4 map
       - "sample_center005.json": layer transition piece is reserved for a required gate slot
       - "sample_center006.json": layer transition piece is reserved for a required gate slot
-  -> SUCCESS: Found 2 compatible pieces. Selected: "sample_center001.json"
+  -> SUCCESS: Found 2 compatible pieces. Selected: "sample_center003.json"
 [Cell (3, 2)] Constraints:
   - North: Connect to "sample_east.json" South (plain_low)
   - South: Not Blocked
-  - West: Connect to "sample_center001.json" East (plain_low)
+  - West: Connect to "sample_center003.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
       - "start_east.json": stageRole is StartReturn (forbidden for non-start cell)
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east.json"
 [Cell (0, 3)] Constraints:
-  - North: Connect to "sample_center001.json" South (plain_low)
+  - North: Connect to "sample_center004.json" South (plain_low)
   - South: Blocked (Bottom border)
   - West: Blocked (Left border)
   - East: Not Blocked
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_west_south.json"
 [Cell (1, 3)] Constraints:
-  - North: Connect to "sample_center003.json" South (plain_low)
+  - North: Connect to "sample_center004.json" South (plain_low)
   - South: Blocked (Bottom border)
   - West: Connect to "sample_west_south.json" East (plain_low)
   - East: Not Blocked
@@ -4929,17 +4579,17 @@ Attempt 101: Start piece location: (2, 0) [central fallback enabled]
       - "start_south.json": stageRole is StartReturn (forbidden for non-start cell)
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_south.json"
 [Cell (2, 3)] Constraints:
-  - North: Connect to "sample_center001.json" South (plain_low)
+  - North: Connect to "sample_center003.json" South (plain_low)
   - South: Blocked (Bottom border)
   - West: Connect to "sample_south.json" East (plain_low)
   - East: Not Blocked
   Compatibility Check Results:
-      - "start_south.json": stageRole is StartReturn (forbidden for non-start cell)
-  -> SUCCESS: Found 1 compatible pieces. Selected: "sample_south.json"
+      - "sample_south.json": stageRole is not StartReturn (required for designated start cell)
+  -> SUCCESS: Found 1 compatible pieces. Selected: "start_south.json"
 [Cell (3, 3)] Constraints:
   - North: Connect to "sample_east.json" South (plain_low)
   - South: Blocked (Bottom border)
-  - West: Connect to "sample_south.json" East (plain_low)
+  - West: Connect to "start_south.json" East (plain_low)
   - East: Blocked (Right border)
   Compatibility Check Results:
   -> SUCCESS: Found 1 compatible pieces. Selected: "sample_east_south.json"

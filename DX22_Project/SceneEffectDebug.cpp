@@ -1,4 +1,5 @@
-#include "SceneEffectDebug.h"
+﻿#include "SceneEffectDebug.h"
+#include "EditorPerformanceProfiler.h"
 
 #include <cstring>
 
@@ -20,11 +21,13 @@ namespace
 
 	const char* SelectLabel(bool useJapanese, const char* english, const char* japanese)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		return useJapanese ? japanese : english;
 	}
 
 	const char* SelectBoolText(bool useJapanese, bool value)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		if (useJapanese)
 		{
 			return value ? u8"\u306f\u3044" : u8"\u3044\u3044\u3048";
@@ -34,11 +37,13 @@ namespace
 
 	float DegreesToRadians(float degrees)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		return degrees * (DirectX::XM_PI / 180.0f);
 	}
 
 	DirectX::XMFLOAT3 AddFloat3(const DirectX::XMFLOAT3& a, const DirectX::XMFLOAT3& b)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		return
 		{
 			a.x + b.x,
@@ -49,6 +54,7 @@ namespace
 
 	DirectX::XMFLOAT3 ScaleFloat3(const DirectX::XMFLOAT3& value, float scale)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		return
 		{
 			value.x * scale,
@@ -59,6 +65,7 @@ namespace
 
 	DirectX::XMFLOAT3 TransformDirection(const DirectX::XMFLOAT3& eulerDeg, const DirectX::XMFLOAT3& localDirection)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		using namespace DirectX;
 		const XMMATRIX rotation = XMMatrixRotationRollPitchYaw(
 			DegreesToRadians(eulerDeg.x),
@@ -74,6 +81,7 @@ namespace
 
 	float ClampFloat(float value, float minValue, float maxValue)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		if (value < minValue) return minValue;
 		if (value > maxValue) return maxValue;
 		return value;
@@ -84,6 +92,7 @@ namespace
 						const DirectX::XMFLOAT2& size,
 						const DirectX::XMFLOAT4& color)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		if (!texture)
 		{
 			return;
@@ -109,6 +118,7 @@ namespace
 							 const DirectX::XMFLOAT2& size,
 							 const DirectX::XMFLOAT4& color)
 	{
+	    EDITOR_PROFILE_FUNCTION();
 		if (!texture)
 		{
 			return;
@@ -152,6 +162,7 @@ SceneEffectDebug::SceneEffectDebug()
 	, m_useJapaneseLabels(true)
 	, m_pendingRestart(true)
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (m_pCamera)
 	{
 		m_pCamera->SetPose({ 0.0f, 2.8f, -7.5f }, { 0.0f, 1.2f, 0.0f });
@@ -181,6 +192,7 @@ SceneEffectDebug::SceneEffectDebug()
 
 SceneEffectDebug::~SceneEffectDebug()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (m_pMarkerTexture)
 	{
 		delete m_pMarkerTexture;
@@ -205,6 +217,7 @@ SceneEffectDebug::~SceneEffectDebug()
 
 void SceneEffectDebug::Update()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (IsMenuBackTrigger())
 	{
 		SceneManager::ChangeScene(SceneManager::SCENE_TITLE);
@@ -235,6 +248,7 @@ void SceneEffectDebug::Update()
 
 void SceneEffectDebug::Draw()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (m_pCamera)
 	{
 		Sprite::SetView(m_pCamera->GetViewMatrix());
@@ -255,6 +269,7 @@ void SceneEffectDebug::Draw()
 
 void SceneEffectDebug::ResetEmitterSettings()
 {
+    EDITOR_PROFILE_FUNCTION();
 	ParticleEmitter2D::Settings settings = ParticleEffectPreset::MakeDefaultSettings();
 	if (m_pEmitter)
 	{
@@ -266,6 +281,7 @@ void SceneEffectDebug::ResetEmitterSettings()
 
 void SceneEffectDebug::SyncEmitterSettings()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (!m_pEmitter)
 	{
 		return;
@@ -278,6 +294,7 @@ void SceneEffectDebug::SyncEmitterSettings()
 
 void SceneEffectDebug::DrawReferenceFloor()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (!m_pCamera)
 	{
 		return;
@@ -304,6 +321,7 @@ void SceneEffectDebug::DrawReferenceFloor()
 
 void SceneEffectDebug::DrawEmitterMarker()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (!m_pEmitter || !m_pMarkerTexture)
 	{
 		return;
@@ -320,6 +338,7 @@ void SceneEffectDebug::DrawEmitterMarker()
 
 void SceneEffectDebug::DrawEmissionGuide()
 {
+    EDITOR_PROFILE_FUNCTION();
 	if (!m_pEmitter || !m_pCamera)
 	{
 		return;
@@ -376,6 +395,8 @@ void SceneEffectDebug::DrawEmissionGuide()
 
 void SceneEffectDebug::DrawDebugWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+	EDITOR_PROFILE_WINDOW(u8"エフェクト確認");
 	if (!m_pEmitter)
 	{
 		return;

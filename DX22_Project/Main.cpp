@@ -10,6 +10,7 @@
 #include "ShaderList.h"
 #include "Transfer.h"
 #include "Sound.h"
+#include "EditorPerformanceProfiler.h"
 // rand初期化用
 #include <cstdlib>
 #include <ctime>
@@ -98,6 +99,24 @@ namespace
 			return "NarakuProto";
 		default:
 			return "Unknown";
+		}
+	}
+
+	bool IsEditorPerformanceScene(SceneManager::SceneType scene)
+	{
+		// Editor専用シーンだけで詳細な関数計測ウィンドウを表示します。
+		switch (scene)
+		{
+		case SceneManager::SceneType::SCENE_ENGINE_EDITOR:
+		case SceneManager::SceneType::SCENE_EFFECT_DEBUG:
+		case SceneManager::SceneType::SCENE_BOSS_EDITOR:
+		case SceneManager::SceneType::SCENE_FINAL_BOSS_EDITOR:
+		case SceneManager::SceneType::SCENE_NEW_BOSS_EDITOR:
+		case SceneManager::SceneType::SCENE_NARAKU_EDITOR:
+		case SceneManager::SceneType::SCENE_NARAKU_PIECE_EDITOR:
+			return true;
+		default:
+			return false;
 		}
 	}
 
@@ -281,6 +300,7 @@ void Uninit()
 
 void Update()
 {
+	EditorPerformanceProfiler::BeginFrame();
 	FramePerfStats perf{};
 	perf.scene = SceneManager::GetCurrent();
 	const double updateStart = NowMS();
@@ -709,6 +729,7 @@ void Draw()
 	// Docking用のルート（上下左右の吸着・分割/再結合）
 	if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable)
 	{
+		EDITOR_PROFILE_WINDOW(u8"DockSpaceRoot");
 		ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
 		const ImGuiViewport* viewport = ImGui::GetMainViewport();
 		ImGui::SetNextWindowPos(viewport->Pos);
@@ -735,6 +756,7 @@ void Draw()
 	using namespace std;
 	if (show_main_window)
 	{
+		EDITOR_PROFILE_WINDOW(u8"メイン設定");
 		Begin(u8"メイン設定",&show_main_window);
 
 		string sceneTxt;
@@ -1781,6 +1803,7 @@ void Draw()
 
 	if (show_table_window)
 	{
+		EDITOR_PROFILE_WINDOW(u8"インスペクタ（表）");
 		ImGui::Begin(u8"インスペクタ（表）", &show_table_window);
 
 		ImGui::Text(u8"F1:表  F2:オーバーレイ");
@@ -2188,6 +2211,11 @@ void Draw()
 		sectionStart = NowMS();
 		SceneManager::Draw();
 		g_perfFrameWorking.sceneDrawMs = static_cast<float>(NowMS() - sectionStart);
+	}
+	// Editorシーンではウィンドウ、クラス、関数別の前フレーム計測値を表示します。
+	if (IsEditorPerformanceScene(SceneManager::GetCurrent()))
+	{
+		EditorPerformanceProfiler::DrawWindow();
 	}
 	sectionStart = NowMS();
 	{

@@ -1,4 +1,5 @@
 ﻿#include "SceneNarakuEditor.h"
+#include "EditorPerformanceProfiler.h"
 
 #include "Defines.h"
 #include "DirectX.h"
@@ -39,6 +40,7 @@ namespace
 
     DirectX::XMFLOAT2 GetEditorViewportSize()
     {
+        EDITOR_PROFILE_FUNCTION();
         const ImVec2 displaySize = ImGui::GetIO().DisplaySize;
         const float width = (displaySize.x > 1.0f) ? displaySize.x : static_cast<float>(SCREEN_WIDTH);
         const float height = (displaySize.y > 1.0f) ? displaySize.y : static_cast<float>(SCREEN_HEIGHT);
@@ -58,6 +60,7 @@ namespace
     // Convert size_t to int for index-based editor code.
     int ToInt(size_t value)
     {
+        EDITOR_PROFILE_FUNCTION();
         return static_cast<int>(value);
     }
 
@@ -65,22 +68,26 @@ namespace
     template<typename T>
     T ClampValue(const T& value, const T& minValue, const T& maxValue)
     {
+        EDITOR_PROFILE_FUNCTION();
         return (value < minValue) ? minValue : ((value > maxValue) ? maxValue : value);
     }
 
     // Return a 2D vector length in screen space.
     float Length2D(float x, float y)
     {
+        EDITOR_PROFILE_FUNCTION();
         return std::sqrt(x * x + y * y);
     }
 
     void SetMenuCheckState(HMENU menuBar, UINT commandId, bool checked)
     {
+        EDITOR_PROFILE_FUNCTION();
         CheckMenuItem(menuBar, commandId, MF_BYCOMMAND | (checked ? MF_CHECKED : MF_UNCHECKED));
     }
 
     void SetMenuRadioState(HMENU menuBar, UINT commandId, const UINT* commandIds, int count)
     {
+        EDITOR_PROFILE_FUNCTION();
         for (int i = 0; i < count; ++i)
         {
             SetMenuCheckState(menuBar, commandIds[i], commandIds[i] == commandId);
@@ -92,6 +99,7 @@ namespace
     // Extract the parent directory portion from an absolute file path.
     std::wstring GetDirectoryPart(const wchar_t* path)
     {
+        EDITOR_PROFILE_FUNCTION();
         if (path == nullptr || path[0] == L'\0')
         {
             return {};
@@ -105,6 +113,7 @@ namespace
 // Build editor-only resources and load the current map.
 SceneNarakuEditor::SceneNarakuEditor()
 {
+    EDITOR_PROFILE_FUNCTION();
 
     m_debugWhiteTexture = new Texture();
 
@@ -117,11 +126,13 @@ SceneNarakuEditor::SceneNarakuEditor()
 // Release editor-only temporary resources.
 SceneNarakuEditor::~SceneNarakuEditor()
 {
+    EDITOR_PROFILE_FUNCTION();
     SAFE_DELETE(m_debugWhiteTexture);
 }
 
 bool SceneNarakuEditor::HandleNativeMenuCommand(unsigned int commandId)
 {
+    EDITOR_PROFILE_FUNCTION();
     switch (commandId)
     {
     case MenuSaveMap:
@@ -283,6 +294,7 @@ bool SceneNarakuEditor::HandleNativeMenuCommand(unsigned int commandId)
 
 void SceneNarakuEditor::SyncNativeMenuState(HMENU menuBar) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (menuBar == nullptr)
     {
         return;
@@ -349,6 +361,7 @@ void SceneNarakuEditor::SyncNativeMenuState(HMENU menuBar) const
 // Load the current map and normalize the initial selection state.
 void SceneNarakuEditor::InitializeMap()
 {
+    EDITOR_PROFILE_FUNCTION();
     LoadCurrentMap();
     EnsureSelectionValid();
     FocusSelection();
@@ -357,6 +370,7 @@ void SceneNarakuEditor::InitializeMap()
 // Advance camera input, picking, and edit interactions for one frame.
 void SceneNarakuEditor::Update()
 {
+    EDITOR_PROFILE_FUNCTION();
     HandleShortcuts();
     UpdateCamera(kDt);
     ApplyCameraMatrices();
@@ -371,6 +385,7 @@ void SceneNarakuEditor::Update()
 // Render the 3D preview first, then draw the editor UI.
 void SceneNarakuEditor::Draw()
 {
+    EDITOR_PROFILE_FUNCTION();
     ApplyCameraMatrices();
 
     DrawWorld();
@@ -382,6 +397,7 @@ void SceneNarakuEditor::Draw()
 // Update the Unity-style editor camera from mouse and keyboard input.
 void SceneNarakuEditor::UpdateCamera(float dt)
 {
+    EDITOR_PROFILE_FUNCTION();
     ImGuiIO& io = ImGui::GetIO();
 
     const bool allowMouseCamera = !io.WantCaptureMouse;
@@ -477,6 +493,7 @@ void SceneNarakuEditor::UpdateCamera(float dt)
 // Handle picking, gizmo drags, and mode-specific edit input.
 void SceneNarakuEditor::UpdateSelectionAndEditing()
 {
+    EDITOR_PROFILE_FUNCTION();
     EnsureSelectionValid();
 
     if (ImGui::GetIO().WantCaptureMouse)
@@ -811,6 +828,7 @@ void SceneNarakuEditor::UpdateSelectionAndEditing()
 // Move the camera focus target to the currently selected object.
 void SceneNarakuEditor::FocusSelection()
 {
+    EDITOR_PROFILE_FUNCTION();
 
     if (m_selectedLayerPoint != LayerPointSelectionTarget::None)
     {
@@ -888,6 +906,7 @@ void SceneNarakuEditor::FocusSelection()
 // Build an unused path for a new map file in the default map directory.
 std::wstring SceneNarakuEditor::MakeUniqueUntitledMapPath() const
 {
+    EDITOR_PROFILE_FUNCTION();
     const std::wstring baseDirectory = GetDirectoryPart(NarakuMap::GetDefaultMapPath());
     const std::wstring absoluteBaseDirectory = GetDirectoryPart(NarakuMap::ResolveMapPathForFileSystem(NarakuMap::GetDefaultMapPath()).c_str());
     if (baseDirectory.empty())
@@ -913,6 +932,7 @@ std::wstring SceneNarakuEditor::MakeUniqueUntitledMapPath() const
 // Open a Win32 file dialog and return the chosen map path.
 bool SceneNarakuEditor::PromptMapPath(bool saveDialog, std::wstring& outPath) const
 {
+    EDITOR_PROFILE_FUNCTION();
     wchar_t filePath[MAX_PATH] = {};
     const wchar_t* currentPath = NarakuMap::GetCurrentMapPath();
     if (currentPath != nullptr && currentPath[0] != L'\0')
@@ -949,6 +969,7 @@ bool SceneNarakuEditor::PromptMapPath(bool saveDialog, std::wstring& outPath) co
 // Save the current map data to the active JSON file.
 bool SceneNarakuEditor::SaveCurrentMap()
 {
+    EDITOR_PROFILE_FUNCTION();
     std::string errorMessage;
     const wchar_t* savePath = NarakuMap::GetCurrentMapPath();
     if (NarakuMap::SaveMap(savePath, m_mapData, &errorMessage))
@@ -966,6 +987,7 @@ bool SceneNarakuEditor::SaveCurrentMap()
 // Choose a new path and save the current map there.
 bool SceneNarakuEditor::SaveCurrentMapAs()
 {
+    EDITOR_PROFILE_FUNCTION();
     std::wstring selectedPath;
     if (!PromptMapPath(true, selectedPath))
     {
@@ -988,6 +1010,7 @@ bool SceneNarakuEditor::SaveCurrentMapAs()
 // Load the active JSON file or regenerate a default map when missing.
 bool SceneNarakuEditor::LoadCurrentMap()
 {
+    EDITOR_PROFILE_FUNCTION();
     std::string errorMessage;
     if (NarakuMap::LoadMap(NarakuMap::GetCurrentMapPath(), m_mapData, &errorMessage))
     {
@@ -1028,6 +1051,7 @@ bool SceneNarakuEditor::LoadCurrentMap()
 // Select a map file and load it into the editor.
 bool SceneNarakuEditor::OpenMapByDialog()
 {
+    EDITOR_PROFILE_FUNCTION();
     std::wstring selectedPath;
     if (!PromptMapPath(false, selectedPath))
     {
@@ -1055,6 +1079,7 @@ bool SceneNarakuEditor::OpenMapByDialog()
 // Create a new map from the default template and assign an untitled path.
 void SceneNarakuEditor::CreateNewMap()
 {
+    EDITOR_PROFILE_FUNCTION();
     NarakuMap::SetCurrentMapPath(MakeUniqueUntitledMapPath().c_str());
     m_mapData = NarakuMap::CreateDefaultMap();
     for (NarakuMap::TerrainLayer& layer : m_mapData.terrainLayers)
@@ -1076,6 +1101,7 @@ void SceneNarakuEditor::CreateNewMap()
 // Clamp all selection indices and repair per-layer height storage.
 void SceneNarakuEditor::EnsureSelectionValid()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_mapData.terrainLayers.empty())
     {
         m_selectedLayer = -1;
@@ -1235,6 +1261,7 @@ void SceneNarakuEditor::EnsureSelectionValid()
 // Build and submit view and projection matrices for rendering and picking.
 void SceneNarakuEditor::ApplyCameraMatrices()
 {
+    EDITOR_PROFILE_FUNCTION();
 
     const float cosPitch = std::cos(m_cameraPitch);
     const XMFLOAT3 eyePos =
@@ -1269,6 +1296,7 @@ void SceneNarakuEditor::ApplyCameraMatrices()
 // Draw terrain, helpers, ropes, and mining points in the 3D preview.
 void SceneNarakuEditor::DrawWorld()
 {
+    EDITOR_PROFILE_FUNCTION();
 
     for (int i = 0; i < ToInt(m_mapData.terrainLayers.size()); ++i)
     {
@@ -1307,6 +1335,7 @@ void SceneNarakuEditor::DrawWorld()
 // Draw every ImGui window that makes up the editor UI.
 void SceneNarakuEditor::DrawEditorUi()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_showMapWindow)
     {
         DrawMapWindow();
@@ -1358,6 +1387,8 @@ void SceneNarakuEditor::DrawEditorUi()
 // Draw file IO controls and the top-level edit mode selector.
 void SceneNarakuEditor::DrawMapWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"奈落塔地形エディタ");
     ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(420.0f, 420.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"奈落塔地形エディタ", &m_showMapWindow))
@@ -1495,6 +1526,8 @@ void SceneNarakuEditor::DrawMapWindow()
 // Draw preview visibility settings opened from the native Settings menu.
 void SceneNarakuEditor::DrawDisplaySettingsWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"表示設定");
     ImGui::SetNextWindowPos(ImVec2(460.0f, 300.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360.0f, 180.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"表示設定", &m_showDisplaySettingsWindow))
@@ -1515,6 +1548,8 @@ void SceneNarakuEditor::DrawDisplaySettingsWindow()
 // Draw terrain layer settings and terrain edit controls.
 void SceneNarakuEditor::DrawLayerWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"レイヤー");
     ImGui::SetNextWindowPos(ImVec2(20.0f, 452.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(420.0f, 520.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"レイヤー", &m_showLayerWindow))
@@ -1881,6 +1916,8 @@ void SceneNarakuEditor::DrawLayerWindow()
 // Draw the rope list and rope property controls.
 void SceneNarakuEditor::DrawRopeWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"ロープ");
     ImGui::SetNextWindowPos(ImVec2(900.0f, 20.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(360.0f, 320.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"ロープ", &m_showRopeWindow))
@@ -2074,6 +2111,8 @@ void SceneNarakuEditor::DrawRopeWindow()
 // Draw the mining point list and mining point property controls.
 void SceneNarakuEditor::DrawMiningWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"採掘ポイント");
     ImGui::SetNextWindowPos(ImVec2(900.0f, 352.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(380.0f, 380.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"採掘ポイント", &m_showMiningWindow))
@@ -2301,6 +2340,8 @@ void SceneNarakuEditor::DrawMiningWindow()
 // Draw the editor control reference window.
 void SceneNarakuEditor::DrawHelpWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"操作説明");
     ImGui::SetNextWindowPos(ImVec2(390.0f, 560.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(560.0f, 170.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"操作説明", &m_showHelpWindow))
@@ -2321,6 +2362,8 @@ void SceneNarakuEditor::DrawHelpWindow()
 
 void SceneNarakuEditor::DrawFeatureWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"機能紹介");
     ImGui::SetNextWindowPos(ImVec2(390.0f, 20.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(280.0f, 260.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"機能紹介", &m_showFeatureWindow))
@@ -2352,6 +2395,8 @@ void SceneNarakuEditor::DrawFeatureWindow()
 // Draw a compact inspector window for the current primary selection.
 void SceneNarakuEditor::DrawInspectorWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"インスペクタ");
     ImGui::SetNextWindowPos(ImVec2(1288.0f, 20.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300.0f, 280.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"インスペクタ", &m_showInspectorWindow))
@@ -2466,6 +2511,8 @@ void SceneNarakuEditor::DrawInspectorWindow()
 
 void SceneNarakuEditor::DrawOperationLogWindow()
 {
+    EDITOR_PROFILE_FUNCTION();
+    EDITOR_PROFILE_WINDOW(u8"操作ログ");
     ImGui::SetNextWindowPos(ImVec2(1288.0f, 320.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(300.0f, 320.0f), ImGuiCond_FirstUseEver);
     if (!ImGui::Begin(u8"操作ログ", &m_showOperationLogWindow))
@@ -2497,6 +2544,7 @@ void SceneNarakuEditor::DrawOperationLogWindow()
 
 bool SceneNarakuEditor::TryLaunchPlaytest()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (SaveCurrentMap())
     {
         m_lastIoMessage = u8"保存成功。プレイテストを起動します。";
@@ -2515,6 +2563,7 @@ bool SceneNarakuEditor::TryLaunchPlaytest()
 
 void SceneNarakuEditor::DrawTransientPopups()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_openIoErrorPopup)
     {
         ImGui::OpenPopup(u8"プレイテスト起動失敗");
@@ -2523,6 +2572,7 @@ void SceneNarakuEditor::DrawTransientPopups()
 
     if (ImGui::BeginPopupModal(u8"プレイテスト起動失敗", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
     {
+        EDITOR_PROFILE_WINDOW(u8"プレイテスト起動失敗");
         ImGui::TextWrapped("%s", m_modalErrorMessage.c_str());
         ImGui::Spacing();
         if (ImGui::Button(u8"閉じる", ImVec2(120.0f, 0.0f)))
@@ -2536,6 +2586,7 @@ void SceneNarakuEditor::DrawTransientPopups()
 // Draw the current marquee rectangle as a 2D overlay.
 void SceneNarakuEditor::DrawMarqueeOverlay()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!m_marqueeSelecting)
     {
         return;
@@ -2557,6 +2608,7 @@ void SceneNarakuEditor::DrawMarqueeOverlay()
 // Draw the active vertex or face height gizmo.
 void SceneNarakuEditor::DrawVertexGizmo()
 {
+    EDITOR_PROFILE_FUNCTION();
 
     if (m_selectedVertex.layerIndex < 0 ||
         m_selectedVertex.layerIndex >= ToInt(m_mapData.terrainLayers.size()))
@@ -2596,6 +2648,7 @@ void SceneNarakuEditor::DrawVertexGizmo()
 // Draw one terrain layer, its preview floor, grid, and selection highlights.
 void SceneNarakuEditor::DrawTerrainLayer(const NarakuMap::TerrainLayer& layer, int layerIndex)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!layer.visible)
     {
         return;
@@ -2768,6 +2821,7 @@ void SceneNarakuEditor::DrawTerrainLayer(const NarakuMap::TerrainLayer& layer, i
 // Highlight the terrain vertex currently under the cursor.
 void SceneNarakuEditor::DrawHoveredVertexHighlight()
 {
+    EDITOR_PROFILE_FUNCTION();
 
     if (m_editMode != EditMode::Terrain)
     {
@@ -2825,6 +2879,7 @@ void SceneNarakuEditor::DrawHoveredVertexHighlight()
 // Draw start and return point markers.
 void SceneNarakuEditor::DrawStartAndReturnPoints()
 {
+    EDITOR_PROFILE_FUNCTION();
     auto drawPoint = [this](const NarakuMap::LayerPoint& point, const XMFLOAT4& color, float heightOffset)
     {
         const int layerIndex = FindLayerIndexById(point.layerId);
@@ -2851,6 +2906,7 @@ void SceneNarakuEditor::DrawStartAndReturnPoints()
 // Draw colored boundary overlays for cell attributes.
 void SceneNarakuEditor::DrawBoundaryOverlay(const NarakuMap::TerrainLayer& layer) const
 {
+    EDITOR_PROFILE_FUNCTION();
     for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
     {
         for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
@@ -2899,6 +2955,7 @@ void SceneNarakuEditor::DrawBoundaryOverlay(const NarakuMap::TerrainLayer& layer
 // Draw rope markers and the line that connects their layers.
 void SceneNarakuEditor::DrawRopes()
 {
+    EDITOR_PROFILE_FUNCTION();
 
     for (int i = 0; i < ToInt(m_mapData.ropes.size()); ++i)
     {
@@ -2934,6 +2991,7 @@ void SceneNarakuEditor::DrawRopes()
 // Draw mining point markers in the preview world.
 void SceneNarakuEditor::DrawMiningPoints()
 {
+    EDITOR_PROFILE_FUNCTION();
     for (int i = 0; i < ToInt(m_mapData.miningPoints.size()); ++i)
     {
         const NarakuMap::MiningPoint& point = m_mapData.miningPoints[i];
@@ -2971,6 +3029,7 @@ void SceneNarakuEditor::DrawMiningPoints()
 // Draw a simple wire box in world space.
 void SceneNarakuEditor::DrawDebugBox3D(const DirectX::XMFLOAT3& pos, const DirectX::XMFLOAT3& scale) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     const XMMATRIX scaling = XMMatrixScaling(scale.x, scale.y, scale.z);
 
@@ -2986,6 +3045,7 @@ void SceneNarakuEditor::DrawDebugBox3D(const DirectX::XMFLOAT3& pos, const Direc
 // Draw a tinted quad used for translucent floor previews.
 void SceneNarakuEditor::DrawTransparentFloor3D(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT2& size, const DirectX::XMFLOAT4& color) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     if (!m_debugWhiteTexture)
     {
@@ -3017,6 +3077,7 @@ void SceneNarakuEditor::DrawTerrainCellPreview(
     int cellZ,
     const DirectX::XMFLOAT4& color) const
 {
+    EDITOR_PROFILE_FUNCTION();
     const XMFLOAT3 p00 = GetVertexWorldPosition(layer, cellX, cellZ);
     const XMFLOAT3 p10 = GetVertexWorldPosition(layer, cellX + 1, cellZ);
     const XMFLOAT3 p01 = GetVertexWorldPosition(layer, cellX, cellZ + 1);
@@ -3031,6 +3092,7 @@ void SceneNarakuEditor::DrawTerrainCellPreview(
 // Convert layer depth and local height into world-space Y.
 float SceneNarakuEditor::ToWorldY(float layerDepth, float height) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     return height - layerDepth * kDepthScale;
 }
@@ -3038,6 +3100,7 @@ float SceneNarakuEditor::ToWorldY(float layerDepth, float height) const
 // Convert a terrain grid vertex into world space.
 DirectX::XMFLOAT3 SceneNarakuEditor::GetVertexWorldPosition(const NarakuMap::TerrainLayer& layer, int gridX, int gridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     const float originX = layer.center.x - (static_cast<float>(layer.gridWidth - 1) * layer.cellSize * 0.5f);
     const float originZ = layer.center.z - (static_cast<float>(layer.gridHeight - 1) * layer.cellSize * 0.5f);
@@ -3051,6 +3114,7 @@ DirectX::XMFLOAT3 SceneNarakuEditor::GetVertexWorldPosition(const NarakuMap::Ter
 // Return the preview floor center for one terrain layer.
 DirectX::XMFLOAT3 SceneNarakuEditor::GetLayerFloorCenter(const NarakuMap::TerrainLayer& layer) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     return { layer.center.x, ToWorldY(layer.layerDepth, -0.03f), layer.center.z };
 }
@@ -3058,6 +3122,7 @@ DirectX::XMFLOAT3 SceneNarakuEditor::GetLayerFloorCenter(const NarakuMap::Terrai
 // Return the preview floor size for one terrain layer.
 DirectX::XMFLOAT2 SceneNarakuEditor::GetLayerFloorSize(const NarakuMap::TerrainLayer& layer) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     const float width = static_cast<float>(layer.gridWidth - 1) * layer.cellSize;
     const float height = static_cast<float>(layer.gridHeight - 1) * layer.cellSize;
@@ -3067,6 +3132,7 @@ DirectX::XMFLOAT2 SceneNarakuEditor::GetLayerFloorSize(const NarakuMap::TerrainL
 // Resolve the selected cell coordinates for the active layer.
 void SceneNarakuEditor::GetSelectedCellCoords(const NarakuMap::TerrainLayer& layer, int& outCellX, int& outCellZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_selectedCell.layerIndex == m_selectedLayer)
     {
         outCellX = ClampValue(m_selectedCell.cellX, 0, std::max(0, layer.gridWidth - 2));
@@ -3081,6 +3147,7 @@ void SceneNarakuEditor::GetSelectedCellCoords(const NarakuMap::TerrainLayer& lay
 // Return the average height of the selected terrain cell.
 float SceneNarakuEditor::GetSelectedCellAverageHeight(const NarakuMap::TerrainLayer& layer) const
 {
+    EDITOR_PROFILE_FUNCTION();
     int cellX = 0;
     int cellZ = 0;
     GetSelectedCellCoords(layer, cellX, cellZ);
@@ -3094,6 +3161,7 @@ float SceneNarakuEditor::GetSelectedCellAverageHeight(const NarakuMap::TerrainLa
 // Offset the four vertices that make up a selected terrain cell.
 void SceneNarakuEditor::ApplyHeightDeltaToCell(NarakuMap::TerrainLayer& layer, int cellX, int cellZ, float deltaHeight)
 {
+    EDITOR_PROFILE_FUNCTION();
     NarakuMap::SetVertexHeight(layer, cellX, cellZ, NarakuMap::GetVertexHeight(layer, cellX, cellZ) + deltaHeight);
     NarakuMap::SetVertexHeight(layer, cellX + 1, cellZ, NarakuMap::GetVertexHeight(layer, cellX + 1, cellZ) + deltaHeight);
     NarakuMap::SetVertexHeight(layer, cellX, cellZ + 1, NarakuMap::GetVertexHeight(layer, cellX, cellZ + 1) + deltaHeight);
@@ -3103,6 +3171,7 @@ void SceneNarakuEditor::ApplyHeightDeltaToCell(NarakuMap::TerrainLayer& layer, i
 // Apply a height delta to the current vertex multi-selection.
 void SceneNarakuEditor::ApplyHeightDeltaToSelectedVertices(float deltaHeight)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_multiSelectedVertices.empty())
     {
         if (m_selectedVertex.layerIndex >= 0 && m_selectedVertex.layerIndex < ToInt(m_mapData.terrainLayers.size()))
@@ -3126,6 +3195,7 @@ void SceneNarakuEditor::ApplyHeightDeltaToSelectedVertices(float deltaHeight)
 // Apply a height delta to the current face multi-selection.
 void SceneNarakuEditor::ApplyHeightDeltaToSelectedCells(float deltaHeight)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_multiSelectedCells.empty())
     {
         if (m_selectedCell.layerIndex >= 0 && m_selectedCell.layerIndex < ToInt(m_mapData.terrainLayers.size()))
@@ -3149,6 +3219,7 @@ void SceneNarakuEditor::ApplyHeightDeltaToSelectedCells(float deltaHeight)
 // Clear all multi-selection buffers.
 void SceneNarakuEditor::ClearMultiSelection()
 {
+    EDITOR_PROFILE_FUNCTION();
     m_multiSelectedVertices.clear();
     m_multiSelectedCells.clear();
     m_multiSelectedRopes.clear();
@@ -3158,6 +3229,7 @@ void SceneNarakuEditor::ClearMultiSelection()
 // Add one vertex to the current multi-selection set.
 void SceneNarakuEditor::AddSelectedVertex(int layerIndex, int gridX, int gridZ)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (layerIndex < 0 || layerIndex >= ToInt(m_mapData.terrainLayers.size()))
     {
         return;
@@ -3181,6 +3253,7 @@ void SceneNarakuEditor::AddSelectedVertex(int layerIndex, int gridX, int gridZ)
 // Add one cell to the current multi-selection set.
 void SceneNarakuEditor::AddSelectedCell(int layerIndex, int cellX, int cellZ)
 {
+    EDITOR_PROFILE_FUNCTION();
     for (const CellSelection& selection : m_multiSelectedCells)
     {
         if (selection.layerIndex == layerIndex && selection.cellX == cellX && selection.cellZ == cellZ)
@@ -3194,6 +3267,7 @@ void SceneNarakuEditor::AddSelectedCell(int layerIndex, int cellX, int cellZ)
 // Add one rope to the current multi-selection set.
 void SceneNarakuEditor::AddSelectedRope(int ropeIndex)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (ropeIndex < 0 || ropeIndex >= ToInt(m_mapData.ropes.size()))
     {
         return;
@@ -3210,6 +3284,7 @@ void SceneNarakuEditor::AddSelectedRope(int ropeIndex)
 // Add one mining point to the current multi-selection set.
 void SceneNarakuEditor::AddSelectedMiningPoint(int pointIndex)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (pointIndex < 0 || pointIndex >= ToInt(m_mapData.miningPoints.size()))
     {
         return;
@@ -3226,6 +3301,7 @@ void SceneNarakuEditor::AddSelectedMiningPoint(int pointIndex)
 // Test whether a vertex is currently inside the multi-selection set.
 bool SceneNarakuEditor::IsVertexMultiSelected(int layerIndex, int gridX, int gridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     for (const VertexSelection& selection : m_multiSelectedVertices)
     {
         if (selection.layerIndex == layerIndex && selection.gridX == gridX && selection.gridZ == gridZ)
@@ -3239,6 +3315,7 @@ bool SceneNarakuEditor::IsVertexMultiSelected(int layerIndex, int gridX, int gri
 // Test whether a cell is currently inside the multi-selection set.
 bool SceneNarakuEditor::IsCellMultiSelected(int layerIndex, int cellX, int cellZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     for (const CellSelection& selection : m_multiSelectedCells)
     {
         if (selection.layerIndex == layerIndex && selection.cellX == cellX && selection.cellZ == cellZ)
@@ -3252,17 +3329,20 @@ bool SceneNarakuEditor::IsCellMultiSelected(int layerIndex, int cellX, int cellZ
 // Test whether a rope is currently inside the multi-selection set.
 bool SceneNarakuEditor::IsRopeMultiSelected(int ropeIndex) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return std::find(m_multiSelectedRopes.begin(), m_multiSelectedRopes.end(), ropeIndex) != m_multiSelectedRopes.end();
 }
 
 // Test whether a mining point is currently inside the multi-selection set.
 bool SceneNarakuEditor::IsMiningPointMultiSelected(int pointIndex) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return std::find(m_multiSelectedMiningPoints.begin(), m_multiSelectedMiningPoints.end(), pointIndex) != m_multiSelectedMiningPoints.end();
 }
 
 bool SceneNarakuEditor::IsCellRemoved(const NarakuMap::TerrainLayer& layer, int cellX, int cellZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     return (NarakuMap::GetCellAttributeFlags(layer, cellX, cellZ) & NarakuMap::CellAttributeRemoved) != 0u;
 }
 
@@ -3272,6 +3352,7 @@ bool SceneNarakuEditor::CanDeleteCell(
     int cellZ,
     const std::vector<CellSelection>& removingCells) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (cellX < 0 || cellZ < 0 || cellX >= layer.gridWidth - 1 || cellZ >= layer.gridHeight - 1)
     {
         return false;
@@ -3314,6 +3395,7 @@ bool SceneNarakuEditor::CanDeleteCell(
 
 bool SceneNarakuEditor::CanDeleteVertex(const NarakuMap::TerrainLayer& layer, int gridX, int gridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!NarakuMap::IsVertexEnabled(layer, gridX, gridZ))
     {
         return false;
@@ -3348,6 +3430,7 @@ bool SceneNarakuEditor::CanDeleteVertex(const NarakuMap::TerrainLayer& layer, in
 // Apply the current marquee rectangle to terrain multi-selection.
 void SceneNarakuEditor::ApplyMarqueeSelection()
 {
+    EDITOR_PROFILE_FUNCTION();
     ClearMultiSelection();
 
     if (m_selectedLayer < 0 || m_selectedLayer >= ToInt(m_mapData.terrainLayers.size()))
@@ -3427,6 +3510,7 @@ void SceneNarakuEditor::ApplyMarqueeSelection()
 // Snap an editable XZ point to the selected layer grid.
 void SceneNarakuEditor::ApplySnapToPoint(NarakuMap::Vec2& pointXZ, int layerId, bool snapToCellCenter) const
 {
+    EDITOR_PROFILE_FUNCTION();
     const int layerIndex = FindLayerIndexById(layerId);
     if (layerIndex < 0 || layerIndex >= ToInt(m_mapData.terrainLayers.size()))
     {
@@ -3446,6 +3530,7 @@ void SceneNarakuEditor::ApplySnapToPoint(NarakuMap::Vec2& pointXZ, int layerId, 
 // Project the mouse cursor onto a layer-aligned horizontal plane.
 bool SceneNarakuEditor::ProjectMouseToLayerPlane(POINT mousePos, float layerDepth, NarakuMap::Vec2& outPointXZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     const DirectX::XMFLOAT2 viewportSize = GetEditorViewportSize();
     const XMMATRIX view = XMLoadFloat4x4(&m_viewMatrix);
     const XMMATRIX projection = XMLoadFloat4x4(&m_projectionMatrix);
@@ -3498,6 +3583,7 @@ bool SceneNarakuEditor::ProjectMouseToLayerPlane(POINT mousePos, float layerDept
 // Move an XZ point by projecting the cursor onto the chosen layer plane.
 void SceneNarakuEditor::DragPointOnLayerPlane(NarakuMap::Vec2& pointXZ, int layerId)
 {
+    EDITOR_PROFILE_FUNCTION();
     const int layerIndex = FindLayerIndexById(layerId);
     if (layerIndex < 0 || layerIndex >= ToInt(m_mapData.terrainLayers.size()))
     {
@@ -3520,6 +3606,7 @@ void SceneNarakuEditor::DragPointOnLayerPlane(NarakuMap::Vec2& pointXZ, int laye
 // Project a world-space point into screen coordinates.
 bool SceneNarakuEditor::ProjectWorldToScreen(const DirectX::XMFLOAT3& worldPos, DirectX::XMFLOAT2& outScreen) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     const XMMATRIX view = XMLoadFloat4x4(&m_viewMatrix);
     const XMMATRIX projection = XMLoadFloat4x4(&m_projectionMatrix);
@@ -3541,6 +3628,7 @@ bool SceneNarakuEditor::ProjectWorldToScreen(const DirectX::XMFLOAT3& worldPos, 
 // Pick the nearest visible terrain vertex in screen space.
 bool SceneNarakuEditor::PickTerrainVertex(POINT mousePos, int& outGridX, int& outGridZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     if (m_selectedLayer < 0 || m_selectedLayer >= ToInt(m_mapData.terrainLayers.size()))
     {
@@ -3585,6 +3673,7 @@ bool SceneNarakuEditor::PickTerrainVertex(POINT mousePos, int& outGridX, int& ou
 // Pick the nearest visible terrain cell center in screen space.
 bool SceneNarakuEditor::PickTerrainCell(POINT mousePos, int& outCellX, int& outCellZ) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_selectedLayer < 0 || m_selectedLayer >= ToInt(m_mapData.terrainLayers.size()))
     {
         return false;
@@ -3637,6 +3726,7 @@ bool SceneNarakuEditor::PickTerrainCell(POINT mousePos, int& outCellX, int& outC
 // Pick the nearest rope handle in screen space.
 int SceneNarakuEditor::PickRope(POINT mousePos) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     float bestDistance = kPickThresholdPx;
     int bestIndex = -1;
@@ -3676,6 +3766,7 @@ int SceneNarakuEditor::PickRope(POINT mousePos) const
 // Pick the nearest mining point marker in screen space.
 int SceneNarakuEditor::PickMiningPoint(POINT mousePos) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     float bestDistance = kPickThresholdPx;
     int bestIndex = -1;
@@ -3710,6 +3801,7 @@ int SceneNarakuEditor::PickMiningPoint(POINT mousePos) const
 // Test whether the cursor is near the selected vertex handle.
 bool SceneNarakuEditor::IsMouseNearSelectedVertexHandle(POINT mousePos) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     if (m_selectedVertex.layerIndex < 0 ||
         m_selectedVertex.layerIndex >= ToInt(m_mapData.terrainLayers.size()))
@@ -3734,6 +3826,7 @@ bool SceneNarakuEditor::IsMouseNearSelectedVertexHandle(POINT mousePos) const
 // Test whether the cursor is near the selected face handle.
 bool SceneNarakuEditor::IsMouseNearSelectedCellHandle(POINT mousePos) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_selectedCell.layerIndex < 0 ||
         m_selectedCell.layerIndex >= ToInt(m_mapData.terrainLayers.size()))
     {
@@ -3772,6 +3865,7 @@ bool SceneNarakuEditor::IsMouseNearSelectedCellHandle(POINT mousePos) const
 // Return the depth currently used to drive foreground fading.
 float SceneNarakuEditor::GetFocusDepth() const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     if (m_editMode == EditMode::Terrain &&
         m_selectedLayer >= 0 &&
@@ -3808,6 +3902,7 @@ float SceneNarakuEditor::GetFocusDepth() const
 // Choose a display alpha for a layer based on the focus depth.
 float SceneNarakuEditor::GetLayerAlpha(const NarakuMap::TerrainLayer& layer, int layerIndex) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (layerIndex == m_selectedLayer)
     {
         return (layer.layerDepth < GetFocusDepth()) ? m_frontLayerAlpha : 0.32f;
@@ -3819,6 +3914,7 @@ float SceneNarakuEditor::GetLayerAlpha(const NarakuMap::TerrainLayer& layer, int
 // Return the UI label for a ground texture slot.
 const char* SceneNarakuEditor::GetGroundTextureLabel(int textureId) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     return kGroundTextureLabels[ClampValue(textureId, 0, 3)];
 }
@@ -3826,6 +3922,7 @@ const char* SceneNarakuEditor::GetGroundTextureLabel(int textureId) const
 // Return a temporary color tint for the preview floor.
 DirectX::XMFLOAT4 SceneNarakuEditor::GetGroundTextureTint(int textureId) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     switch (ClampValue(textureId, 0, 3))
     {
@@ -3839,6 +3936,7 @@ DirectX::XMFLOAT4 SceneNarakuEditor::GetGroundTextureTint(int textureId) const
 // Convert a UTF-16 string to UTF-8 for ImGui display.
 std::string SceneNarakuEditor::WideToUtf8(const wchar_t* text) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     if (!text)
     {
@@ -3859,6 +3957,7 @@ std::string SceneNarakuEditor::WideToUtf8(const wchar_t* text) const
 
 void SceneNarakuEditor::AppendOperationLog(const std::string& message)
 {
+    EDITOR_PROFILE_FUNCTION();
     if (message.empty())
     {
         return;
@@ -3873,11 +3972,13 @@ void SceneNarakuEditor::AppendOperationLog(const std::string& message)
 
 void SceneNarakuEditor::InvalidateValidationCache()
 {
+    EDITOR_PROFILE_FUNCTION();
     m_validationDirty = true;
 }
 
 const std::vector<NarakuMap::ValidationIssue>& SceneNarakuEditor::GetValidationIssues()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_validationDirty)
     {
         m_cachedValidationIssues = NarakuMap::ValidateMapData(m_mapData);
@@ -3888,6 +3989,7 @@ const std::vector<NarakuMap::ValidationIssue>& SceneNarakuEditor::GetValidationI
 
 bool SceneNarakuEditor::ShouldDrawDetailedFloorPreview(const NarakuMap::TerrainLayer& layer, int layerIndex) const
 {
+    EDITOR_PROFILE_FUNCTION();
     if (!m_showFloorPreview || !m_useDetailedFloorPreview)
     {
         return false;
@@ -3905,6 +4007,7 @@ bool SceneNarakuEditor::ShouldDrawDetailedFloorPreview(const NarakuMap::TerrainL
 // Find the terrain layer index that matches a layer ID.
 int SceneNarakuEditor::FindLayerIndexById(int layerId) const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     for (int i = 0; i < ToInt(m_mapData.terrainLayers.size()); ++i)
     {
@@ -3919,6 +4022,7 @@ int SceneNarakuEditor::FindLayerIndexById(int layerId) const
 // Create a default terrain layer for the editor.
 NarakuMap::LayerPoint* SceneNarakuEditor::GetSelectedLayerPoint()
 {
+    EDITOR_PROFILE_FUNCTION();
     switch (m_selectedLayerPoint)
     {
     case LayerPointSelectionTarget::PlayerStart:
@@ -3932,6 +4036,7 @@ NarakuMap::LayerPoint* SceneNarakuEditor::GetSelectedLayerPoint()
 
 const NarakuMap::LayerPoint* SceneNarakuEditor::GetSelectedLayerPoint() const
 {
+    EDITOR_PROFILE_FUNCTION();
     switch (m_selectedLayerPoint)
     {
     case LayerPointSelectionTarget::PlayerStart:
@@ -3945,6 +4050,7 @@ const NarakuMap::LayerPoint* SceneNarakuEditor::GetSelectedLayerPoint() const
 
 bool SceneNarakuEditor::PickLayerPoint(POINT mousePos, LayerPointSelectionTarget& outTarget) const
 {
+    EDITOR_PROFILE_FUNCTION();
     outTarget = LayerPointSelectionTarget::None;
     float bestDistance = kPickThresholdPx;
 
@@ -3978,6 +4084,7 @@ bool SceneNarakuEditor::PickLayerPoint(POINT mousePos, LayerPointSelectionTarget
 }
 NarakuMap::TerrainLayer SceneNarakuEditor::CreateNewLayer() const
 {
+    EDITOR_PROFILE_FUNCTION();
     NarakuMap::TerrainLayer layer = {};
     layer.id = m_mapData.terrainLayers.empty() ? 0 : (m_mapData.terrainLayers.back().id + 1);
     layer.center = { 0.0f, 0.0f };
@@ -3997,6 +4104,7 @@ NarakuMap::TerrainLayer SceneNarakuEditor::CreateNewLayer() const
 // Create a default rope that links the outermost layers.
 NarakuMap::RopePoint SceneNarakuEditor::CreateNewRope() const
 {
+    EDITOR_PROFILE_FUNCTION();
 
     NarakuMap::RopePoint rope = {};
     rope.topXZ = { 0.0f, 0.0f };
@@ -4012,6 +4120,7 @@ NarakuMap::RopePoint SceneNarakuEditor::CreateNewRope() const
 // Create a default mining point on the selected layer.
 NarakuMap::MiningPoint SceneNarakuEditor::CreateNewMiningPoint() const
 {
+    EDITOR_PROFILE_FUNCTION();
     NarakuMap::MiningPoint point = {};
     point.xz = { 0.0f, 0.0f };
     point.layerId = (m_selectedLayer >= 0 && m_selectedLayer < ToInt(m_mapData.terrainLayers.size()))
@@ -4029,6 +4138,7 @@ NarakuMap::MiningPoint SceneNarakuEditor::CreateNewMiningPoint() const
 
 SceneNarakuEditor::EditorSnapshot SceneNarakuEditor::MakeSnapshot() const
 {
+    EDITOR_PROFILE_FUNCTION();
     EditorSnapshot snapshot = {};
     snapshot.mapData = m_mapData;
     snapshot.editMode = m_editMode;
@@ -4048,6 +4158,7 @@ SceneNarakuEditor::EditorSnapshot SceneNarakuEditor::MakeSnapshot() const
 
 void SceneNarakuEditor::RestoreSnapshot(const EditorSnapshot& snapshot)
 {
+    EDITOR_PROFILE_FUNCTION();
     m_mapData = snapshot.mapData;
     m_editMode = snapshot.editMode;
     m_terrainEditTarget = snapshot.terrainEditTarget;
@@ -4073,6 +4184,7 @@ void SceneNarakuEditor::RestoreSnapshot(const EditorSnapshot& snapshot)
 
 void SceneNarakuEditor::PushUndoSnapshot()
 {
+    EDITOR_PROFILE_FUNCTION();
     m_undoStack.push_back(MakeSnapshot());
     if (m_undoStack.size() > 64)
     {
@@ -4084,6 +4196,7 @@ void SceneNarakuEditor::PushUndoSnapshot()
 
 bool SceneNarakuEditor::Undo()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_undoStack.empty())
     {
         return false;
@@ -4101,6 +4214,7 @@ bool SceneNarakuEditor::Undo()
 
 bool SceneNarakuEditor::Redo()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_redoStack.empty())
     {
         return false;
@@ -4118,6 +4232,7 @@ bool SceneNarakuEditor::Redo()
 
 bool SceneNarakuEditor::DeleteSelectedTerrainCells()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_selectedLayer < 0 || m_selectedLayer >= ToInt(m_mapData.terrainLayers.size()))
     {
         return false;
@@ -4198,6 +4313,7 @@ bool SceneNarakuEditor::DeleteSelectedTerrainCells()
 
 bool SceneNarakuEditor::DeleteSelectedTerrainVertices()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_selectedLayer < 0 || m_selectedLayer >= ToInt(m_mapData.terrainLayers.size()))
     {
         return false;
@@ -4238,6 +4354,7 @@ bool SceneNarakuEditor::DeleteSelectedTerrainVertices()
 
 bool SceneNarakuEditor::RestoreSelectedTerrainGeometry()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_selectedLayer < 0 || m_selectedLayer >= ToInt(m_mapData.terrainLayers.size()))
     {
         return false;
@@ -4320,6 +4437,7 @@ bool SceneNarakuEditor::RestoreSelectedTerrainGeometry()
 
 bool SceneNarakuEditor::DeleteCurrentSelection()
 {
+    EDITOR_PROFILE_FUNCTION();
     if (m_editMode == EditMode::Terrain)
     {
         return (m_terrainEditTarget == TerrainEditTarget::Face)
@@ -4376,12 +4494,14 @@ bool SceneNarakuEditor::DeleteCurrentSelection()
 
 void SceneNarakuEditor::SnapCameraToTopView()
 {
+    EDITOR_PROFILE_FUNCTION();
     m_cameraPitch = DirectX::XMConvertToRadians(89.0f);
     m_cameraDistance = std::max(m_cameraDistance, 24.0f);
 }
 
 void SceneNarakuEditor::HandleShortcuts()
 {
+    EDITOR_PROFILE_FUNCTION();
     ImGuiIO& io = ImGui::GetIO();
     if (io.WantTextInput)
     {
