@@ -28,7 +28,7 @@ namespace
     ProfileEntries g_classEntries;
     ProfileEntries g_functionEntries;
     std::unordered_map<std::string, unsigned int> g_classCallDepths;
-    bool g_showProfilerWindow = true;
+    bool g_showProfilerWindow = false;
     bool g_showOnlyActiveEntries = true;
 
     ProfileEntries& GetEntries(EditorPerformanceProfiler::Category category)
@@ -173,9 +173,18 @@ namespace
 
 void EditorPerformanceProfiler::BeginFrame()
 {
+    if (!g_showProfilerWindow)
+    {
+        return;
+    }
     FinalizeEntries(g_windowEntries);
     FinalizeEntries(g_classEntries);
     FinalizeEntries(g_functionEntries);
+}
+
+bool EditorPerformanceProfiler::IsRecordingEnabled()
+{
+    return g_showProfilerWindow;
 }
 
 void EditorPerformanceProfiler::Record(Category category, const char* name, double elapsedMilliseconds)
@@ -229,6 +238,10 @@ void EditorPerformanceProfiler::DrawWindow()
     if (ImGui::IsKeyPressed(ImGuiKey_F3, false))
     {
         g_showProfilerWindow = !g_showProfilerWindow;
+        if (g_showProfilerWindow)
+        {
+            ClearEntries();
+        }
     }
     if (!g_showProfilerWindow)
     {
@@ -282,8 +295,14 @@ EditorPerformanceScope::EditorPerformanceScope(
     const char* name)
     : m_category(category)
     , m_name(name)
-    , m_startedAt(Clock::now())
 {
+    m_active = EditorPerformanceProfiler::IsRecordingEnabled();
+    if (!m_active)
+    {
+        return;
+    }
+
+    m_startedAt = Clock::now();
     if (m_category == EditorPerformanceProfiler::Category::Function)
     {
         m_className = ExtractClassName(m_name);
@@ -293,6 +312,11 @@ EditorPerformanceScope::EditorPerformanceScope(
 
 EditorPerformanceScope::~EditorPerformanceScope()
 {
+    if (!m_active)
+    {
+        return;
+    }
+
     const Clock::time_point finishedAt = Clock::now();
     const double elapsedMilliseconds =
         std::chrono::duration<double, std::milli>(finishedAt - m_startedAt).count();

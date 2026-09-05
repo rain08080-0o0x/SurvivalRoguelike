@@ -14,18 +14,109 @@
 #include "imgui.h"
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <direct.h>
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 
 namespace
 {
     constexpr const char* kPlaytestConfigPath = "Assets/Config/naraku_proto_playtest.json";
     constexpr const wchar_t* kEnvironmentModelCatalogRelativePath = L"Assets/Naraku/environment_models.cfg";
+    constexpr const wchar_t* kProgressDirectory = L"Assets/Save";
+    constexpr const wchar_t* kProgressPath = L"Assets/Save/naraku_proto_save.dat";
+    constexpr const wchar_t* kProgressTempPath = L"Assets/Save/naraku_proto_save.tmp";
+    constexpr int kSaveVersion = 1;
+    constexpr int kPreviousSaveVersion = 0;
+
+    struct DepthRules
+    {
+        std::array<int, 5> dropWeights;
+        float enemyHp;
+        float enemyAttack;
+        float enemyMove;
+        float enemyInterval;
+        float regularExp;
+        float movementExp;
+        int movementExpCap;
+        float hunger;
+        float reward;
+        float stayReward;
+        int chargerMax;
+        int territoryMax;
+    };
+
+    constexpr DepthRules kDepthRules[] =
+    {
+        { { 70, 15, 15, 0, 0 }, 1.00f, 1.00f, 1.00f, 1.000f, 1.0f,   1.0f, 100, 1.00f, 1.0f, 0.8f, 2, 1 },
+        { { 40, 20, 30, 10, 0 }, 1.75f, 1.25f, 1.10f, 0.875f, 5.0f,   2.0f, 200, 1.15f, 1.5f, 1.2f, 2, 1 },
+        { { 20, 30, 32, 17, 1 }, 4.50f, 1.50f, 1.25f, 0.750f, 17.5f,  3.0f, 300, 1.30f, 2.0f, 1.6f, 3, 1 },
+        { { 10, 29, 35, 25, 1 }, 15.0f, 2.00f, 1.50f, 0.625f, 40.0f,  4.0f, 400, 1.45f, 3.5f, 2.0f, 4, 2 },
+        { { 0, 27, 35, 35, 3 }, 25.0f, 2.50f, 2.00f, 0.500f, 100.0f, 5.0f, 500, 1.60f, 6.0f, 2.4f, 5, 3 }
+    };
+
+    constexpr float kPlayerBaseMaxHp = 100.0f;
+    constexpr float kPlayerBaseMaxStamina = 100.0f;
+    constexpr float kPlayerBaseMaxMental = 100.0f;
+    constexpr float kPlayerBaseAttack = 10.0f;
+    constexpr float kPlayerBaseDefense = 1.0f;
+    constexpr float kFullnessMaximum = 100.0f;
+    constexpr float kFullnessWarning = 30.0f;
+    constexpr float kFullnessCritical = 10.0f;
+    constexpr float kRestaurantHpRatio = 0.75f;
+    constexpr float kRestaurantMentalRatio = 0.50f;
+    constexpr int kRestaurantPrice = 50;
+    constexpr int kFoodPrice = 10;
+    constexpr float kFoodHpRecovery = 20.0f;
+    constexpr float kFoodFullnessRecovery = 10.0f;
+    constexpr float kRelicAttackRadius = 2.0f;
+    constexpr float kRelicAttackDamageScale = 12.0f;
+    constexpr float kMentalSenseDuration = 15.0f;
+    constexpr float kUpperLoadWardDuration = 180.0f;
+    constexpr float kQHoldThreshold = 1.0f;
+    constexpr float kEnemyRespawnTime = 300.0f;
+    constexpr float kEnemyRespawnRetry = 15.0f;
+    constexpr float kEnemyRespawnMinPlayerDistance = 15.0f;
+    constexpr float kDiscoveryRange = 7.5f;
+    constexpr int kLevel100ProtectionExp = 1500000;
+
+    int ClampDepth(int depth)
+    {
+        return std::max(1, std::min(5, depth));
+    }
+
+    float RoundToHundredth(float value)
+    {
+        return std::round(value * 100.0f) / 100.0f;
+    }
+
+    const DepthRules& GetRulesForDepth(int depth)
+    {
+        return kDepthRules[static_cast<std::size_t>(ClampDepth(depth) - 1)];
+    }
+
+    float RandomFloat(float minimum, float maximum)
+    {
+        static std::mt19937 engine(std::random_device{}());
+        std::uniform_real_distribution<float> distribution(minimum, maximum);
+        return distribution(engine);
+    }
+
+    int RandomInt(int minimum, int maximum)
+    {
+        static std::mt19937 engine(std::random_device{}());
+        std::uniform_int_distribution<int> distribution(minimum, maximum);
+        return distribution(engine);
+    }
 
     std::wstring Utf8ToWide(const std::string& text)
     {
@@ -157,12 +248,7 @@ namespace
     constexpr float kCameraDefaultMaxPitchDegrees = 60.0f;
     constexpr float kCameraMinDistance = 6.0f;
     constexpr float kCameraMaxDistance = kCameraDefaultDistance;
-    constexpr float kRelicArmorWalkMultiplier = 1.2f;
-    constexpr float kRelicArmorRunMultiplier = 2.0f;
-    constexpr float kRelicArmorHpRecoveryPerSecond = 0.2f;
     constexpr int kMapGenerationMaxAttempts = 5;
-    constexpr int kLayerGateFailureLimit = 5;
-    constexpr int kMaximumAreaDepth = 3;
     constexpr float kLayerTransitionDuration = 1.5f;
     constexpr float kLayerTransitionHeight = 6.0f;
     constexpr float kCompassRadius = 30.0f;
@@ -184,7 +270,7 @@ namespace
     // 危険地形の継続ダメージ間隔です。
     constexpr float kHazardTickInterval = 0.50f;
     // 危険地形1回ぶんのダメージです。
-    constexpr float kHazardDamage = 0.5f;
+    constexpr float kHazardDamage = 5.0f;
     // 斜面移動時に経路を分割する1区間の基準長です。
     constexpr float kSlopeMoveSampleStep = 0.25f;
     // セル境界の浮動小数誤差で通行不可になりにくくするための許容値です。
@@ -236,6 +322,9 @@ SceneNarakuProto::SceneNarakuProto()
     m_ownedBodyArmor[static_cast<std::size_t>(ArmorTier::Leather)] = true;
     m_ownedWeapons[static_cast<std::size_t>(WeaponTier::RustyPickaxe)] = true;
 
+    InitializeNewProgress();
+    LoadProgress();
+
     // フィールドを準備し、最初は自宅で持ち物を決められる状態にします。
     ResetRun();
     m_mode = Mode::Home;
@@ -243,6 +332,14 @@ SceneNarakuProto::SceneNarakuProto()
 
 SceneNarakuProto::~SceneNarakuProto()
 {
+    if (m_mode == Mode::Explore || m_mode == Mode::Inventory || m_mode == Mode::RelicPrompt ||
+        m_mode == Mode::ReturnConfirm || m_mode == Mode::AbandonConfirm || m_mode == Mode::Loading || m_mode == Mode::LayerTransition)
+    {
+        ApplyAbandonPenalty();
+        m_inventory.clear();
+        m_foodCount = 0;
+    }
+    SaveProgress();
     ReleaseEnvironmentModels();
     ReleaseEnemyBillboardBatch();
     ReleaseTerrainFloorBatch();
@@ -565,41 +662,15 @@ void SceneNarakuProto::DrawEnemyBillboardBatch(
 bool SceneNarakuProto::ResetRun()
 {
     int keepMoney = m_money;
-
-    constexpr const wchar_t* generated4x4MapPath = L"Assets/Maps/generated_naraku_map_4x4.json";
-    constexpr const wchar_t* generated3x3MapPath = L"Assets/Maps/generated_naraku_map.json";
     bool generated = false;
     std::string mapError;
-    for (int attempt = 0; attempt < kMapGenerationMaxAttempts; ++attempt)
-    {
-        if (NarakuStageGenerator::GenerateFixed4x4AreaMap(generated4x4MapPath, false, true, &mapError) &&
-            NarakuMap::LoadMap(generated4x4MapPath, m_runtimeMap, &mapError))
-        {
-            generated = true;
-            NarakuMap::SetCurrentMapPath(generated4x4MapPath);
-            break;
-        }
-    }
-
-    if (!generated)
-    {
-        if (NarakuMap::LoadMap(generated3x3MapPath, m_runtimeMap, &mapError))
-        {
-            NarakuMap::SetCurrentMapPath(generated3x3MapPath);
-        }
-        else
-        {
-            NarakuMap::SetCurrentMapPath(NarakuMap::GetDefaultMapPath());
-            if (!NarakuMap::LoadMap(NarakuMap::GetDefaultMapPath(), m_runtimeMap, &mapError))
-            {
-                m_runtimeMap = NarakuMap::CreateDefaultMap();
-            }
-        }
-    }
 
     LoadEnvironmentModels();
 
     m_player = PlayerState();
+    m_player.hp = GetMaxHp();
+    m_player.stamina = GetMaxStamina();
+    m_player.mental = GetMaxMental();
     m_inventory.clear();
     m_foodCount = 0;
     m_groundRelics.clear();
@@ -632,16 +703,59 @@ bool SceneNarakuProto::ResetRun()
     m_shiftPendingStep = false;
     m_shiftWasPressed = false;
     m_shiftRunCommitted = false;
+    m_qHoldTime = 0.0f;
+    m_qWasPressed = false;
+    m_qLongTriggered = false;
+    m_upperLoadWardTimer = 0.0f;
+    m_miningSenseTimer = 0.0f;
+    m_movementExpByDepth.fill(0.0f);
     m_cameraShakeTimer = 0.0f;
     m_miningTimer = 0.0f;
     m_miningDuration = kMiningTime;
     m_miningIndex = -1;
+    m_foodUseTimer = 0.0f;
     m_selectedInventory = -1;
     m_mapScrollOffset = { 0.0f, 0.0f };
     m_mode = Mode::Explore;
     m_result = RunResult();
+    m_pendingDeathCause = DeathCause::Other;
     m_pendingRelicDepth = 0.0f;
     m_money = keepMoney;
+
+    if (!BuildDiveStructure())
+    {
+        m_mode = Mode::Home;
+        return false;
+    }
+
+    for (int areaIndex = 0; areaIndex < static_cast<int>(m_areas.size()); ++areaIndex)
+    {
+        if (!m_areas[areaIndex].canReturn) continue;
+        m_currentAreaIndex = areaIndex;
+        int entryCount = 0;
+        int exitCount = 0;
+        for (const PlannedLayerGate& gate : m_areas[areaIndex].plannedGates)
+            gate.isEntry ? ++entryCount : ++exitCount;
+        constexpr const wchar_t* generated4x4MapPath = L"Assets/Maps/generated_naraku_map_4x4.json";
+        for (int attempt = 0; attempt < kMapGenerationMaxAttempts; ++attempt)
+        {
+            if (NarakuStageGenerator::GenerateFixed4x4AreaMap(
+                    generated4x4MapPath, entryCount, exitCount, true, &mapError) &&
+                NarakuMap::LoadMap(generated4x4MapPath, m_runtimeMap, &mapError))
+            {
+                generated = true;
+                NarakuMap::SetCurrentMapPath(generated4x4MapPath);
+                break;
+            }
+        }
+        break;
+    }
+
+    if (!generated)
+    {
+        m_mode = Mode::Home;
+        return false;
+    }
 
     m_autoFallStartHeight = m_runtimeMap.autoFallStartHeight;
     m_worldHalfSize = 1.0f;
@@ -730,6 +844,12 @@ bool SceneNarakuProto::ResetRun()
         m_layerGates.push_back(runtimeGate);
     }
 
+    if (!AssignPlannedGates(m_currentAreaIndex))
+    {
+        m_mode = Mode::Home;
+        return false;
+    }
+
     int fallbackRelicIndex = 0;
     for (const NarakuMap::MiningPoint& point : m_runtimeMap.miningPoints)
     {
@@ -751,48 +871,18 @@ bool SceneNarakuProto::ResetRun()
         m_miningPoints.push_back(runtimePoint);
     }
 
-    auto pickEnemyDepth = [this](const Vec2& pos) -> float
-    {
-        float bestDepth = m_startDepth;
-        bool found = false;
-        for (const FloorRegion& floor : m_floorRegions)
-        {
-            if (!IsInsideFloor(floor, pos))
-            {
-                continue;
-            }
-            if (!found || floor.depth < bestDepth)
-            {
-                bestDepth = floor.depth;
-                found = true;
-            }
-        }
-        return bestDepth;
-    };
-
-    EnemyState enemyA = {};
-    enemyA.pos = { -8.0f, 11.0f };
-    enemyA.depth = pickEnemyDepth(enemyA.pos);
-    m_enemies.push_back(enemyA);
-
-    EnemyState enemyB = {};
-    enemyB.pos = { 13.0f, -8.0f };
-    enemyB.depth = pickEnemyDepth(enemyB.pos);
-    m_enemies.push_back(enemyB);
-
-    EnemyState enemyC = {};
-    enemyC.pos = { -18.0f, -13.0f };
-    enemyC.depth = pickEnemyDepth(enemyC.pos);
-    m_enemies.push_back(enemyC);
-
+    SpawnEnemiesForCurrentArea();
     RebuildTerrainFloorBatch();
     RebuildEnemyBillboardBatch();
     AddMessage(u8"奈落塔プロトタイプを開始しました。");
     if (generated)
     {
-        m_areas.emplace_back();
-        m_areas.front().depth = 1;
-        m_currentAreaIndex = 0;
+        AreaState& startArea = m_areas[m_currentAreaIndex];
+        startArea.generated = true;
+        startArea.firstAreaExpAwarded = true;
+        startArea.firstAreaRewardAwarded = true;
+        m_result.firstAreaCount = 1;
+        AwardExp(static_cast<int>(100.0f * GetDepthExpMultiplier(1)));
         SaveCurrentAreaState();
     }
     if (!generated)
@@ -800,6 +890,223 @@ bool SceneNarakuProto::ResetRun()
         m_mode = Mode::Home;
     }
     return generated;
+}
+
+bool SceneNarakuProto::BuildDiveStructure()
+{
+    constexpr int stageCount = 15;
+    constexpr int maximumGatesPerArea = 4;
+    constexpr int maximumAttempts = 2000;
+
+    for (int attempt = 0; attempt < maximumAttempts; ++attempt)
+    {
+        m_areas.clear();
+        std::array<std::vector<int>, stageCount> stageAreas;
+        for (int stage = 0; stage < stageCount; ++stage)
+        {
+            const int areaCount = RandomInt(2, 4);
+            for (int number = 0; number < areaCount; ++number)
+            {
+                const int areaIndex = static_cast<int>(m_areas.size());
+                m_areas.emplace_back();
+                AreaState& area = m_areas.back();
+                area.depth = stage / 3 + 1;
+                area.sublayer = stage % 3;
+                area.areaNumber = number + 1;
+                stageAreas[stage].push_back(areaIndex);
+            }
+        }
+
+        const int startAreaIndex = stageAreas[0][RandomInt(0, static_cast<int>(stageAreas[0].size()) - 1)];
+        m_areas[startAreaIndex].canReturn = true;
+        int nextConnectionId = 1;
+        bool failed = false;
+
+        const auto shuffledIndices = [](int count)
+        {
+            std::vector<int> result(static_cast<std::size_t>(count));
+            for (int index = 0; index < count; ++index) result[static_cast<std::size_t>(index)] = index;
+            for (int index = count - 1; index > 0; --index)
+            {
+                const int swapIndex = RandomInt(0, index);
+                std::swap(result[static_cast<std::size_t>(index)], result[static_cast<std::size_t>(swapIndex)]);
+            }
+            return result;
+        };
+
+        for (int stage = 0; stage < stageCount - 1 && !failed; ++stage)
+        {
+            const int upperCount = static_cast<int>(stageAreas[stage].size());
+            const int lowerCount = static_cast<int>(stageAreas[stage + 1].size());
+            std::vector<std::pair<int, int>> edges;
+
+            if (stage == 0)
+            {
+                const int edgeCount = upperCount + lowerCount - 1 + RandomInt(0, 1);
+                bool connected = false;
+                for (int edgeAttempt = 0; edgeAttempt < 1000 && !connected; ++edgeAttempt)
+                {
+                    edges.clear();
+                    std::vector<int> upperDegree(static_cast<std::size_t>(upperCount), 0);
+                    std::vector<int> lowerDegree(static_cast<std::size_t>(lowerCount), 0);
+                    for (int edge = 0; edge < edgeCount; ++edge)
+                    {
+                        const int upper = RandomInt(0, upperCount - 1);
+                        const int lower = RandomInt(0, lowerCount - 1);
+                        edges.push_back({ upper, lower });
+                        ++upperDegree[static_cast<std::size_t>(upper)];
+                        ++lowerDegree[static_cast<std::size_t>(lower)];
+                    }
+                    if (std::find(upperDegree.begin(), upperDegree.end(), 0) != upperDegree.end() ||
+                        std::find(lowerDegree.begin(), lowerDegree.end(), 0) != lowerDegree.end()) continue;
+
+                    std::vector<bool> reachedUpper(static_cast<std::size_t>(upperCount), false);
+                    std::vector<bool> reachedLower(static_cast<std::size_t>(lowerCount), false);
+                    reachedUpper[static_cast<std::size_t>(
+                        std::find(stageAreas[0].begin(), stageAreas[0].end(), startAreaIndex) - stageAreas[0].begin())] = true;
+                    bool changed = true;
+                    while (changed)
+                    {
+                        changed = false;
+                        for (const auto& edge : edges)
+                        {
+                            if (reachedUpper[static_cast<std::size_t>(edge.first)] && !reachedLower[static_cast<std::size_t>(edge.second)])
+                            { reachedLower[static_cast<std::size_t>(edge.second)] = true; changed = true; }
+                            if (reachedLower[static_cast<std::size_t>(edge.second)] && !reachedUpper[static_cast<std::size_t>(edge.first)])
+                            { reachedUpper[static_cast<std::size_t>(edge.first)] = true; changed = true; }
+                        }
+                    }
+                    connected = std::find(reachedUpper.begin(), reachedUpper.end(), false) == reachedUpper.end() &&
+                        std::find(reachedLower.begin(), reachedLower.end(), false) == reachedLower.end();
+                }
+                if (!connected) failed = true;
+            }
+            else
+            {
+                const std::vector<int> upperOrder = shuffledIndices(upperCount);
+                const std::vector<int> lowerOrder = shuffledIndices(lowerCount);
+                if (upperCount >= lowerCount)
+                {
+                    for (int index = 0; index < upperCount; ++index)
+                        edges.push_back({ upperOrder[static_cast<std::size_t>(index)],
+                            lowerOrder[static_cast<std::size_t>(index % lowerCount)] });
+                }
+                else
+                {
+                    for (int index = 0; index < lowerCount; ++index)
+                        edges.push_back({ upperOrder[static_cast<std::size_t>(index % upperCount)],
+                            lowerOrder[static_cast<std::size_t>(index)] });
+                }
+                if (RandomInt(0, 1) != 0)
+                    edges.push_back({ RandomInt(0, upperCount - 1), RandomInt(0, lowerCount - 1) });
+            }
+
+            for (const auto& edge : edges)
+            {
+                const int upperArea = stageAreas[stage][static_cast<std::size_t>(edge.first)];
+                const int lowerArea = stageAreas[stage + 1][static_cast<std::size_t>(edge.second)];
+                const int connectionId = nextConnectionId++;
+                m_areas[upperArea].plannedGates.push_back({ false, lowerArea, connectionId });
+                m_areas[lowerArea].plannedGates.push_back({ true, upperArea, connectionId });
+            }
+        }
+
+        if (failed) continue;
+        for (int areaIndex = 0; areaIndex < static_cast<int>(m_areas.size()); ++areaIndex)
+        {
+            const AreaState& area = m_areas[areaIndex];
+            if (area.plannedGates.empty() || static_cast<int>(area.plannedGates.size()) > maximumGatesPerArea)
+            { failed = true; break; }
+            const bool hasEntry = std::any_of(area.plannedGates.begin(), area.plannedGates.end(),
+                [](const PlannedLayerGate& gate) { return gate.isEntry; });
+            const bool hasExit = std::any_of(area.plannedGates.begin(), area.plannedGates.end(),
+                [](const PlannedLayerGate& gate) { return !gate.isEntry; });
+            if (area.sublayer + (area.depth - 1) * 3 > 0 && !hasEntry) { failed = true; break; }
+            if (area.sublayer + (area.depth - 1) * 3 < stageCount - 1 && !hasExit) { failed = true; break; }
+        }
+        if (failed) continue;
+
+        std::vector<bool> reached(m_areas.size(), false);
+        std::vector<int> queue = { startAreaIndex };
+        reached[static_cast<std::size_t>(startAreaIndex)] = true;
+        for (std::size_t cursor = 0; cursor < queue.size(); ++cursor)
+        {
+            for (const PlannedLayerGate& gate : m_areas[queue[cursor]].plannedGates)
+            {
+                if (gate.destinationAreaIndex < 0 || reached[static_cast<std::size_t>(gate.destinationAreaIndex)]) continue;
+                reached[static_cast<std::size_t>(gate.destinationAreaIndex)] = true;
+                queue.push_back(gate.destinationAreaIndex);
+            }
+        }
+        if (std::find(reached.begin(), reached.end(), false) != reached.end()) continue;
+        return true;
+    }
+    m_areas.clear();
+    return false;
+}
+
+bool SceneNarakuProto::AssignPlannedGates(int areaIndex)
+{
+    if (areaIndex < 0 || areaIndex >= static_cast<int>(m_areas.size())) return false;
+    const std::vector<PlannedLayerGate>& planned = m_areas[areaIndex].plannedGates;
+    std::vector<bool> assigned(planned.size(), false);
+    for (LayerGateState& gate : m_layerGates)
+    {
+        bool found = false;
+        for (std::size_t index = 0; index < planned.size(); ++index)
+        {
+            if (assigned[index] || planned[index].isEntry != gate.isEntry) continue;
+            gate.destinationAreaIndex = planned[index].destinationAreaIndex;
+            gate.connectionId = planned[index].connectionId;
+            assigned[index] = true;
+            found = true;
+            break;
+        }
+        if (!found) return false;
+    }
+    return m_layerGates.size() == planned.size() &&
+        std::find(assigned.begin(), assigned.end(), false) == assigned.end();
+}
+
+bool SceneNarakuProto::GeneratePlannedArea(int areaIndex, std::string& outError)
+{
+    if (areaIndex < 0 || areaIndex >= static_cast<int>(m_areas.size())) return false;
+    AreaState& area = m_areas[areaIndex];
+    int entryCount = 0;
+    int exitCount = 0;
+    for (const PlannedLayerGate& gate : area.plannedGates) gate.isEntry ? ++entryCount : ++exitCount;
+
+    wchar_t generatedPath[128] = {};
+    std::swprintf(generatedPath, 128, L"Assets/Maps/generated_area_%03d.json", areaIndex);
+    NarakuMap::MapData generatedMap;
+    bool generated = false;
+    for (int attempt = 0; attempt < kMapGenerationMaxAttempts; ++attempt)
+    {
+        if (NarakuStageGenerator::GenerateFixed4x4AreaMap(
+                generatedPath, entryCount, exitCount, area.canReturn, &outError) &&
+            NarakuMap::LoadMap(generatedPath, generatedMap, &outError))
+        { generated = true; break; }
+    }
+    if (!generated) return false;
+
+    m_runtimeMap = std::move(generatedMap);
+    m_currentAreaIndex = areaIndex;
+    BuildCurrentAreaRuntime(false);
+    if (!AssignPlannedGates(areaIndex)) return false;
+    area.generated = true;
+    SaveCurrentAreaState();
+    return true;
+}
+
+const char* SceneNarakuProto::GetSublayerName(int sublayer) const
+{
+    switch (sublayer)
+    {
+    case 0: return u8"上層";
+    case 1: return u8"中層";
+    case 2: return u8"下層";
+    default: return u8"不明";
+    }
 }
 
 void SceneNarakuProto::SaveCurrentAreaState()
@@ -871,6 +1178,8 @@ void SceneNarakuProto::ActivateArea(int areaIndex, bool placeAtEntry)
     m_player.peakFeetWorldY = m_player.feetWorldY;
     m_player.grounded = true;
     m_player.verticalSpeed = 0.0f;
+    for (EnemyState& enemy : m_enemies)
+        if (!enemy.alive && enemy.respawnTimer <= 0.0f) RespawnEnemy(enemy);
     RebuildTerrainFloorBatch();
     RebuildEnemyBillboardBatch();
 }
@@ -970,14 +1279,7 @@ void SceneNarakuProto::BuildCurrentAreaRuntime(bool placeAtStart)
         m_miningPoints.push_back(runtimePoint);
     }
 
-    const Vec2 enemyOffsets[] = { { -8.0f, 11.0f }, { 13.0f, -8.0f }, { -18.0f, -13.0f } };
-    for (const Vec2& offset : enemyOffsets)
-    {
-        EnemyState enemy = {};
-        enemy.pos = Add(m_startPoint, offset);
-        enemy.depth = m_startDepth;
-        m_enemies.push_back(enemy);
-    }
+    SpawnEnemiesForCurrentArea();
 
     if (placeAtStart)
     {
@@ -1015,25 +1317,19 @@ void SceneNarakuProto::TryUseLayerGate(int gateIndex)
     }
     if (gate.destinationAreaIndex >= 0)
     {
-        BeginLayerTransition(gateIndex, gate.destinationAreaIndex);
+        if (gate.destinationAreaIndex < static_cast<int>(m_areas.size()) && m_areas[gate.destinationAreaIndex].generated)
+        {
+            BeginLayerTransition(gateIndex, gate.destinationAreaIndex);
+            return;
+        }
+        SaveCurrentAreaState();
+        m_loadingSourceGateIndex = gateIndex;
+        m_loadingStep = 0;
+        m_loadingProgress = 0.05f;
+        m_mode = Mode::Loading;
         return;
     }
-    if (gate.isEntry)
-    {
-        ShowCenterNotification(u8"接続先がありません。");
-        return;
-    }
-    if (m_currentAreaIndex < 0 || m_areas[m_currentAreaIndex].depth >= kMaximumAreaDepth)
-    {
-        ShowCenterNotification(u8"これ以上深くは進めない！");
-        return;
-    }
-
-    SaveCurrentAreaState();
-    m_loadingSourceGateIndex = gateIndex;
-    m_loadingStep = 0;
-    m_loadingProgress = 0.05f;
-    m_mode = Mode::Loading;
+    ShowCenterNotification(u8"接続先がありません。");
 }
 
 void SceneNarakuProto::BeginLayerTransition(int sourceGateIndex, int destinationAreaIndex)
@@ -1048,7 +1344,7 @@ void SceneNarakuProto::BeginLayerTransition(int sourceGateIndex, int destination
     const std::vector<LayerGateState>& destinationGates = m_areas[destinationAreaIndex].layerGates;
     for (int i = 0; i < static_cast<int>(destinationGates.size()); ++i)
     {
-        if (destinationGates[i].destinationAreaIndex == m_currentAreaIndex)
+        if (destinationGates[i].connectionId == m_layerGates[sourceGateIndex].connectionId)
         {
             destinationGateIndex = i;
             break;
@@ -1069,6 +1365,16 @@ void SceneNarakuProto::BeginLayerTransition(int sourceGateIndex, int destination
     m_player.pos = m_layerGates[sourceGateIndex].ropePos;
     m_player.depth = m_layerGates[sourceGateIndex].depth;
     m_player.onRope = false;
+    const bool routeAlreadyDiscovered = m_layerGates[sourceGateIndex].routeDiscovered ||
+        m_areas[destinationAreaIndex].layerGates[destinationGateIndex].routeDiscovered;
+    m_layerGates[sourceGateIndex].routeDiscovered = true;
+    m_areas[destinationAreaIndex].layerGates[destinationGateIndex].routeDiscovered = true;
+    if (!routeAlreadyDiscovered)
+    {
+        const int destinationDepth = m_areas[destinationAreaIndex].depth;
+        AwardExp(static_cast<int>(std::round(100.0f * GetDepthExpMultiplier(destinationDepth))));
+    }
+    SaveCurrentAreaState();
     m_mode = Mode::LayerTransition;
 }
 
@@ -1089,70 +1395,33 @@ void SceneNarakuProto::UpdateLoading()
 
     const int parentAreaIndex = m_currentAreaIndex;
     const int sourceGateIndex = m_loadingSourceGateIndex;
-    const int childDepth = m_areas[parentAreaIndex].depth + 1;
-    wchar_t generatedPath[128] = {};
-    std::swprintf(generatedPath, 128, L"Assets/Maps/generated_area_%03d.json", static_cast<int>(m_areas.size()));
-
-    NarakuMap::MapData childMap;
+    const int destinationAreaIndex = m_layerGates[sourceGateIndex].destinationAreaIndex;
+    if (destinationAreaIndex < 0 || destinationAreaIndex >= static_cast<int>(m_areas.size()))
+    {
+        m_mode = Mode::Explore;
+        ShowCenterNotification(u8"接続先がありません。");
+        return;
+    }
     std::string error;
     m_loadingProgress = 0.45f;
-    const bool requireExit = childDepth < kMaximumAreaDepth;
-    if (!NarakuStageGenerator::GenerateFixed4x4AreaMap(generatedPath, true, requireExit, &error) ||
-        !NarakuMap::LoadMap(generatedPath, childMap, &error))
+    if (!GeneratePlannedArea(destinationAreaIndex, error))
     {
-        LayerGateState& sourceGate = m_layerGates[sourceGateIndex];
-        ++sourceGate.generationFailures;
-        sourceGate.disabled = sourceGate.generationFailures >= kLayerGateFailureLimit;
+        ActivateArea(parentAreaIndex, false);
+        ++m_layerGates[sourceGateIndex].generationFailures;
         SaveCurrentAreaState();
         m_mode = Mode::Explore;
         m_loadingProgress = 0.0f;
         m_loadingStep = 0;
-        ShowCenterNotification(sourceGate.disabled
-            ? u8"生成に5回失敗したため、この層間口は使用不能になりました。"
-            : u8"下層の生成に失敗しました。もう一度Fで試せます。");
+        ShowCenterNotification(u8"接続先の生成に失敗しました。もう一度Fで再試行できます。");
         return;
     }
-
-    SaveCurrentAreaState();
-    m_runtimeMap = std::move(childMap);
-    BuildCurrentAreaRuntime(true);
-
-    const int childAreaIndex = static_cast<int>(m_areas.size());
-    m_areas.emplace_back();
-    m_areas.back().depth = childDepth;
-    m_currentAreaIndex = childAreaIndex;
-
-    int childEntryIndex = -1;
-    for (int i = 0; i < static_cast<int>(m_layerGates.size()); ++i)
-    {
-        if (m_layerGates[i].isEntry)
-        {
-            childEntryIndex = i;
-            m_layerGates[i].destinationAreaIndex = parentAreaIndex;
-            break;
-        }
-    }
-    if (childEntryIndex < 0)
-    {
-        m_areas.pop_back();
-        ActivateArea(parentAreaIndex, false);
-        LayerGateState& sourceGate = m_layerGates[sourceGateIndex];
-        ++sourceGate.generationFailures;
-        sourceGate.disabled = sourceGate.generationFailures >= kLayerGateFailureLimit;
-        SaveCurrentAreaState();
-        m_mode = Mode::Explore;
-        ShowCenterNotification(u8"生成結果に層入口がありません。もう一度Fで試せます。");
-        return;
-    }
-
-    SaveCurrentAreaState();
-    m_areas[parentAreaIndex].layerGates[sourceGateIndex].destinationAreaIndex = childAreaIndex;
     ActivateArea(parentAreaIndex, false);
-    m_layerGates[sourceGateIndex].destinationAreaIndex = childAreaIndex;
+    m_layerGates[sourceGateIndex].previewReady = true;
     SaveCurrentAreaState();
     m_loadingProgress = 1.0f;
-    m_loadingStep = 2;
-    BeginLayerTransition(sourceGateIndex, childAreaIndex);
+    m_loadingStep = 0;
+    m_mode = Mode::Explore;
+    ShowCenterNotification(u8"ルート情報を取得しました。もう一度Fで進入します。");
 }
 
 void SceneNarakuProto::UpdateLayerTransition(float dt)
@@ -1166,9 +1435,10 @@ void SceneNarakuProto::UpdateLayerTransition(float dt)
         m_player.upperLoad += kLayerTransitionHeight * dt / kLayerTransitionDuration;
         if (m_player.upperLoad >= kUpperLoadLimit)
         {
-            m_player.mental = std::max(0.0f, m_player.mental - 10.0f);
+            if (!TryPreventUpperLoad()) ApplyMentalDamage(10.0f, DeathCause::UpperLoad, u8"精神崩壊");
             m_player.upperLoad = 0.0f;
-            AddMessage(u8"上昇負荷が発症しました。精神力-10。");
+            if (m_mode != Mode::DeathResult) AddMessage(u8"上昇負荷が発症しました。精神力-10。");
+            else return;
         }
     }
 
@@ -1181,6 +1451,14 @@ void SceneNarakuProto::UpdateLayerTransition(float dt)
     const int destinationArea = m_transitionDestinationAreaIndex;
     const int destinationGate = m_transitionDestinationGateIndex;
     ActivateArea(destinationArea, false);
+    AreaState& arrivedArea = m_areas[destinationArea];
+    if (!arrivedArea.firstAreaExpAwarded)
+    {
+        arrivedArea.firstAreaExpAwarded = true;
+        arrivedArea.firstAreaRewardAwarded = true;
+        ++m_result.firstAreaCount;
+        AwardExp(static_cast<int>(std::round(100.0f * GetDepthExpMultiplier(arrivedArea.depth))));
+    }
     if (destinationGate >= 0 && destinationGate < static_cast<int>(m_layerGates.size()))
     {
         m_player.pos = m_layerGates[destinationGate].ropePos;
@@ -1194,6 +1472,7 @@ void SceneNarakuProto::UpdateLayerTransition(float dt)
     m_transitionDestinationAreaIndex = -1;
     m_transitionDestinationGateIndex = -1;
     m_mode = Mode::Explore;
+    SaveProgress();
 }
 
 void SceneNarakuProto::Update()
@@ -1222,10 +1501,20 @@ void SceneNarakuProto::Update()
     if (IsKeyTrigger('T'))
     {
         // 探索中なら所持品画面へ移ります。
-        if (m_mode == Mode::Explore) m_mode = Mode::Inventory;
+        if (m_mode == Mode::Explore)
+        {
+            m_inventoryMapShowingMap = false;
+            m_mode = Mode::Inventory;
+        }
 
         // 所持品表示中なら探索へ戻ります。
         else if (m_mode == Mode::Inventory) m_mode = Mode::Explore;
+    }
+
+    if (m_mode == Mode::Inventory)
+    {
+        if (IsKeyTrigger('Q')) m_inventoryMapShowingMap = false;
+        if (IsKeyTrigger('E')) m_inventoryMapShowingMap = true;
     }
 
     // 探索モード中だけプレイヤーや敵などのゲーム更新を進めます。
@@ -1252,39 +1541,49 @@ void SceneNarakuProto::UpdateExplore(float dt)
 
     // 入力に応じてプレイヤーの移動と行動制限を更新します。
     UpdateMovement(dt);
+    UpdateMentalAbilities(dt);
 
     // 攻撃タイマーとスタミナ回復を更新します。
     UpdateAction(dt);
 
     // 採掘中なら採掘タイマーを進めます。
     UpdateMining(dt);
+    UpdateHunger(dt);
 
     // 敵の追跡と体当たりを更新します。
     UpdateEnemies(dt);
+    UpdateRespawns(dt);
 
-    if (HasRelicArmorSetEffect() && m_player.hp > 0.0f)
+    const float hpRecoveryPerSecond = GetEquipmentBonus().hpRecoveryPerSecond;
+    if (hpRecoveryPerSecond > 0.0f && m_player.hp > 0.0f)
     {
-        m_player.hp = std::min(10.0f, m_player.hp + kRelicArmorHpRecoveryPerSecond * dt);
+        m_player.hp = std::min(GetMaxHp(), m_player.hp + hpRecoveryPerSecond * dt);
     }
 
     // 近くの未発見採掘ポイントを発見済みにします。
     DiscoverNearbyMiningPoints();
+    UpdateExplorationDiscovery();
 
     // 深度変化から上昇負荷を更新します。
     UpdateUpperLoad(dt);
 
     // リザルト用に今回の最大深度を記録します。
-    m_result.maxDepth = std::max(m_result.maxDepth, m_player.depth);
+    m_result.maxDepth = std::max(m_result.maxDepth, GetCurrentDepth());
+    const int currentDepth = GetCurrentDepth();
+    m_result.staySecondsByDepth[static_cast<std::size_t>(currentDepth - 1)] += dt;
 
     // Fキーで帰還、ロープ、拾う、採掘のいずれかを試します。
     if (IsKeyTrigger('F')) TryInteract();
 
     // 体力が0以下になったら死亡リザルトへ移行します。
-    if (m_player.hp <= 0.0f && m_mode == Mode::Explore) StartDeath(u8"体力が0になりました。");
+    if (m_player.hp <= 0.0f && m_mode == Mode::Explore) StartDeath(u8"体力が0になりました。", DeathCause::Other);
 }
 
 void SceneNarakuProto::UpdateMovement(float dt)
 {
+    const Vec2 frameStartPos = m_player.pos;
+    m_lastFrameRunning = false;
+    m_lastFrameRopeMoving = false;
     // WASD入力を集めるための移動ベクトルです。
     Vec2 input;
 
@@ -1464,8 +1763,8 @@ void SceneNarakuProto::UpdateMovement(float dt)
         if (wantsRun && canRun && (move.x != 0.0f || move.y != 0.0f))
         {
             // 走り速度へ切り替えます。
-            speed = m_debugPlayerParams.runSpeed *
-                (HasRelicArmorSetEffect() ? kRelicArmorRunMultiplier : 1.0f);
+            speed = GetRunSpeed();
+            m_lastFrameRunning = true;
 
             // 1フレームぶんの走りスタミナを消費します。
             SpendStamina(m_debugPlayerParams.runCostPerSecond * dt);
@@ -1484,6 +1783,7 @@ void SceneNarakuProto::UpdateMovement(float dt)
         {
             m_player.onRope = false;
             m_activeRope = -1;
+            m_lastFrameMovementDistance = Distance(frameStartPos, m_player.pos);
             return;
         }
 
@@ -1518,6 +1818,7 @@ void SceneNarakuProto::UpdateMovement(float dt)
         // 深度入力があり、スタミナを払える時だけ昇降します。
         if (m_player.onRope && depthInput != 0.0f && CanSpendStamina(m_debugPlayerParams.ropeCostPerSecond * dt))
         {
+            m_lastFrameRopeMoving = true;
             // ロープ昇降のスタミナを消費します。
             SpendStamina(m_debugPlayerParams.ropeCostPerSecond * dt);
 
@@ -1527,7 +1828,7 @@ void SceneNarakuProto::UpdateMovement(float dt)
             const float verticalLength = bottomWorldY - topWorldY;
             const float ropeLength = std::max(0.001f, std::sqrt(horizontalLength * horizontalLength + verticalLength * verticalLength));
             m_ropeProgress = std::max(0.0f, std::min(1.0f,
-                m_ropeProgress + depthInput * m_debugPlayerParams.ropeSpeed * dt / ropeLength));
+                m_ropeProgress + depthInput * GetRopeSpeed(depthInput < 0.0f) * dt / ropeLength));
             m_player.pos = GetRopePosition(m_activeRope, m_ropeProgress);
             m_player.depth = rope.topDepth + (rope.bottomDepth - rope.topDepth) * m_ropeProgress;
             m_player.feetWorldY = GetRopeWorldY(m_activeRope, m_ropeProgress);
@@ -1578,10 +1879,10 @@ void SceneNarakuProto::UpdateMovement(float dt)
             else if (fallDistance >= 4.0f) landingRecovery = kLandingRecoveryMedium;
             else if (fallDistance >= 2.0f) landingRecovery = kLandingRecoveryLight;
 
-            if (fallDistance >= 8.0f) StartDeath(u8"落下死しました。");
-            else if (fallDistance >= 6.0f) m_player.hp -= 6.0f;
-            else if (fallDistance >= 4.0f) m_player.hp -= 3.0f;
-            else if (fallDistance >= 2.0f) m_player.hp -= 1.0f;
+            if (fallDistance >= 8.0f) StartDeath(u8"落下死しました。", DeathCause::Fall);
+            else if (fallDistance >= 6.0f) ApplyPlayerDamage(60.0f, DeathCause::Fall, u8"落下ダメージで死亡しました。");
+            else if (fallDistance >= 4.0f) ApplyPlayerDamage(30.0f, DeathCause::Fall, u8"落下ダメージで死亡しました。");
+            else if (fallDistance >= 2.0f) ApplyPlayerDamage(10.0f, DeathCause::Fall, u8"落下ダメージで死亡しました。");
 
             m_player.grounded = true;
             m_player.airTime = 0.0f;
@@ -1611,7 +1912,7 @@ void SceneNarakuProto::UpdateMovement(float dt)
         if (m_hazardTickTimer <= 0.0f)
         {
             m_hazardTickTimer += kHazardTickInterval;
-            m_player.hp = std::max(0.0f, m_player.hp - kHazardDamage);
+            ApplyPlayerDamage(kHazardDamage, DeathCause::Other, u8"危険地形で死亡しました。");
             AddMessage(u8"危険地形でダメージを受けました。");
         }
     }
@@ -1620,12 +1921,26 @@ void SceneNarakuProto::UpdateMovement(float dt)
         m_hazardTickTimer = kHazardTickInterval;
     }
 
+    m_lastFrameMovementDistance = Distance(frameStartPos, m_player.pos);
+
     // 次フレームで押下/離上を判定できるよう、現在のShift状態を保存します。
     m_shiftWasPressed = shiftPressed;
 }
 
 void SceneNarakuProto::UpdateAction(float dt)
 {
+    if (m_foodUseTimer > 0.0f)
+    {
+        m_foodUseTimer = std::max(0.0f, m_foodUseTimer - dt);
+        if (m_foodUseTimer <= 0.0f && m_foodCount > 0)
+        {
+            --m_foodCount;
+            m_player.hp = std::min(GetMaxHp(), m_player.hp + kFoodHpRecovery);
+            m_fullness = std::min(kFullnessMaximum, m_fullness + kFoodFullnessRecovery);
+            AddMessage(u8"食料でHP20、満腹度10を回復しました。");
+        }
+    }
+
     m_cameraShakeTimer = std::max(0.0f, m_cameraShakeTimer - dt);
     for (AttackHitEffect& effect : m_attackHitEffects)
     {
@@ -1659,6 +1974,9 @@ void SceneNarakuProto::UpdateAction(float dt)
         // 攻撃判定が有効なフレームだけ敵との当たり判定を取ります。
         if (activeThisFrame)
         {
+            Vec2 relicCenter = Add(m_player.pos, Mul(m_player.facing, kAttackRange));
+            float relicDepth = m_player.depth;
+            bool foundPrimaryHit = false;
             // すべての敵に対して攻撃が当たるか調べます。
             for (EnemyState& enemy : m_enemies)
             {
@@ -1675,19 +1993,34 @@ void SceneNarakuProto::UpdateAction(float dt)
                     m_attackHitEffects.push_back({ enemy.pos, enemy.depth, kAttackHitEffectDuration });
 
                     // つるはし1回ぶんのダメージを与えます。
-                    enemy.hp -= m_debugPlayerParams.attackPower;
-
-                    // HPが0以下なら敵を倒します。
-                    if (enemy.hp <= 0.0f)
+                    enemy.hp -= GetAttackPower();
+                    if (!foundPrimaryHit)
                     {
-                        // 敵を非アクティブにします。
-                        enemy.alive = false;
-
-                        // プロトでは商店販売品と同じ食料を敵位置へ落とします。
-                        m_groundFoods.push_back({ enemy.pos, enemy.depth, true });
-                        AddMessage(u8"敵を倒しました。食料を落としました。");
+                        relicCenter = enemy.pos;
+                        relicDepth = enemy.depth;
+                        foundPrimaryHit = true;
                     }
                 }
+            }
+            if (m_attackRelicTriggered)
+            {
+                m_attackHitEffects.push_back({ relicCenter, relicDepth, kAttackHitEffectDuration });
+                for (EnemyState& enemy : m_enemies)
+                {
+                    if (!enemy.alive || enemy.hitByRelicAttack || std::fabs(enemy.depth - relicDepth) > 0.35f ||
+                        Distance(enemy.pos, relicCenter) > kRelicAttackRadius) continue;
+                    enemy.hitByRelicAttack = true;
+                    enemy.hp -= GetAttackPower() * kRelicAttackDamageScale;
+                }
+            }
+            for (EnemyState& enemy : m_enemies)
+            {
+                if (!enemy.alive || enemy.hp > 0.0f) continue;
+                enemy.alive = false;
+                enemy.respawnTimer = kEnemyRespawnTime;
+                m_groundFoods.push_back({ enemy.pos, enemy.depth, true });
+                AwardEnemyDefeat(enemy);
+                AddMessage(u8"敵を倒しました。食料を落としました。");
             }
         }
     }
@@ -1696,7 +2029,7 @@ void SceneNarakuProto::UpdateAction(float dt)
     if (IsMouseLeftTrigger()) TryStartAttack();
 
     // スタミナが最大未満なら自然回復できるかを判定します。
-    if (m_player.stamina < 100.0f && m_player.attackTimer <= 0.0f && m_miningIndex < 0)
+    if (m_player.stamina < GetMaxStamina() && m_player.attackTimer <= 0.0f && m_miningIndex < 0)
     {
         // Shift中またはロープ中はスタミナ消費行動中として回復を止めます。
         // ロープは掴まっているだけなら回復し、実際に昇降できる入力中だけ消費行動として扱います。
@@ -1706,7 +2039,8 @@ void SceneNarakuProto::UpdateAction(float dt)
         bool spending = IsShiftPress() || ropeClimbing;
 
         // 消費行動中でなければ1フレームぶん回復します。
-        if (!spending) m_player.stamina = std::min(100.0f, m_player.stamina + m_debugPlayerParams.staminaRecoverPerSecond * dt);
+        if (!spending) m_player.stamina = std::min(GetMaxStamina(), m_player.stamina +
+            m_debugPlayerParams.staminaRecoverPerSecond * GetStaminaRecoveryMultiplier() * dt);
     }
 }
 
@@ -1752,6 +2086,9 @@ void SceneNarakuProto::UpdateMining(float dt)
 
     // リザルト用の採掘数を増やします。
     ++m_result.minedCount;
+    const int depth = GetCurrentDepth();
+    ++m_result.minedByDepth[static_cast<std::size_t>(depth - 1)];
+    AwardExp(static_cast<int>(std::round(20.0f * GetDepthExpMultiplier(depth))));
 
     // 発見確認に出す旧器を作ります。
     // 種類と重量は採掘した時点で確定し、鑑定状態は表示名だけに反映します。
@@ -1776,19 +2113,13 @@ void SceneNarakuProto::UpdateMining(float dt)
 
 void SceneNarakuProto::UpdateEnemies(float dt)
 {
-    // 登録されている敵を順番に更新します。
+    const int activity = GetCurrentActivity();
     for (EnemyState& enemy : m_enemies)
     {
-        // 死んでいる敵は移動も攻撃もしません。
         if (!enemy.alive) continue;
-
         enemy.landingRecoveryTimer = std::max(0.0f, enemy.landingRecoveryTimer - dt);
-
-        // 現在フレームの移動前の地面高さを覚えて、段差踏み外し時の落下開始判定に使います。
         const Vec2 moveStartPos = enemy.pos;
         const float moveStartGroundY = GetGroundWorldY(enemy.pos, enemy.depth);
-
-        // 空中にいる敵は落下更新だけ行い、着地するまでは通常AIを止めます。
         if (!enemy.grounded)
         {
             const float groundWorldY = GetGroundWorldY(enemy.pos, enemy.depth);
@@ -1815,17 +2146,20 @@ void SceneNarakuProto::UpdateEnemies(float dt)
 
             continue;
         }
-
         if (enemy.landingRecoveryTimer > 0.0f)
         {
             enemy.feetWorldY = moveStartGroundY;
             enemy.peakFeetWorldY = moveStartGroundY;
             continue;
         }
-
-        // 体当たり中なら専用の高速移動と命中判定を行います。
         if (enemy.chargeTimer > 0.0f)
         {
+            if (enemy.type == EnemyType::Territory && Distance(m_player.pos, enemy.territoryCenter) > enemy.territoryRadius)
+            {
+                enemy.chargeTimer = 0.0f;
+                enemy.hasHitThisCharge = false;
+                continue;
+            }
             const float chargeProgress = std::max(
                 0.0f,
                 std::min(1.0f, 1.0f - enemy.chargeTimer / kEnemyChargeTime));
@@ -1833,100 +2167,83 @@ void SceneNarakuProto::UpdateEnemies(float dt)
                 (kEnemyChargeEndSpeedScale - kEnemyChargeStartSpeedScale) * chargeProgress;
             const Vec2 chargeTarget = Add(
                 enemy.pos,
-                Mul(enemy.chargeDir, kEnemyChargeSpeed * chargeSpeedScale * dt));
+                Mul(enemy.chargeDir, enemy.moveSpeed * 3.0f * chargeSpeedScale * dt));
             enemy.pos = ResolveFloorMove(enemy.pos, chargeTarget, enemy.depth);
-
-            // 体当たりの残り時間を減らします。
             enemy.chargeTimer = std::max(0.0f, enemy.chargeTimer - dt);
-
-            // 同じ深度帯にいる場合だけ命中判定を行います。
+            if (enemy.chargeTimer <= 0.0f)
+            {
+                float intervalScale = 1.0f;
+                if (activity >= 100) intervalScale = enemy.type == EnemyType::Charger ? 0.50f : 0.25f;
+                else if (activity >= 65) intervalScale = enemy.type == EnemyType::Charger ? 0.75f : 0.70f;
+                enemy.attackCooldown = enemy.attackInterval * intervalScale;
+            }
             const bool sameDepthAsPlayer = std::fabs(enemy.depth - m_player.depth) <= 0.35f;
             if (sameDepthAsPlayer && !enemy.hasHitThisCharge && Distance(enemy.pos, m_player.pos) <= kEnemyHitRange)
             {
-                // ステップ無敵時間中かどうかを判定します。
                 bool invincible = m_player.stepTimer > kStepRecoveryTime;
-
-                // 無敵でなければ体当たりダメージとノックバックを与えます。
                 if (!invincible)
                 {
-                    // 体当たり1回ぶんのダメージを与えます。
-                    m_player.hp -= 1.0f;
+                    ApplyPlayerDamage(enemy.attackDamage, DeathCause::Enemy, u8"敵の攻撃で死亡しました。");
                     m_cameraShakeTimer = kCameraShakeDuration;
-
-                    // ノックバック時間を設定します。
                     m_player.knockbackTimer = kKnockbackTime;
-
-                    // 敵からプレイヤーへ押し出す方向を計算します。
                     Vec2 dir = Normalize(Sub(m_player.pos, enemy.pos));
-
-                    // 指定距離を指定時間で押し出す速度を設定します。
                     m_player.knockbackVelocity = Mul(dir, kKnockbackDistance / kKnockbackTime);
-
-                    // HUDログに被弾を出します。
                     AddMessage(u8"敵の体当たりを受けました。");
                 }
-
-                // この体当たりではもう追加ヒットしないようにします。
                 enemy.hasHitThisCharge = true;
             }
-
-            // 体当たり中の敵は通常追跡を行わないため、この敵の更新を終えます。
             continue;
         }
-
-        // 予備動作中ならタイマーを進め、終了時に体当たりへ移ります。
         if (enemy.telegraphTimer > 0.0f)
         {
-            // 予備動作の残り時間を減らします。
+            if (enemy.type == EnemyType::Territory && Distance(m_player.pos, enemy.territoryCenter) > enemy.territoryRadius)
+            {
+                enemy.telegraphTimer = 0.0f;
+                continue;
+            }
             enemy.telegraphTimer = std::max(0.0f, enemy.telegraphTimer - dt);
-
-            // 予備動作が終わった瞬間に体当たり方向を決定します。
             if (enemy.telegraphTimer <= 0.0f)
             {
-                // 現在のプレイヤー位置へ向かって突進します。
                 enemy.chargeDir = Normalize(Sub(m_player.pos, enemy.pos));
-
-                // 体当たり時間を設定します。
                 enemy.chargeTimer = kEnemyChargeTime;
-
-                // 体当たりヒット済みフラグをリセットします。
                 enemy.hasHitThisCharge = false;
             }
-
-            // 予備動作中は通常追跡を行わないため、この敵の更新を終えます。
             continue;
         }
-
-        // 同じ深度帯のプレイヤーだけ追跡対象にします。
         const bool sameDepthAsPlayer = std::fabs(enemy.depth - m_player.depth) <= 0.35f;
-
-        // 敵からプレイヤーへの方向を計算します。
         Vec2 toPlayer = Sub(m_player.pos, enemy.pos);
-
-        // 敵とプレイヤーの距離を計算します。
         float dist = Distance(enemy.pos, m_player.pos);
 
-        // 同じ深度帯で近すぎない場合はプレイヤーへゆっくり接近します。
-        if (sameDepthAsPlayer && dist > 0.1f)
+        float searchScale = 1.0f;
+        if (activity >= 100) searchScale = enemy.type == EnemyType::Charger ? 1.50f : 1.25f;
+        else if (activity >= 40) searchScale = enemy.type == EnemyType::Charger ? 1.25f : 1.10f;
+        const bool territoryHostile = enemy.type == EnemyType::Territory &&
+            Distance(m_player.pos, enemy.territoryCenter) <= enemy.territoryRadius;
+        const bool chargerHostile = enemy.type == EnemyType::Charger && dist <= enemy.searchRange * searchScale;
+        const bool hostile = sameDepthAsPlayer && (territoryHostile || chargerHostile);
+
+        if (hostile && dist > 0.1f)
         {
-            const Vec2 moveTarget = Add(enemy.pos, Mul(Normalize(toPlayer), kEnemyWalkSpeed * dt));
+            const Vec2 moveTarget = Add(enemy.pos, Mul(Normalize(toPlayer), enemy.moveSpeed * dt));
             enemy.pos = ResolveFloorMove(enemy.pos, moveTarget, enemy.depth);
         }
-
-        // 体当たりの再使用待ち時間を減らします。
-        enemy.attackCooldown -= dt;
-
-        // クールダウンが終わり、同じ深度帯で十分近ければ予備動作を開始します。
-        if (sameDepthAsPlayer && enemy.attackCooldown <= 0.0f && dist <= 3.0f)
+        else if (enemy.type == EnemyType::Territory)
         {
-            // 予備動作タイマーを設定します。
-            enemy.telegraphTimer = kEnemyTelegraphTime;
-
-            // 次回攻撃までのクールダウンを5秒に戻します。
-            enemy.attackCooldown = kEnemyAttackInterval;
+            Vec2 target = enemy.patrolPoints[enemy.patrolIndex];
+            if (Distance(enemy.pos, enemy.territoryCenter) > enemy.territoryRadius) target = enemy.territoryCenter;
+            if (Distance(enemy.pos, target) <= 0.3f)
+            {
+                enemy.patrolIndex = (enemy.patrolIndex + 1) % 3;
+                target = enemy.patrolPoints[enemy.patrolIndex];
+            }
+            enemy.pos = ResolveFloorMove(enemy.pos, Add(enemy.pos, Mul(Normalize(Sub(target, enemy.pos)), enemy.moveSpeed * dt)), enemy.depth);
         }
 
-        // 地面歩行でより低い地形へ出た時は、一定以上の落差で敵も落下状態へ移ります。
+        enemy.attackCooldown -= dt;
+        if (hostile && enemy.attackCooldown <= 0.0f && dist <= 3.0f)
+        {
+            enemy.telegraphTimer = activity >= 100 ? enemy.telegraphDuration * 0.50f : enemy.telegraphDuration;
+        }
         const float currentGroundWorldY = GetGroundWorldY(enemy.pos, enemy.depth);
         const float walkedDropHeight = moveStartGroundY - currentGroundWorldY;
         const bool movedHorizontally = Distance(moveStartPos, enemy.pos) > 0.01f;
@@ -1943,7 +2260,6 @@ void SceneNarakuProto::UpdateEnemies(float dt)
             enemy.hasHitThisCharge = false;
             continue;
         }
-
         enemy.feetWorldY = currentGroundWorldY;
         enemy.peakFeetWorldY = currentGroundWorldY;
     }
@@ -1967,17 +2283,14 @@ void SceneNarakuProto::UpdateUpperLoad(float dt)
         // 第一層の発症目安10mに達したら発症します。
         if (m_player.upperLoad >= kUpperLoadLimit)
         {
-            // プロト仕様として精神力を10減らします。
-            m_player.mental = std::max(0.0f, m_player.mental - 10.0f);
+            const bool prevented = TryPreventUpperLoad();
+            if (!prevented) ApplyMentalDamage(10.0f, DeathCause::UpperLoad, u8"精神崩壊");
 
             // 発症後は内部ゲージを0へ戻します。
             m_player.upperLoad = 0.0f;
 
             // HUDログに発症を出します。
-            AddMessage(u8"上昇負荷が発症しました。精神力-10。");
-
-            // 精神力が0になったら精神崩壊扱いで死亡リザルトへ移します。
-            if (m_player.mental <= 0.0f) StartDeath(u8"精神崩壊");
+            if (!prevented && m_mode != Mode::DeathResult) AddMessage(u8"上昇負荷が発症しました。精神力-10。");
         }
     }
 
@@ -2016,7 +2329,10 @@ void SceneNarakuProto::TryInteract()
     }
 
     // 帰還地点が最優先です。原点付近でFを押すと帰還します。
-    if (IsNear(m_player.pos, m_returnPoint, kReturnRange) && std::fabs(m_player.depth - m_returnDepth) <= 0.35f)
+    const bool canReturnHere = m_currentAreaIndex >= 0 && m_currentAreaIndex < static_cast<int>(m_areas.size()) &&
+        m_areas[m_currentAreaIndex].canReturn;
+    if (canReturnHere && IsNear(m_player.pos, m_returnPoint, kReturnRange) &&
+        std::fabs(m_player.depth - m_returnDepth) <= 0.35f)
     {
         // 誤操作を避けるため、帰還処理の前に確認を表示します。
         m_mode = Mode::ReturnConfirm;
@@ -2139,6 +2455,7 @@ void SceneNarakuProto::TryInteract()
 
         // 採掘開始時にスタミナを消費します。
         SpendStamina(m_debugPlayerParams.miningCost);
+        m_fullness = std::max(0.0f, m_fullness - GetDepthHungerMultiplier(GetCurrentDepth()));
 
         // 採掘中のポイント番号を記録します。
         m_miningIndex = i;
@@ -2173,6 +2490,7 @@ void SceneNarakuProto::TryStartStep()
 
     // ステップ1回ぶんのスタミナを消費します。
     SpendStamina(m_debugPlayerParams.stepCost);
+    m_fullness = std::max(0.0f, m_fullness - 0.5f * GetDepthHungerMultiplier(GetCurrentDepth()));
 
     // 無敵時間と後硬直の合計時間を設定します。
     m_player.stepTimer = kStepInvincibleTime + kStepRecoveryTime;
@@ -2197,6 +2515,7 @@ void SceneNarakuProto::TryStartJump()
 
     // ジャンプ1回ぶんのスタミナを消費します。
     SpendStamina(m_debugPlayerParams.jumpCost);
+    m_fullness = std::max(0.0f, m_fullness - 0.5f * GetDepthHungerMultiplier(GetCurrentDepth()));
 
     // 空中状態へ切り替えます。
     m_player.grounded = false;
@@ -2228,6 +2547,35 @@ void SceneNarakuProto::TryStartAttack()
 
     // 攻撃1回ぶんのスタミナを消費します。
     SpendStamina(m_debugPlayerParams.attackCost);
+    m_fullness = std::max(0.0f, m_fullness - 0.75f * GetDepthHungerMultiplier(GetCurrentDepth()));
+
+    m_attackRelicTriggered = false;
+    int relicIndex = -1;
+    int fewestUses = std::numeric_limits<int>::max();
+    for (int i = 0; i < static_cast<int>(m_inventory.size()); ++i)
+    {
+        const RelicItem& item = m_inventory[i];
+        if (item.type != RelicType::Offensive || item.broken || item.remainingUses <= 0) continue;
+        if (item.remainingUses < fewestUses)
+        {
+            relicIndex = i;
+            fewestUses = item.remainingUses;
+        }
+    }
+    const float relicStaminaCost = GetMaxStamina() * 0.10f;
+    if (relicIndex >= 0 && CanSpendStamina(relicStaminaCost))
+    {
+        SpendStamina(relicStaminaCost);
+        RelicItem& item = m_inventory[relicIndex];
+        --item.remainingUses;
+        if (item.remainingUses <= 0)
+        {
+            item.remainingUses = 0;
+            item.broken = true;
+            item.value = 5;
+        }
+        m_attackRelicTriggered = true;
+    }
 
     // 攻撃全体時間を設定します。
     m_player.attackTimer = kAttackTotal;
@@ -2237,7 +2585,360 @@ void SceneNarakuProto::TryStartAttack()
     for (EnemyState& enemy : m_enemies)
     {
         enemy.hitByPlayerAttack = false;
+        enemy.hitByRelicAttack = false;
     }
+}
+
+void SceneNarakuProto::UpdateHunger(float dt)
+{
+    const int depth = GetCurrentDepth();
+    float perMinute = 0.5f;
+    if (m_miningIndex >= 0 || m_player.stepTimer > 0.0f) perMinute = 0.0f;
+    else if (m_lastFrameRopeMoving) perMinute = 2.0f;
+    else if (m_player.grounded && m_player.landingRecoveryTimer <= 0.0f && m_player.knockbackTimer <= 0.0f &&
+        m_lastFrameMovementDistance > 0.001f) perMinute = m_lastFrameRunning ? 1.5f : 1.0f;
+    m_fullness = std::max(0.0f, m_fullness - perMinute / 60.0f * GetDepthHungerMultiplier(depth) * dt);
+    m_player.stamina = std::min(m_player.stamina, GetMaxStamina());
+
+    if (m_player.knockbackTimer <= 0.0f && m_lastFrameMovementDistance > 0.0f)
+    {
+        const std::size_t index = static_cast<std::size_t>(depth - 1);
+        const float before = m_movementExpByDepth[index];
+        const float cap = static_cast<float>(GetRulesForDepth(depth).movementExpCap);
+        m_movementExpByDepth[index] = std::min(cap, before + m_lastFrameMovementDistance * GetDepthMovementExpMultiplier(depth));
+        const int gained = static_cast<int>(std::floor(m_movementExpByDepth[index])) - static_cast<int>(std::floor(before));
+        if (gained > 0) AwardExp(gained);
+    }
+
+    if (m_fullness <= 0.0f && m_mode == Mode::Explore)
+    {
+        StartDeath(u8"餓死しました。", DeathCause::Starvation);
+    }
+}
+
+void SceneNarakuProto::UpdateMentalAbilities(float dt)
+{
+    m_upperLoadWardTimer = std::max(0.0f, m_upperLoadWardTimer - dt);
+    m_miningSenseTimer = std::max(0.0f, m_miningSenseTimer - dt);
+    if (m_miningSenseTimer <= 0.0f)
+    {
+        for (MiningPoint& point : m_miningPoints) point.sensed = false;
+        for (AreaState& area : m_areas)
+            for (MiningPoint& point : area.miningPoints) point.sensed = false;
+    }
+
+    const bool pressed = IsKeyPress('Q');
+    if (pressed)
+    {
+        m_qHoldTime += dt;
+        if (!m_qLongTriggered && m_qHoldTime >= kQHoldThreshold)
+        {
+            m_qLongTriggered = true;
+            ActivateUpperLoadWard();
+        }
+    }
+    else if (m_qWasPressed)
+    {
+        if (!m_qLongTriggered) ActivateMiningSense();
+        m_qHoldTime = 0.0f;
+        m_qLongTriggered = false;
+    }
+    m_qWasPressed = pressed;
+}
+
+void SceneNarakuProto::ActivateMiningSense()
+{
+    if (m_level < 30) { ShowCenterNotification(u8"Lv30で解放されます。"); return; }
+    const int cost = static_cast<int>(std::round(15.0f * (GetCurrentDepth() == 1 ? 1.0f :
+        GetCurrentDepth() == 2 ? 1.5f : GetCurrentDepth() == 3 ? 2.25f : GetCurrentDepth() == 4 ? 3.75f : 7.5f)));
+    if (m_player.mental < cost) { ShowCenterNotification(u8"精神力が足りない！"); return; }
+    m_player.mental -= static_cast<float>(cost);
+    m_miningSenseTimer = kMentalSenseDuration;
+
+    std::vector<int> queue;
+    std::vector<int> visited;
+    if (m_currentAreaIndex >= 0) { queue.push_back(m_currentAreaIndex); visited.push_back(m_currentAreaIndex); }
+    for (std::size_t cursor = 0; cursor < queue.size() && visited.size() < 4; ++cursor)
+    {
+        const AreaState& area = m_areas[queue[cursor]];
+        for (const LayerGateState& gate : area.layerGates)
+        {
+            const int next = gate.destinationAreaIndex;
+            if (next < 0 || next >= static_cast<int>(m_areas.size()) || m_areas[next].depth != GetCurrentDepth() ||
+                std::find(visited.begin(), visited.end(), next) != visited.end()) continue;
+            visited.push_back(next);
+            queue.push_back(next);
+            if (visited.size() >= 4) break;
+        }
+    }
+    for (int areaIndex : visited)
+    {
+        if (areaIndex == m_currentAreaIndex) for (MiningPoint& point : m_miningPoints) point.sensed = true;
+        else for (MiningPoint& point : m_areas[areaIndex].miningPoints) point.sensed = true;
+    }
+    ShowCenterNotification(u8"採掘地点を15秒間感知します。");
+}
+
+void SceneNarakuProto::ActivateUpperLoadWard()
+{
+    if (m_level < 30) { ShowCenterNotification(u8"Lv30で解放されます。"); return; }
+    const int depth = GetCurrentDepth();
+    const float multiplier = depth == 1 ? 1.0f : depth == 2 ? 1.5f : depth == 3 ? 2.25f : depth == 4 ? 3.75f : 7.5f;
+    const int cost = static_cast<int>(std::round(30.0f * multiplier));
+    if (m_player.mental < cost) { ShowCenterNotification(u8"精神力が足りない！"); return; }
+    m_player.mental -= static_cast<float>(cost);
+    m_upperLoadWardTimer = kUpperLoadWardDuration;
+    ShowCenterNotification(u8"遺物を鎮め、次の上昇負荷を防ぎます。");
+}
+
+bool SceneNarakuProto::TryPreventUpperLoad()
+{
+    if (m_upperLoadWardTimer <= 0.0f) return false;
+    m_upperLoadWardTimer = 0.0f;
+    AddMessage(u8"安定化の力が上昇負荷を防ぎました。");
+    return true;
+}
+
+void SceneNarakuProto::UpdateExplorationDiscovery()
+{
+    if (m_currentAreaIndex < 0 || m_currentAreaIndex >= static_cast<int>(m_areas.size())) return;
+    AreaState& area = m_areas[m_currentAreaIndex];
+    int enemySeen = 0;
+    for (EnemyState& enemy : m_enemies)
+    {
+        if (!enemy.discovered && Distance(enemy.pos, m_player.pos) <= kDiscoveryRange) enemy.discovered = true;
+        if (enemy.discovered) ++enemySeen;
+    }
+    int miningSeen = 0;
+    for (MiningPoint& point : m_miningPoints)
+    {
+        if (!point.discovered && Distance(point.pos, m_player.pos) <= kDiscoveryRange) point.discovered = true;
+        if (point.discovered) ++miningSeen;
+    }
+    area.discoveredEnemyCount = enemySeen;
+    area.discoveredMiningCount = miningSeen;
+
+    std::size_t totalCells = 0;
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+        totalCells += static_cast<std::size_t>(std::max(0, layer.gridWidth - 1) * std::max(0, layer.gridHeight - 1));
+    if (area.discoveredCells.size() != totalCells) area.discoveredCells.assign(totalCells, 0);
+    if (area.discoveredCliffs.size() != totalCells) area.discoveredCliffs.assign(totalCells, 0);
+    std::size_t offset = 0;
+    int validCells = 0;
+    int discoveredValid = 0;
+    int totalCliffs = 0;
+    int discoveredCliffs = 0;
+    for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
+    {
+        const int cellWidth = std::max(0, layer.gridWidth - 1);
+        const int cellHeight = std::max(0, layer.gridHeight - 1);
+        int playerCellX = -1, playerCellZ = -1;
+        float fracX = 0.0f, fracZ = 0.0f;
+        const bool onLayer = std::fabs(layer.layerDepth - m_player.depth) <= 0.35f &&
+            TryGetLayerCellAt(layer, m_player.pos, playerCellX, playerCellZ, fracX, fracZ);
+        for (int z = 0; z < cellHeight; ++z)
+        {
+            for (int x = 0; x < cellWidth; ++x)
+            {
+                const std::size_t index = offset + static_cast<std::size_t>(z * cellWidth + x);
+                const std::uint32_t flags = NarakuMap::GetCellAttributeFlags(layer, x, z);
+                if ((flags & NarakuMap::CellAttributeRemoved) != 0u) continue;
+                ++validCells;
+                if (onLayer && x == playerCellX && z == playerCellZ) area.discoveredCells[index] = 1;
+                if (area.discoveredCells[index] != 0) ++discoveredValid;
+                if ((flags & NarakuMap::CellAttributeCliffEdge) != 0u)
+                {
+                    ++totalCliffs;
+                    const float width = static_cast<float>(cellWidth) * layer.cellSize;
+                    const float height = static_cast<float>(cellHeight) * layer.cellSize;
+                    const Vec2 center = {
+                        layer.center.x - width * 0.5f + (static_cast<float>(x) + 0.5f) * layer.cellSize,
+                        layer.center.z - height * 0.5f + (static_cast<float>(z) + 0.5f) * layer.cellSize };
+                    if (std::fabs(layer.layerDepth - m_player.depth) <= 0.35f && Distance(center, m_player.pos) <= kDiscoveryRange)
+                        area.discoveredCliffs[index] = 1;
+                    if (area.discoveredCliffs[index] != 0) ++discoveredCliffs;
+                }
+            }
+        }
+        offset += static_cast<std::size_t>(cellWidth * cellHeight);
+    }
+    area.totalCliffCount = totalCliffs;
+    area.discoveredCliffCount = discoveredCliffs;
+    if (validCells > 0)
+    {
+        const float ratio = static_cast<float>(discoveredValid) / static_cast<float>(validCells);
+        for (int threshold = 0; threshold < 4; ++threshold)
+        {
+            if (!area.cellExpThresholds[threshold] && ratio >= 0.25f * static_cast<float>(threshold + 1))
+            {
+                area.cellExpThresholds[threshold] = true;
+                AwardExp(static_cast<int>(std::round(20.0f * GetDepthExpMultiplier(GetCurrentDepth()))));
+            }
+        }
+    }
+}
+
+SceneNarakuProto::EnemyState SceneNarakuProto::CreateEnemy(EnemyType type, int depth, const Vec2& position) const
+{
+    const DepthRules& rules = GetRulesForDepth(depth);
+    EnemyState enemy;
+    enemy.type = type;
+    enemy.pos = position;
+    enemy.spawnPos = position;
+    enemy.territoryCenter = position;
+    enemy.depth = m_startDepth;
+    for (const FloorRegion& floor : m_floorRegions)
+    {
+        if (IsInsideFloor(floor, position)) { enemy.depth = floor.depth; break; }
+    }
+    enemy.feetWorldY = GetGroundWorldY(enemy.pos, enemy.depth);
+    enemy.peakFeetWorldY = enemy.feetWorldY;
+    if (type == EnemyType::Charger)
+    {
+        enemy.maxHp = 30.0f * rules.enemyHp;
+        enemy.attackDamage = 10.0f * rules.enemyAttack;
+        enemy.searchRange = 8.0f;
+        enemy.moveSpeed = kEnemyWalkSpeed * rules.enemyMove;
+        enemy.attackInterval = kEnemyAttackInterval * rules.enemyInterval;
+    }
+    else
+    {
+        enemy.territoryRank = static_cast<TerritoryRank>(RandomInt(0, 2));
+        const int rank = static_cast<int>(enemy.territoryRank);
+        const float minimumAttack[] = { 15.0f, 20.0f, 25.0f };
+        const float maximumAttack[] = { 20.0f, 25.0f, 30.0f };
+        const float search[] = { 3.0f, 4.0f, 5.0f };
+        const float divisor[] = { 6.0f, 5.0f, 4.0f };
+        float stageSide = 24.0f;
+        for (const FloorRegion& floor : m_floorRegions)
+        {
+            if (!IsInsideFloor(floor, position)) continue;
+            stageSide = std::max(4.0f, std::min(floor.halfSize.x * 2.0f, floor.halfSize.y * 2.0f));
+            break;
+        }
+        enemy.maxHp = 120.0f * rules.enemyHp;
+        enemy.attackDamage = RandomFloat(minimumAttack[rank], maximumAttack[rank]) * rules.enemyAttack;
+        enemy.searchRange = search[rank];
+        enemy.territoryRadius = stageSide / divisor[rank];
+        const float level40Growth = (1.0f - std::exp(-0.5f * (39.0f / 99.0f))) / (1.0f - std::exp(-0.5f));
+        enemy.moveSpeed = (1.5f * (1.0f + 1.5f * level40Growth) * 0.75f) * rules.enemyMove;
+        enemy.attackInterval = 1.0f * rules.enemyInterval;
+        for (int i = 0; i < 3; ++i)
+        {
+            const float angle = DirectX::XM_2PI * static_cast<float>(i) / 3.0f + RandomFloat(-0.35f, 0.35f);
+            const float radius = enemy.territoryRadius * RandomFloat(0.35f, 0.75f);
+            enemy.patrolPoints[i] = { position.x + std::cos(angle) * radius, position.y + std::sin(angle) * radius };
+        }
+    }
+    enemy.hp = enemy.maxHp;
+    enemy.attackCooldown = RandomFloat(0.0f, enemy.attackInterval);
+    enemy.telegraphDuration = kEnemyTelegraphTime;
+    return enemy;
+}
+
+bool SceneNarakuProto::HasTerritoryTreeDensity(const Vec2& position) const
+{
+    int treeCount = 0;
+    for (const NarakuMap::EnvironmentObject& object : m_runtimeMap.environmentObjects)
+    {
+        const auto resource = std::find_if(m_environmentModels.begin(), m_environmentModels.end(),
+            [&object](const EnvironmentModelResource& value) { return value.id == object.modelId; });
+        if (resource == m_environmentModels.end() || !resource->isTree) continue;
+        if (Distance(position, { object.xz.x, object.xz.z }) <= 5.0f && ++treeCount >= 10) return true;
+    }
+    return false;
+}
+
+SceneNarakuProto::Vec2 SceneNarakuProto::FindEnemySpawnPoint(float minimumPlayerDistance, bool requireTerritory, bool* found) const
+{
+    if (found) *found = false;
+    if (m_floorRegions.empty()) return m_startPoint;
+    for (int attempt = 0; attempt < 96; ++attempt)
+    {
+        const FloorRegion& floor = m_floorRegions[static_cast<std::size_t>(RandomInt(0, static_cast<int>(m_floorRegions.size()) - 1))];
+        const Vec2 point = {
+            RandomFloat(floor.center.x - floor.halfSize.x * 0.85f, floor.center.x + floor.halfSize.x * 0.85f),
+            RandomFloat(floor.center.y - floor.halfSize.y * 0.85f, floor.center.y + floor.halfSize.y * 0.85f) };
+        if (!HasFloorAt(point, floor.depth) || Distance(point, m_player.pos) < minimumPlayerDistance) continue;
+        if (requireTerritory && !HasTerritoryTreeDensity(point)) continue;
+        if (found) *found = true;
+        return point;
+    }
+    return m_startPoint;
+}
+
+void SceneNarakuProto::SpawnEnemiesForCurrentArea()
+{
+    m_enemies.clear();
+    const int depth = GetCurrentDepth();
+    const DepthRules& rules = GetRulesForDepth(depth);
+    const int chargerCount = RandomInt(0, rules.chargerMax);
+    const int territoryCount = RandomInt(0, rules.territoryMax);
+    for (int i = 0; i < chargerCount; ++i)
+    {
+        bool found = false;
+        const Vec2 point = FindEnemySpawnPoint(3.0f, false, &found);
+        if (found) m_enemies.push_back(CreateEnemy(EnemyType::Charger, depth, point));
+    }
+    for (int i = 0; i < territoryCount; ++i)
+    {
+        bool found = false;
+        const Vec2 point = FindEnemySpawnPoint(3.0f, true, &found);
+        if (found) m_enemies.push_back(CreateEnemy(EnemyType::Territory, depth, point));
+    }
+}
+
+bool SceneNarakuProto::RespawnEnemy(EnemyState& enemy)
+{
+    bool found = false;
+    const Vec2 point = FindEnemySpawnPoint(kEnemyRespawnMinPlayerDistance, enemy.type == EnemyType::Territory, &found);
+    if (!found)
+    {
+        enemy.respawnTimer = kEnemyRespawnRetry;
+        return false;
+    }
+    enemy = CreateEnemy(enemy.type, GetCurrentDepth(), point);
+    return true;
+}
+
+void SceneNarakuProto::UpdateRespawns(float dt)
+{
+    for (EnemyState& enemy : m_enemies)
+    {
+        if (enemy.alive) continue;
+        enemy.respawnTimer = std::max(0.0f, enemy.respawnTimer - dt);
+        if (enemy.respawnTimer <= 0.0f) RespawnEnemy(enemy);
+    }
+    for (int areaIndex = 0; areaIndex < static_cast<int>(m_areas.size()); ++areaIndex)
+    {
+        if (areaIndex == m_currentAreaIndex) continue;
+        for (EnemyState& enemy : m_areas[areaIndex].enemies)
+            if (!enemy.alive) enemy.respawnTimer = std::max(0.0f, enemy.respawnTimer - dt);
+    }
+}
+
+void SceneNarakuProto::AwardEnemyDefeat(const EnemyState& enemy)
+{
+    const int depth = GetCurrentDepth();
+    const int baseExp = enemy.type == EnemyType::Territory ? 250 : 100;
+    AwardExp(static_cast<int>(std::round(baseExp * GetDepthExpMultiplier(depth))));
+    const std::size_t index = static_cast<std::size_t>(depth - 1);
+    if (enemy.type == EnemyType::Territory) ++m_result.territoryKillsByDepth[index];
+    else ++m_result.chargerKillsByDepth[index];
+}
+
+int SceneNarakuProto::CalculateReturnReward() const
+{
+    double reward = static_cast<double>(m_result.firstAreaCount * 150 + m_result.newRelicTypeCount * 150 + m_result.uniqueReward);
+    for (int i = 0; i < 5; ++i)
+    {
+        const int depth = i + 1;
+        reward += static_cast<double>(m_result.minedByDepth[i] * 5) * GetDepthRewardMultiplier(depth);
+        reward += static_cast<double>(m_result.chargerKillsByDepth[i] * 10) * GetDepthRewardMultiplier(depth);
+        reward += static_cast<double>(m_result.territoryKillsByDepth[i] * 20) * GetDepthRewardMultiplier(depth);
+        reward += static_cast<double>(std::min(300.0f, m_result.staySecondsByDepth[i])) * GetDepthStayRewardMultiplier(depth);
+    }
+    return static_cast<int>(std::llround(reward));
 }
 
 bool SceneNarakuProto::IsShiftPress() const
@@ -2246,13 +2947,32 @@ bool SceneNarakuProto::IsShiftPress() const
     return IsRawKeyPress(VK_LSHIFT) || IsRawKeyPress(VK_RSHIFT) || IsRawKeyPress(VK_SHIFT);
 }
 
-void SceneNarakuProto::StartDeath(const char* reason)
+void SceneNarakuProto::StartDeath(const char* reason, DeathCause cause)
 {
     // すでに死亡リザルト中なら二重処理を防ぎます。
-    if (m_mode == Mode::DeathResult) return;
+    if (m_mode == Mode::DeathResult)
+    {
+        const int extraLoss = std::max(0, GetDeathLevelLoss(cause) - GetDeathLevelLoss(m_pendingDeathCause));
+        const float oldHp = GetMaxHp();
+        const float oldStamina = GetMaxStamina();
+        const float oldMental = GetMaxMental();
+        int applicable = std::min(extraLoss, std::max(0, m_level - 1));
+        const int protectedLevels = std::min(applicable, m_levelProtection);
+        m_levelProtection -= protectedLevels;
+        m_result.protectionConsumed += protectedLevels;
+        applicable -= protectedLevels;
+        m_level = std::max(1, m_level - applicable);
+        m_result.levelAfterDeath = m_level;
+        PreserveResourceRatios(oldHp, oldStamina, oldMental);
+        if (extraLoss > 0) { m_pendingDeathCause = cause; m_result.reason = reason; SaveProgress(); }
+        return;
+    }
 
     // 死亡理由をリザルトに記録します。
     m_result.reason = reason;
+    m_pendingDeathCause = cause;
+    m_diedSinceLastDive = true;
+    ApplyDeathPenalty(cause);
 
     // 死亡時に失った旧器数を記録します。
     m_result.lostRelics = static_cast<int>(m_inventory.size());
@@ -2260,12 +2980,14 @@ void SceneNarakuProto::StartDeath(const char* reason)
     // 死亡ペナルティとして所持旧器を全ロストします。
     m_inventory.clear();
     m_foodCount = 0;
+    if (cause == DeathCause::Starvation) m_fullness = 50.0f;
 
     // 死亡ペナルティとして探索中ピンを失わせます。
     m_pins.clear();
 
     // 死亡リザルトモードへ移行します。
     m_mode = Mode::DeathResult;
+    SaveProgress();
 }
 
 void SceneNarakuProto::FinishReturn()
@@ -2289,9 +3011,22 @@ void SceneNarakuProto::FinishReturn()
             m_identifiedRelics[index] = true;
             ++m_result.identifiedRelics;
         }
-        ++m_storedRelics[index];
-        m_result.saleAmount += item.value;
+        RelicItem stored = item;
+        stored.stabilized = true;
+        m_storedInventory.push_back(stored);
+        if (IsRelicSellable(stored)) m_result.saleAmount += stored.value;
+        if (item.type == RelicType::Unique)
+        {
+            m_result.uniqueReward += 1000;
+            m_uniqueRelicReturned = true;
+            m_uniqueRelicCodexUnlocked = true;
+            m_uniqueRelicAchievementUnlocked = true;
+            m_uniqueRelicStoryUnlocked = true;
+        }
     }
+    m_result.newRelicTypeCount = m_result.identifiedRelics;
+    m_result.explorationReward = CalculateReturnReward();
+    m_money += m_result.explorationReward;
 
     m_inventory.clear();
 
@@ -2299,16 +3034,23 @@ void SceneNarakuProto::FinishReturn()
     m_storedFoodCount += m_foodCount;
     m_foodCount = 0;
 
+    // 生還した時は精神力を現在の最大値まで回復します。
+    m_player.mental = GetMaxMental();
+
     // 帰還リザルトモードへ移行します。
     m_mode = Mode::ReturnResult;
+    SaveProgress();
 }
 
 void SceneNarakuProto::StartDive()
 {
+    const float previousHp = m_player.hp;
+    const float previousStamina = m_player.stamina;
+    const float previousMental = m_player.mental;
     float loadoutWeight = 10.0f + static_cast<float>(m_loadoutFoodCount);
     for (std::size_t i = 0; i < m_loadoutRelics.size(); ++i)
     {
-        if (m_loadoutRelics[i] > m_storedRelics[i])
+        if (m_loadoutRelics[i] > CountStoredRelics(static_cast<RelicType>(i)))
         {
             AddMessage(u8"持ち込み予定数が自宅在庫を超えています。");
             return;
@@ -2317,7 +3059,7 @@ void SceneNarakuProto::StartDive()
     }
     if (loadoutWeight > GetMaxWeight())
     {
-        AddMessage(u8"持ち込み重量が100を超えているため潜行できません。");
+        AddMessage(u8"持ち込み重量が最大重量を超えているため潜行できません。");
         return;
     }
 
@@ -2326,6 +3068,13 @@ void SceneNarakuProto::StartDive()
     {
         return;
     }
+    if (!m_diedSinceLastDive)
+    {
+        m_player.hp = std::min(GetMaxHp(), previousHp);
+        m_player.stamina = std::min(GetMaxStamina(), previousStamina);
+        m_player.mental = std::min(GetMaxMental(), previousMental);
+    }
+    m_diedSinceLastDive = false;
     m_foodCount = m_loadoutFoodCount;
     m_storedFoodCount -= m_loadoutFoodCount;
     m_loadoutFoodCount = 0;
@@ -2334,13 +3083,22 @@ void SceneNarakuProto::StartDive()
     {
         const RelicType type = static_cast<RelicType>(i);
         const int count = m_loadoutRelics[i];
-        m_storedRelics[i] -= count;
-        for (int itemIndex = 0; itemIndex < count; ++itemIndex)
+        int remaining = count;
+        for (auto it = m_storedInventory.begin(); it != m_storedInventory.end() && remaining > 0;)
         {
-            m_inventory.push_back(CreateRelic(type, GetRelicTypeName(type)));
+            if (it->type == type)
+            {
+                RelicItem item = *it;
+                item.stabilized = true;
+                m_inventory.push_back(item);
+                it = m_storedInventory.erase(it);
+                --remaining;
+            }
+            else ++it;
         }
         m_loadoutRelics[i] = 0;
     }
+    SaveProgress();
 }
 
 void SceneNarakuProto::RestartAfterDeath()
@@ -2349,6 +3107,20 @@ void SceneNarakuProto::RestartAfterDeath()
     m_loadoutFoodCount = 0;
     m_loadoutRelics.fill(0);
     StartDive();
+}
+
+void SceneNarakuProto::AbandonDive()
+{
+    if (m_mode == Mode::Home || m_mode == Mode::GeneralShop || m_mode == Mode::Armory || m_mode == Mode::Restaurant) return;
+    ApplyAbandonPenalty();
+    m_result.reason = u8"探窟を放棄しました。";
+    m_result.lostRelics = static_cast<int>(m_inventory.size());
+    m_inventory.clear();
+    m_foodCount = 0;
+    m_pins.clear();
+    m_areas.clear();
+    m_mode = Mode::Home;
+    SaveProgress();
 }
 
 void SceneNarakuProto::Draw()
@@ -2362,10 +3134,21 @@ void SceneNarakuProto::Draw()
     // デバッグ用3Dフィールドを最初に描画します。
     Draw3DField();
 
+    if (m_mode == Mode::Explore && m_fullness <= kFullnessCritical)
+    {
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const ImVec2 minimum = viewport->WorkPos;
+        const ImVec2 maximum(viewport->WorkPos.x + viewport->WorkSize.x, viewport->WorkPos.y + viewport->WorkSize.y);
+        ImDrawList* effect = ImGui::GetBackgroundDrawList();
+        effect->AddRectFilled(minimum, maximum, IM_COL32(90, 28, 8, 26));
+        effect->AddRect(minimum, maximum, IM_COL32(180, 55, 18, 120), 0.0f, 0, 18.0f);
+    }
+
     DrawCompass();
 
     // 常時確認するステータスHUDを描画します。
     DrawHud();
+    if (m_mode == Mode::Explore) DrawRouteInfo();
 
     // プレイテスト中にプレイヤー性能を調整するデバッグUIを描画します。
     DrawDebugPlayerTuning();
@@ -2374,12 +3157,18 @@ void SceneNarakuProto::Draw()
     DrawPlayerPositionDebug();
 
     // 所持品モードでは所持品と地図ピンUIを重ねます。
-    if (m_mode == Mode::Inventory) { DrawInventory(); DrawMapControls(); }
+    if (m_mode == Mode::Inventory)
+    {
+        if (m_inventoryMapShowingMap) DrawMapControls();
+        else DrawInventory();
+    }
 
     // 旧器発見中は拾う/置く確認を重ねます。
     else if (m_mode == Mode::RelicPrompt) DrawRelicPrompt();
 
     else if (m_mode == Mode::ReturnConfirm) DrawReturnConfirm();
+
+    else if (m_mode == Mode::AbandonConfirm) DrawAbandonConfirm();
 
     // 帰還または死亡後はリザルトを重ねます。
     else if (m_mode == Mode::ReturnResult || m_mode == Mode::DeathResult) DrawResult();
@@ -2389,6 +3178,8 @@ void SceneNarakuProto::Draw()
     else if (m_mode == Mode::GeneralShop) DrawGeneralShop();
 
     else if (m_mode == Mode::Armory) DrawArmory();
+
+    else if (m_mode == Mode::Restaurant) DrawRestaurant();
 
     DrawCenterNotification();
 
@@ -2513,11 +3304,7 @@ void SceneNarakuProto::LoadEnvironmentModels()
 
         const std::string resolvedModelPath = WideToUtf8(ResolveProjectPath(Utf8ToWide(modelPath)));
         Model* model = new Model();
-        if (!model->Load(resolvedModelPath.c_str(), 1.0f, Model::ZFlip))
-        {
-            SAFE_DELETE(model);
-            continue;
-        }
+        if (!model->Load(resolvedModelPath.c_str(), 1.0f, Model::ZFlip)) SAFE_DELETE(model);
 
         DirectX::XMFLOAT3 minValue = {
             std::numeric_limits<float>::max(),
@@ -2528,7 +3315,7 @@ void SceneNarakuProto::LoadEnvironmentModels()
             std::numeric_limits<float>::lowest(),
             std::numeric_limits<float>::lowest() };
         bool hasVertex = false;
-        for (unsigned int meshIndex = 0; meshIndex < model->GetMeshNum(); ++meshIndex)
+        for (unsigned int meshIndex = 0; model != nullptr && meshIndex < model->GetMeshNum(); ++meshIndex)
         {
             const Model::Mesh* mesh = model->GetMesh(meshIndex);
             if (mesh == nullptr) continue;
@@ -2547,7 +3334,10 @@ void SceneNarakuProto::LoadEnvironmentModels()
         EnvironmentModelResource resource;
         resource.id = id;
         resource.model = model;
-        if (hasVertex)
+        std::string treeSource = name + ' ' + modelPath;
+        std::transform(treeSource.begin(), treeSource.end(), treeSource.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        resource.isTree = treeSource.find("tree") != std::string::npos;
+        if (model != nullptr && hasVertex)
         {
             resource.placementAnchor = {
                 (minValue.x + maxValue.x) * 0.5f,
@@ -2872,7 +3662,7 @@ void SceneNarakuProto::Draw3DField()
     for (const MiningPoint& point : m_miningPoints)
     {
         // 未記録でも、近くまで来た採掘ポイントは現地で見えるようにします。
-        const bool visibleInField = point.discovered || IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
+        const bool visibleInField = point.discovered || point.sensed || IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
         if (!visibleInField)
         {
             continue;
@@ -3094,7 +3884,7 @@ void SceneNarakuProto::DrawField()
     for (const MiningPoint& point : m_miningPoints)
     {
         // 未記録でも近くまで来たポイントは、初期記録済みと同じ色で見せます。
-        const bool visibleInField = point.discovered || IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
+        const bool visibleInField = point.discovered || point.sensed || IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
         if (!visibleInField) continue;
 
         // 採掘ポイント座標を斜め見下ろし座標へ変換します。
@@ -3200,9 +3990,10 @@ void SceneNarakuProto::DrawField()
 
 void SceneNarakuProto::DrawHud()
 {
-    constexpr float overlayWidth = 280.0f;
-    constexpr float overlayHeight = 106.0f;
+    constexpr float fixedGaugeWindowWidth = 280.0f;
+    constexpr float overlayHeight = 270.0f;
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float overlayWidth = std::max(fixedGaugeWindowWidth, viewport->WorkSize.x - 32.0f);
     const ImVec2 overlayPos(viewport->WorkPos.x + 16.0f, viewport->WorkPos.y + 16.0f);
     ImGui::SetNextWindowPos(overlayPos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(overlayWidth, overlayHeight), ImGuiCond_Always);
@@ -3213,18 +4004,42 @@ void SceneNarakuProto::DrawHud()
 
     if (ImGui::Begin("PlayerStatusOverlay##Overlay", nullptr, flags))
     {
-        const auto drawGauge = [](float ratio, const char* label, const ImVec4& color)
+        const auto drawGauge = [](float ratio, const char* label, const ImVec4& color, float width)
         {
             ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.04f, 0.05f, 0.05f, 0.88f));
             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, color);
-            ImGui::ProgressBar(std::max(0.0f, std::min(1.0f, ratio)), ImVec2(-1.0f, 18.0f), label);
+            ImGui::ProgressBar(std::max(0.0f, std::min(1.0f, ratio)), ImVec2(width, 18.0f), label);
             ImGui::PopStyleColor(2);
         };
 
-        drawGauge(m_player.hp / 10.0f, "HP", ImVec4(0.78f, 0.18f, 0.16f, 1.0f));
-        drawGauge(m_player.stamina / 100.0f, u8"スタミナ", ImVec4(0.18f, 0.68f, 0.36f, 1.0f));
-        drawGauge(m_player.mental / 100.0f, u8"精神力", ImVec4(0.22f, 0.48f, 0.82f, 1.0f));
-        drawGauge(m_player.upperLoad / kUpperLoadLimit, u8"上昇負荷 (Debug)", ImVec4(0.88f, 0.58f, 0.18f, 1.0f));
+        constexpr float level100MaxHp = 1200.0f;
+        constexpr float maximumHpWindowRatio = 0.75f;
+        const float gaugeWidthPerHp = viewport->WorkSize.x * maximumHpWindowRatio / level100MaxHp;
+        const float fixedGaugeWidth = fixedGaugeWindowWidth - ImGui::GetStyle().WindowPadding.x * 2.0f;
+        const float hpGaugeWidth = GetMaxHp() * gaugeWidthPerHp;
+        const float staminaGaugeWidth = GetMaxStamina() * gaugeWidthPerHp;
+        const float mentalGaugeWidth = GetMaxMental() * gaugeWidthPerHp;
+
+        drawGauge(m_player.hp / GetMaxHp(), "HP", ImVec4(0.78f, 0.18f, 0.16f, 1.0f), hpGaugeWidth);
+        drawGauge(m_player.stamina / GetMaxStamina(), u8"スタミナ", ImVec4(0.18f, 0.68f, 0.36f, 1.0f), staminaGaugeWidth);
+        drawGauge(m_player.mental / GetMaxMental(), u8"精神力", ImVec4(0.22f, 0.48f, 0.82f, 1.0f), mentalGaugeWidth);
+        drawGauge(m_fullness / kFullnessMaximum, u8"満腹度", ImVec4(0.78f, 0.56f, 0.20f, 1.0f), fixedGaugeWidth);
+        char activityLabel[64];
+        std::snprintf(activityLabel, sizeof(activityLabel), u8"奈落活性度 %d", GetCurrentActivity());
+        drawGauge(std::min(1.0f, GetCurrentActivity() / 100.0f), activityLabel, ImVec4(0.70f, 0.20f, 0.72f, 1.0f), fixedGaugeWidth);
+        drawGauge(m_player.upperLoad / kUpperLoadLimit, u8"上昇負荷 (Debug)", ImVec4(0.88f, 0.58f, 0.18f, 1.0f), fixedGaugeWidth);
+        if (m_level < 100)
+            ImGui::Text(u8"Lv%d  EXP %s / %s", m_level, FormatExp(m_currentExp).c_str(), FormatExp(GetRequiredExp(m_level)).c_str());
+        else
+            ImGui::Text(u8"Lv100  保護:%d  余剰:%s", m_levelProtection, FormatExp(m_level100OverflowExp).c_str());
+        if (m_fullness <= kFullnessCritical) ImGui::TextColored(ImVec4(1.0f, 0.25f, 0.15f, 1.0f), u8"飢餓警告");
+        else if (m_fullness <= 25.0f) ImGui::TextColored(ImVec4(1.0f, 0.55f, 0.15f, 1.0f), u8"空腹（最大スタミナ-10%%）");
+        else if (m_fullness <= kFullnessWarning) ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.20f, 1.0f), u8"軽い空腹");
+        const int activity = GetCurrentActivity();
+        ImGui::Text(u8"活性段階: %s", activity >= 100 ? u8"危険活性" : activity >= 65 ? u8"高活性" : activity >= 40 ? u8"中活性" : u8"低活性");
+        ImGui::Text(u8"精神力能力: %s", m_level >= 30 ? u8"Q短押し/長押しで使用" : u8"Lv30で解放");
+        if (m_miningSenseTimer > 0.0f) ImGui::Text(u8"採掘感知: %.0f秒", std::ceil(m_miningSenseTimer));
+        if (m_upperLoadWardTimer > 0.0f) ImGui::Text(u8"上昇負荷無効: %.0f秒", std::ceil(m_upperLoadWardTimer));
     }
     ImGui::End();
 }
@@ -3243,6 +4058,32 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
     // 現在の重量補正を確認しながら調整できるよう、実効状態を先頭に表示します。
     ImGui::Text(u8"実効歩行速度: %.2f", GetMoveSpeed());
     ImGui::Text(u8"重量補正: %.0f%%", GetWeightRate() * 100.0f);
+    ImGui::Separator();
+
+    if (ImGui::CollapsingHeader(u8"進行デバッグ", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (ImGui::InputInt(u8"所持金", &m_money, 100, 1000))
+        {
+            m_money = std::max(0, m_money);
+            SaveProgress();
+        }
+
+        int requestedLevel = m_level;
+        if (ImGui::InputInt(u8"レベル", &requestedLevel, 1, 10))
+        {
+            requestedLevel = std::max(1, std::min(100, requestedLevel));
+            if (requestedLevel != m_level)
+            {
+                const float oldMaxHp = GetMaxHp();
+                const float oldMaxStamina = GetMaxStamina();
+                const float oldMaxMental = GetMaxMental();
+                m_level = requestedLevel;
+                m_currentExp = 0;
+                PreserveResourceRatios(oldMaxHp, oldMaxStamina, oldMaxMental);
+                SaveProgress();
+            }
+        }
+    }
     ImGui::Separator();
 
     if (ImGui::Button(u8"調整値を保存"))
@@ -3272,7 +4113,7 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
     if (ImGui::CollapsingHeader(u8"戦闘", ImGuiTreeNodeFlags_DefaultOpen))
     {
         // 攻撃1回あたりのダメージと消費スタミナを調整します。
-        ImGui::SliderFloat(u8"攻撃力", &m_debugPlayerParams.attackPower, 0.0f, 20.0f, "%.2f");
+        ImGui::Text(u8"基礎攻撃力: %.0f  実効攻撃力: %.0f", kPlayerBaseAttack, GetAttackPower());
         ImGui::SliderFloat(u8"攻撃スタミナ消費", &m_debugPlayerParams.attackCost, 0.0f, 100.0f, "%.2f");
     }
 
@@ -3318,6 +4159,8 @@ void SceneNarakuProto::DrawInventory()
     // 所持品ウィンドウを開始します。
     ImGui::Begin(u8"所持品", nullptr, ImGuiWindowFlags_NoCollapse);
 
+    ImGui::TextDisabled(u8"[Q] 所持品  /  [E] 地図  /  [T] 閉じる");
+
     const float currentWeight = GetCurrentWeight();
     const float maxWeight = GetMaxWeight();
     ImGui::Text(u8"重量: %.0f / %.0f  %.0f%%", currentWeight, maxWeight, currentWeight / maxWeight * 100.0f);
@@ -3339,7 +4182,10 @@ void SceneNarakuProto::DrawInventory()
         const bool identified = typeIndex < m_identifiedRelics.size() && m_identifiedRelics[typeIndex];
         if (identified)
         {
-            std::snprintf(label, sizeof(label), u8"%s  重量 %.0f  売値 %d", GetRelicDisplayName(item), item.weight, item.value);
+            if (item.type == RelicType::Offensive)
+                std::snprintf(label, sizeof(label), u8"%s%s  重量 %.0f  使用 %d/%d", GetRelicDisplayName(item), item.broken ? u8"（破損）" : "", item.weight, item.remainingUses, item.maxUses);
+            else
+                std::snprintf(label, sizeof(label), u8"%s%s  重量 %.0f  売値 %d", GetRelicDisplayName(item), item.broken ? u8"（破損）" : "", item.weight, item.value);
         }
         else
         {
@@ -3355,6 +4201,20 @@ void SceneNarakuProto::DrawInventory()
     // 有効な旧器が選ばれている時だけ捨てるボタンを出します。
     if (m_selectedInventory >= 0 && m_selectedInventory < static_cast<int>(m_inventory.size()))
     {
+        RelicItem& selected = m_inventory[m_selectedInventory];
+        if (selected.type == RelicType::MentalRecovery && !selected.broken && ImGui::Button(u8"精神力を回復する"))
+        {
+            UseMentalRecoveryRelic(m_selectedInventory);
+            m_selectedInventory = -1;
+            ImGui::End();
+            return;
+        }
+        else if (selected.type == RelicType::Survival)
+        {
+            if (ImGui::Checkbox(u8"致死時に自動発動", &selected.autoTrigger)) SaveProgress();
+        }
+        if (selected.type == RelicType::Unique)
+            ImGui::TextWrapped(u8"不思議な力が込められている気がする");
         // 選択旧器を現在位置に捨てます。
         if (ImGui::Button(u8"選択した旧器を捨てる"))
         {
@@ -3368,13 +4228,12 @@ void SceneNarakuProto::DrawInventory()
 
     ImGui::Separator();
     ImGui::Text(u8"食料: %d（重量 %d）", m_foodCount, m_foodCount);
-    if (m_foodCount > 0 && m_player.hp < 10.0f && ImGui::Button(u8"食料を使う（HP+2）"))
+    if (m_foodCount > 0 && (m_player.hp < GetMaxHp() || m_fullness < kFullnessMaximum) && ImGui::Button(u8"食料を使う（HP+20 / 満腹度+10）"))
     {
         UseFood();
+        if (m_foodUseTimer > 0.0f) m_mode = Mode::Explore;
     }
-
-    // タブ切り替えは今後の実装予定として表示だけ残します。
-    ImGui::Text(u8"Q/Eのタブ切り替えは後で実装します。現在は地図ピン用ウィンドウを使います。");
+    if (ImGui::Button(u8"探窟を放棄して自宅へ戻る")) m_mode = Mode::AbandonConfirm;
 
     // 所持品ウィンドウを閉じます。
     ImGui::End();
@@ -3400,6 +4259,7 @@ void SceneNarakuProto::DrawRelicPrompt()
 
     // 発見した旧器の重量を表示します。
     ImGui::Text(u8"重量: %.0f", m_pendingRelic.weight);
+    ImGui::Text(u8"活性度: +%d（拾得後 %d）", GetRelicActivity(m_pendingRelic), GetCurrentActivity() + GetRelicActivity(m_pendingRelic));
 
     // 拾った後の総重量を表示します。
     ImGui::Text(u8"拾得後重量: %.0f / %.0f", GetCurrentWeight() + m_pendingRelic.weight, GetPickupWeightLimit());
@@ -3454,7 +4314,7 @@ void SceneNarakuProto::DrawResult()
     ImGui::SetNextWindowSize(ImVec2(540.0f, 360.0f), ImGuiCond_Always);
     ImGui::Begin(m_mode == Mode::DeathResult ? u8"死亡リザルト" : u8"帰還リザルト", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
     ImGui::Text(u8"結果: %s", m_result.reason.c_str());
-    ImGui::Text(u8"最大深度: %.2fm", m_result.maxDepth);
+    ImGui::Text(u8"最大到達深度: 第%d層", m_result.maxDepth);
     ImGui::Text(u8"採掘した遺物: %d", m_result.minedCount);
     ImGui::Separator();
 
@@ -3462,6 +4322,20 @@ void SceneNarakuProto::DrawResult()
     {
         ImGui::Text(u8"持ち帰った遺物: %d", m_result.carriedRelics);
         ImGui::Text(u8"今回初めて鑑定した種類: %d", m_result.identifiedRelics);
+        int miningReward = 0;
+        int defeatReward = 0;
+        int stayReward = 0;
+        for (int i = 0; i < 5; ++i)
+        {
+            const int depth = i + 1;
+            miningReward += static_cast<int>(std::llround(m_result.minedByDepth[i] * 5.0 * GetDepthRewardMultiplier(depth)));
+            defeatReward += static_cast<int>(std::llround((m_result.chargerKillsByDepth[i] * 10.0 + m_result.territoryKillsByDepth[i] * 20.0) * GetDepthRewardMultiplier(depth)));
+            stayReward += static_cast<int>(std::llround(std::min(300.0f, m_result.staySecondsByDepth[i]) * GetDepthStayRewardMultiplier(depth)));
+        }
+        ImGui::Text(u8"内訳 採掘:%dG / 撃破:%dG / 滞在:%dG", miningReward, defeatReward, stayReward);
+        ImGui::Text(u8"内訳 初到達:%dG / 新種:%dG", m_result.firstAreaCount * 150, m_result.newRelicTypeCount * 150);
+        ImGui::Text(u8"探索報酬: %dG", m_result.explorationReward);
+        if (m_result.uniqueReward > 0) ImGui::Text(u8"欲望の揺籃 持ち帰り報酬: %dG", m_result.uniqueReward);
         ImGui::Text(u8"遺物の売却見込額: %d", m_result.saleAmount);
         ImGui::Spacing();
         if (ImGui::Button(u8"商店へ", ImVec2(120.0f, 0.0f))) m_mode = Mode::GeneralShop;
@@ -3479,6 +4353,8 @@ void SceneNarakuProto::DrawResult()
     else
     {
         ImGui::Text(u8"失った遺物: %d", m_result.lostRelics);
+        ImGui::Text(u8"レベル: %d -> %d", m_result.levelBeforeDeath, m_result.levelAfterDeath);
+        ImGui::Text(u8"消費した保護: %d", m_result.protectionConsumed);
         if (ImGui::Button(u8"再挑戦")) RestartAfterDeath();
         ImGui::SameLine();
         if (ImGui::Button(u8"自宅へ")) m_mode = Mode::Home;
@@ -3498,12 +4374,46 @@ void SceneNarakuProto::DrawReturnConfirm()
     ImGui::End();
 }
 
+void SceneNarakuProto::DrawAbandonConfirm()
+{
+    ImGui::SetNextWindowPos(ImVec2(440.0f, 220.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(440.0f, 190.0f), ImGuiCond_Always);
+    ImGui::Begin(u8"探窟放棄の確認", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+    ImGui::TextWrapped(u8"今回持ち込んだ物と取得物、帰還報酬を失い、レベル進行が0.5戻ります。満腹度は維持されます。");
+    if (ImGui::Button(u8"放棄する", ImVec2(130.0f, 0.0f))) AbandonDive();
+    ImGui::SameLine();
+    if (ImGui::Button(u8"戻る", ImVec2(130.0f, 0.0f))) m_mode = Mode::Inventory;
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawCurrentStatus()
+{
+    if (!ImGui::CollapsingHeader(u8"現在のステータス", ImGuiTreeNodeFlags_DefaultOpen)) return;
+
+    const EquipmentBonus equipment = GetEquipmentBonus();
+    ImGui::Text(u8"装備  頭:%s / 胴:%s / 武器:%s", GetArmorName(m_equippedHeadArmor),
+        GetArmorName(m_equippedBodyArmor), GetWeaponName(m_equippedWeapon));
+    ImGui::Text(u8"Lv%d  HP %.0f / %.0f", m_level, m_player.hp, GetMaxHp());
+    ImGui::Text(u8"スタミナ %.0f / %.0f  精神力 %.0f / %.0f", m_player.stamina, GetMaxStamina(), m_player.mental, GetMaxMental());
+    ImGui::Text(u8"満腹度 %.0f / 100  重量 %.0f / %.0f", m_fullness, GetCurrentWeight(), GetMaxWeight());
+    ImGui::Text(u8"攻撃力 %.2f  防御倍率 %.0f%%", GetAttackPower(), GetDefenseMultiplier() * 100.0f);
+    ImGui::Text(u8"歩行 %.2fm/s  走行 %.2fm/s", GetMoveSpeed(), GetRunSpeed());
+    ImGui::Text(u8"スタミナ回復 %.2f/s  精神遺物回復 %.2f", m_debugPlayerParams.staminaRecoverPerSecond * GetStaminaRecoveryMultiplier(),
+        10.0f * GetMentalRecoveryMultiplier());
+    ImGui::Text(u8"採掘速度 %.0f%%  ロープ上昇 %.2f / 降下 %.2f",
+        GetMiningSpeedMultiplier() * 100.0f, GetRopeSpeed(true), GetRopeSpeed(false));
+    ImGui::Text(u8"装備HP回復 %.2f/s", equipment.hpRecoveryPerSecond);
+}
+
 void SceneNarakuProto::DrawHome()
 {
     ImGui::SetNextWindowPos(ImVec2(230.0f, 60.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(760.0f, 700.0f), ImGuiCond_FirstUseEver);
     ImGui::Begin(u8"自宅 - 潜行準備", nullptr, ImGuiWindowFlags_NoCollapse);
     ImGui::Text(u8"所持金: %d", m_money);
+    if (m_uniqueRelicReturned)
+        ImGui::TextWrapped(u8"欲望の揺籃: 図鑑登録・実績解除済み / 物語の進行条件を達成");
+    DrawCurrentStatus();
     ImGui::Separator();
 
     ImGui::Text(u8"頭装備");
@@ -3512,7 +4422,9 @@ void SceneNarakuProto::DrawHome()
         if (!m_ownedHeadArmor[i]) continue;
         const ArmorTier tier = static_cast<ArmorTier>(i);
         ImGui::PushID(static_cast<int>(i));
-        if (ImGui::RadioButton(GetArmorName(tier), m_equippedHeadArmor == tier)) m_equippedHeadArmor = tier;
+        if (ImGui::RadioButton(GetArmorName(tier), m_equippedHeadArmor == tier)) { m_equippedHeadArmor = tier; SaveProgress(); }
+        ImGui::SameLine();
+        ImGui::TextDisabled(u8"%s", GetArmorEffectText(tier, true));
         ImGui::PopID();
     }
 
@@ -3522,7 +4434,9 @@ void SceneNarakuProto::DrawHome()
         if (!m_ownedBodyArmor[i]) continue;
         const ArmorTier tier = static_cast<ArmorTier>(i);
         ImGui::PushID(100 + static_cast<int>(i));
-        if (ImGui::RadioButton(GetArmorName(tier), m_equippedBodyArmor == tier)) m_equippedBodyArmor = tier;
+        if (ImGui::RadioButton(GetArmorName(tier), m_equippedBodyArmor == tier)) { m_equippedBodyArmor = tier; SaveProgress(); }
+        ImGui::SameLine();
+        ImGui::TextDisabled(u8"%s", GetArmorEffectText(tier, false));
         ImGui::PopID();
     }
 
@@ -3532,31 +4446,35 @@ void SceneNarakuProto::DrawHome()
         if (!m_ownedWeapons[i]) continue;
         const WeaponTier tier = static_cast<WeaponTier>(i);
         ImGui::PushID(200 + static_cast<int>(i));
-        if (ImGui::RadioButton(GetWeaponName(tier), m_equippedWeapon == tier)) m_equippedWeapon = tier;
+        if (ImGui::RadioButton(GetWeaponName(tier), m_equippedWeapon == tier)) { m_equippedWeapon = tier; SaveProgress(); }
         ImGui::SameLine();
-        ImGui::TextDisabled(u8"採掘速度 %.0f%%", (tier == WeaponTier::RustyPickaxe ? 1.0f : tier == WeaponTier::NormalPickaxe ? 1.35f : tier == WeaponTier::SturdyPickaxe ? 1.80f : tier == WeaponTier::SharpPickaxe ? 2.0f : 2.5f) * 100.0f);
+        ImGui::TextDisabled(u8"%s", GetWeaponEffectText(tier));
         ImGui::PopID();
     }
+    if (HasRelicArmorSetEffect())
+        ImGui::TextColored(ImVec4(0.75f, 0.55f, 1.0f, 1.0f),
+            u8"遺物装備セット: 重量+100%% / 歩行+20%% / 走行+100%% / HP毎秒+2 / 攻撃+50%% / 防御+75%% / 採掘+50%%");
 
     ImGui::Separator();
     ImGui::Text(u8"次回の持ち込み");
     ImGui::Text(u8"食料  保管:%d  持込:%d", m_storedFoodCount, m_loadoutFoodCount);
     ImGui::SameLine();
-    if (ImGui::SmallButton(u8"-##food")) m_loadoutFoodCount = std::max(0, m_loadoutFoodCount - 1);
+    if (ImGui::SmallButton(u8"-##food")) { m_loadoutFoodCount = std::max(0, m_loadoutFoodCount - 1); SaveProgress(); }
     ImGui::SameLine();
-    if (ImGui::SmallButton(u8"+##food")) m_loadoutFoodCount = std::min(m_storedFoodCount, m_loadoutFoodCount + 1);
+    if (ImGui::SmallButton(u8"+##food")) { m_loadoutFoodCount = std::min(m_storedFoodCount, m_loadoutFoodCount + 1); SaveProgress(); }
 
     float loadoutWeight = 10.0f + static_cast<float>(m_loadoutFoodCount);
-    for (std::size_t i = 0; i < m_storedRelics.size(); ++i)
+    for (std::size_t i = 0; i < static_cast<std::size_t>(RelicType::Count); ++i)
     {
         const RelicType type = static_cast<RelicType>(i);
         loadoutWeight += GetRelicWeight(type) * static_cast<float>(m_loadoutRelics[i]);
         ImGui::PushID(300 + static_cast<int>(i));
-        ImGui::Text(u8"%s  保管:%d  持込:%d", GetRelicTypeName(type), m_storedRelics[i], m_loadoutRelics[i]);
+        const int storedCount = CountStoredRelics(type);
+        ImGui::Text(u8"%s  保管:%d  持込:%d", GetRelicTypeName(type), storedCount, m_loadoutRelics[i]);
         ImGui::SameLine();
-        if (ImGui::SmallButton("-")) m_loadoutRelics[i] = std::max(0, m_loadoutRelics[i] - 1);
+        if (ImGui::SmallButton("-")) { m_loadoutRelics[i] = std::max(0, m_loadoutRelics[i] - 1); SaveProgress(); }
         ImGui::SameLine();
-        if (ImGui::SmallButton("+")) m_loadoutRelics[i] = std::min(m_storedRelics[i], m_loadoutRelics[i] + 1);
+        if (ImGui::SmallButton("+")) { m_loadoutRelics[i] = std::min(storedCount, m_loadoutRelics[i] + 1); SaveProgress(); }
         ImGui::PopID();
     }
     const float maxWeight = GetMaxWeight();
@@ -3568,6 +4486,10 @@ void SceneNarakuProto::DrawHome()
     if (ImGui::Button(u8"商店", ImVec2(100.0f, 0.0f))) m_mode = Mode::GeneralShop;
     ImGui::SameLine();
     if (ImGui::Button(u8"武具屋", ImVec2(100.0f, 0.0f))) m_mode = Mode::Armory;
+    ImGui::SameLine();
+    if (ImGui::Button(u8"レストラン", ImVec2(120.0f, 0.0f))) m_mode = Mode::Restaurant;
+    if (ImGui::Button(u8"任意保存", ImVec2(120.0f, 0.0f)))
+        ShowCenterNotification(SaveProgress() ? u8"保存しました。" : u8"保存に失敗しました。");
     ImGui::End();
 }
 
@@ -3579,10 +4501,11 @@ void SceneNarakuProto::DrawGeneralShop()
     ImGui::Text(u8"所持金: %d", m_money);
     ImGui::Separator();
     ImGui::Text(u8"購入");
-    if (ImGui::Button(u8"食料を購入  5G（重量1 / HP+2）") && m_money >= 5) { m_money -= 5; ++m_storedFoodCount; }
+    if (ImGui::Button(u8"食料を購入  10G（重量1 / HP+20 / 満腹度+10）") && m_money >= kFoodPrice)
+    { m_money -= kFoodPrice; ++m_storedFoodCount; SaveProgress(); }
 
     const RelicType shopTypes[] = { RelicType::ArmamentUpgrade, RelicType::WeaponUpgrade, RelicType::ArmorUpgrade };
-    const int shopPrices[] = { 30, 35, 35 };
+    const int shopPrices[] = { 600, 700, 700 };
     for (int i = 0; i < 3; ++i)
     {
         ImGui::PushID(i);
@@ -3592,8 +4515,11 @@ void SceneNarakuProto::DrawGeneralShop()
         {
             m_money -= shopPrices[i];
             const std::size_t typeIndex = static_cast<std::size_t>(shopTypes[i]);
-            ++m_storedRelics[typeIndex];
+            RelicItem item = CreateRelic(shopTypes[i], GetRelicTypeName(shopTypes[i]));
+            item.stabilized = true;
+            m_storedInventory.push_back(item);
             m_identifiedRelics[typeIndex] = true;
+            SaveProgress();
         }
         ImGui::PopID();
     }
@@ -3601,20 +4527,25 @@ void SceneNarakuProto::DrawGeneralShop()
     ImGui::Separator();
     ImGui::Text(u8"遺物売却");
     bool hasSellableRelic = false;
-    for (std::size_t i = 0; i < m_storedRelics.size(); ++i)
+    for (std::size_t i = 0; i < static_cast<std::size_t>(RelicType::Count); ++i)
     {
-        if (m_storedRelics[i] <= 0) continue;
-
-        hasSellableRelic = true;
         const RelicType type = static_cast<RelicType>(i);
+        const int count = static_cast<int>(std::count_if(m_storedInventory.begin(), m_storedInventory.end(),
+            [type, this](const RelicItem& item) { return item.type == type && IsRelicSellable(item); }));
+        if (count <= 0) continue;
+        hasSellableRelic = true;
         ImGui::PushID(100 + static_cast<int>(i));
-        ImGui::Text(u8"%s  %d個  1個%dG", GetRelicTypeName(type), m_storedRelics[i], GetRelicSellValue(type));
+        auto sellIt = std::find_if(m_storedInventory.begin(), m_storedInventory.end(),
+            [type, this](const RelicItem& item) { return item.type == type && IsRelicSellable(item); });
+        const int saleValue = sellIt != m_storedInventory.end() ? sellIt->value : 0;
+        ImGui::Text(u8"%s  %d個  1個%dG", GetRelicTypeName(type), count, saleValue);
         ImGui::SameLine();
         if (ImGui::SmallButton(u8"1個売却"))
         {
-            --m_storedRelics[i];
-            m_money += GetRelicSellValue(type);
-            m_loadoutRelics[i] = std::min(m_loadoutRelics[i], m_storedRelics[i]);
+            m_money += saleValue;
+            m_storedInventory.erase(sellIt);
+            m_loadoutRelics[i] = std::min(m_loadoutRelics[i], CountStoredRelics(type));
+            SaveProgress();
         }
         ImGui::PopID();
     }
@@ -3629,23 +4560,24 @@ void SceneNarakuProto::DrawGeneralShop()
 
 void SceneNarakuProto::DrawArmory()
 {
-    static const int armorDiscountPrices[][2] = { { 10, 15 }, { 15, 20 }, { 20, 30 }, { 25, 35 }, { 35, 40 }, { 50, 60 } };
-    static const int armorMoneyPrices[][2] = { { 10, 15 }, { 30, 40 }, { 40, 60 }, { 50, 70 }, { 70, 80 }, { 100, 120 } };
-    static const int armorArmamentCosts[] = { 0, 0, 1, 2, 2, 3 };
-    static const int armorMaterialCosts[] = { 0, 0, 1, 1, 2, 5 };
-    static const int weaponDiscountPrices[] = { 5, 10, 25, 50, 150 };
-    static const int weaponMoneyPrices[] = { 5, 10, 25, 50, 400 };
-    static const int weaponArmamentCosts[] = { 0, 0, 0, 0, 2 };
-    static const int weaponMaterialCosts[] = { 0, 0, 0, 0, 3 };
+    static const int armorDiscountPrices[][2] = { { 10, 15 }, { 150, 200 }, { 200, 300 }, { 250, 350 }, { 350, 400 }, { 5000, 6000 } };
+    static const int armorMoneyPrices[][2] = { { 10, 15 }, { 150, 200 }, { 1000, 1500 }, { 1250, 1750 }, { 1750, 2000 }, { 25000, 30000 } };
+    static const int armorArmamentCosts[][2] = { { 0, 0 }, { 0, 0 }, { 3, 4 }, { 4, 6 }, { 7, 10 }, { 17, 19 } };
+    static const int armorMaterialCosts[][2] = { { 0, 0 }, { 0, 0 }, { 5, 7 }, { 7, 9 }, { 5, 7 }, { 15, 19 } };
+    static const int weaponDiscountPrices[] = { 5, 500, 1250, 1500, 5000 };
+    static const int weaponMoneyPrices[] = { 5, 500, 1250, 1500, 25000 };
+    static const int weaponArmamentCosts[] = { 0, 0, 0, 0, 11 };
+    static const int weaponMaterialCosts[] = { 0, 0, 0, 0, 21 };
 
     ImGui::SetNextWindowPos(ImVec2(220.0f, 50.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(900.0f, 720.0f), ImGuiCond_FirstUseEver);
     ImGui::Begin(u8"武具屋", nullptr, ImGuiWindowFlags_NoCollapse);
     ImGui::Text(u8"所持金: %d", m_money);
     ImGui::Text(u8"素材  武具:%d  武器:%d  装備:%d",
-        m_storedRelics[static_cast<std::size_t>(RelicType::ArmamentUpgrade)],
-        m_storedRelics[static_cast<std::size_t>(RelicType::WeaponUpgrade)],
-        m_storedRelics[static_cast<std::size_t>(RelicType::ArmorUpgrade)]);
+        CountStoredRelics(RelicType::ArmamentUpgrade),
+        CountStoredRelics(RelicType::WeaponUpgrade),
+        CountStoredRelics(RelicType::ArmorUpgrade));
+    DrawCurrentStatus();
     ImGui::Separator();
 
     ImGui::Text(u8"頭・胴装備");
@@ -3654,9 +4586,11 @@ void SceneNarakuProto::DrawArmory()
         const ArmorTier tier = static_cast<ArmorTier>(i);
         ImGui::PushID(static_cast<int>(i));
         ImGui::Text(u8"%s", GetArmorName(tier));
-        ImGui::TextDisabled(u8"割引 頭%dG/胴%dG（武具%d・装備%d）  金のみ 頭%dG/胴%dG",
-            armorDiscountPrices[i][0], armorDiscountPrices[i][1], armorArmamentCosts[i], armorMaterialCosts[i],
-            armorMoneyPrices[i][0], armorMoneyPrices[i][1]);
+        ImGui::TextDisabled(u8"効果  頭: %s / 胴: %s", GetArmorEffectText(tier, true), GetArmorEffectText(tier, false));
+        ImGui::TextDisabled(u8"素材併用 頭%dG（武具%d・装備%d） / 胴%dG（武具%d・装備%d）",
+            armorDiscountPrices[i][0], armorArmamentCosts[i][0], armorMaterialCosts[i][0],
+            armorDiscountPrices[i][1], armorArmamentCosts[i][1], armorMaterialCosts[i][1]);
+        ImGui::TextDisabled(u8"金のみ 頭%dG / 胴%dG", armorMoneyPrices[i][0], armorMoneyPrices[i][1]);
         if (m_ownedHeadArmor[i]) ImGui::TextDisabled(u8"頭:所有済み");
         else
         {
@@ -3681,6 +4615,7 @@ void SceneNarakuProto::DrawArmory()
         const WeaponTier tier = static_cast<WeaponTier>(i);
         ImGui::PushID(100 + static_cast<int>(i));
         ImGui::Text(u8"%s", GetWeaponName(tier));
+        ImGui::TextDisabled(u8"効果  %s", GetWeaponEffectText(tier));
         ImGui::TextDisabled(u8"割引 %dG（武具%d・武器%d）  金のみ %dG",
             weaponDiscountPrices[i], weaponArmamentCosts[i], weaponMaterialCosts[i], weaponMoneyPrices[i]);
         if (m_ownedWeapons[i]) ImGui::TextDisabled(u8"所有済み");
@@ -3700,16 +4635,106 @@ void SceneNarakuProto::DrawArmory()
     ImGui::End();
 }
 
+void SceneNarakuProto::DrawRestaurant()
+{
+    ImGui::SetNextWindowPos(ImVec2(430.0f, 190.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(460.0f, 260.0f), ImGuiCond_FirstUseEver);
+    ImGui::Begin(u8"地上レストラン", nullptr, ImGuiWindowFlags_NoCollapse);
+    ImGui::Text(u8"所持金: %dG", m_money);
+    ImGui::Text(u8"満腹度: %.2f / 100", m_fullness);
+    ImGui::Text(u8"HP: %.0f / %.0f", m_player.hp, GetMaxHp());
+    ImGui::Text(u8"精神力: %.0f / %.0f", m_player.mental, GetMaxMental());
+    ImGui::Separator();
+    ImGui::TextWrapped(u8"50Gで満腹度を100にし、最大HPの75%%と最大精神力の50%%を回復します。");
+    if (ImGui::Button(u8"食事をする（50G）", ImVec2(180.0f, 0.0f))) TryUseRestaurant();
+    ImGui::SameLine();
+    if (ImGui::Button(u8"自宅へ")) m_mode = Mode::Home;
+    ImGui::End();
+}
+
+void SceneNarakuProto::DrawRouteInfo()
+{
+    for (const LayerGateState& gate : m_layerGates)
+    {
+        if (gate.isEntry || !IsNear(m_player.pos, gate.loadPos, 3.0f)) continue;
+        ImGui::SetNextWindowPos(ImVec2(840.0f, 20.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(360.0f, 180.0f), ImGuiCond_Always);
+        ImGui::Begin(u8"ルート傾向", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
+        if (gate.destinationAreaIndex < 0 || gate.destinationAreaIndex >= static_cast<int>(m_areas.size()) ||
+            !m_areas[gate.destinationAreaIndex].generated)
+        {
+            ImGui::TextWrapped(u8"Fでルートを調査します。調査後、進入前に傾向を確認できます。");
+        }
+        else
+        {
+            const AreaState& area = m_areas[gate.destinationAreaIndex];
+            ImGui::Text(u8"接続先: 第%d層（%s） エリア%d", area.depth,
+                GetSublayerName(area.sublayer), area.areaNumber);
+            const DepthRules& rules = GetRulesForDepth(area.depth);
+            const int enemyMaximum = rules.chargerMax + rules.territoryMax;
+            const int miningMaximum = static_cast<int>(area.map.pieceNames.size()) * 5;
+            if (static_cast<int>(area.enemies.size()) == enemyMaximum) ImGui::BulletText(u8"敵が多め");
+            if (!area.miningPoints.empty() && static_cast<int>(area.miningPoints.size()) > miningMaximum - 5) ImGui::BulletText(u8"採掘地点が多め");
+            const bool hasCliff = std::any_of(area.map.terrainLayers.begin(), area.map.terrainLayers.end(), [](const NarakuMap::TerrainLayer& layer)
+            {
+                return std::any_of(layer.cellAttributeFlags.begin(), layer.cellAttributeFlags.end(), [](std::uint32_t flags)
+                { return (flags & NarakuMap::CellAttributeCliffEdge) != 0u; });
+            });
+            if (hasCliff) ImGui::BulletText(u8"崖あり");
+            if (std::any_of(area.enemies.begin(), area.enemies.end(), [](const EnemyState& enemy) { return enemy.type == EnemyType::Territory; }))
+                ImGui::BulletText(u8"縄張り型あり");
+            if (area.enemies.empty() && area.miningPoints.empty() && !hasCliff) ImGui::TextDisabled(u8"目立った傾向なし");
+            const int enemyRequired = static_cast<int>(std::ceil(static_cast<float>(area.enemies.size()) * 0.75f));
+            const int miningRequired = static_cast<int>(std::ceil(static_cast<float>(area.miningPoints.size()) * 0.75f));
+            if (area.discoveredEnemyCount >= enemyRequired)
+                ImGui::Text(u8"記録済みの敵: %d体", static_cast<int>(area.enemies.size()));
+            if (area.discoveredMiningCount >= miningRequired)
+                ImGui::Text(u8"記録済みの採掘地点: %d箇所", static_cast<int>(area.miningPoints.size()));
+            if (area.discoveredCliffCount > 0) ImGui::Text(u8"視認済みの崖あり");
+            ImGui::Separator();
+            ImGui::Text(u8"もう一度Fで進入");
+        }
+        ImGui::End();
+        break;
+    }
+}
+
 void SceneNarakuProto::DrawMapControls()
 {
     // マップウィンドウの初期位置を指定します。
     ImGui::SetNextWindowPos(ImVec2(690.0f, 80.0f), ImGuiCond_FirstUseEver);
 
     // マップウィンドウの初期サイズを指定します。
-    ImGui::SetNextWindowSize(ImVec2(360.0f, 380.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(420.0f, 560.0f), ImGuiCond_FirstUseEver);
 
     // マップウィンドウを開始します。
     ImGui::Begin(u8"地図", nullptr, ImGuiWindowFlags_NoCollapse);
+
+    ImGui::TextDisabled(u8"[Q] 所持品  /  [E] 地図  /  [T] 閉じる");
+    if (m_currentAreaIndex >= 0 && m_currentAreaIndex < static_cast<int>(m_areas.size()))
+    {
+        const AreaState& currentArea = m_areas[m_currentAreaIndex];
+        ImGui::Text(u8"現在深度: 第%d層（%s） エリア%d", currentArea.depth,
+            GetSublayerName(currentArea.sublayer), currentArea.areaNumber);
+    }
+    else ImGui::Text(u8"現在深度: 第%d層", GetCurrentDepth());
+    ImGui::Separator();
+
+    if (m_currentAreaIndex >= 0 && m_currentAreaIndex < static_cast<int>(m_areas.size()))
+    {
+        const AreaState& area = m_areas[m_currentAreaIndex];
+        const int enemyRequired = static_cast<int>(std::ceil(static_cast<float>(m_enemies.size()) * 0.75f));
+        const int miningRequired = static_cast<int>(std::ceil(static_cast<float>(m_miningPoints.size()) * 0.75f));
+        ImGui::Text(u8"情報開示  敵:%d/%d  採掘:%d/%d", area.discoveredEnemyCount, enemyRequired,
+            area.discoveredMiningCount, miningRequired);
+        if (area.discoveredEnemyCount >= enemyRequired)
+            ImGui::Text(u8"敵情報: 突進型%d / 縄張り型%d",
+                static_cast<int>(std::count_if(m_enemies.begin(), m_enemies.end(), [](const EnemyState& enemy) { return enemy.type == EnemyType::Charger; })),
+                static_cast<int>(std::count_if(m_enemies.begin(), m_enemies.end(), [](const EnemyState& enemy) { return enemy.type == EnemyType::Territory; })));
+        if (area.discoveredMiningCount >= miningRequired) ImGui::Text(u8"採掘地点: %d", static_cast<int>(m_miningPoints.size()));
+        if (area.discoveredCliffCount > 0) ImGui::Text(u8"崖: あり");
+        ImGui::Separator();
+    }
 
     // 拡大縮小操作のUIを追加します。
     if (ImGui::Button("-"))
@@ -3797,7 +4822,7 @@ void SceneNarakuProto::DrawMapControls()
     // 3. 採掘ポイントの描画 (採掘済み、または発見済みのみ)
     for (const MiningPoint& point : m_miningPoints)
     {
-        if (!(point.mined || point.discovered))
+        if (!(point.mined || point.discovered || point.sensed))
         {
             continue;
         }
@@ -3891,7 +4916,7 @@ void SceneNarakuProto::ResetDebugPlayerParams()
     m_debugPlayerParams.walkSpeed = 1.5f;
     m_debugPlayerParams.runSpeed = 2.5f;
     m_debugPlayerParams.ropeSpeed = 1.0f;
-    m_debugPlayerParams.attackPower = 1.0f;
+    m_debugPlayerParams.attackPower = kPlayerBaseAttack;
     m_debugPlayerParams.runCostPerSecond = 1.5f;
     m_debugPlayerParams.ropeCostPerSecond = 3.0f;
     m_debugPlayerParams.attackCost = 10.0f;
@@ -3920,7 +4945,7 @@ bool SceneNarakuProto::LoadDebugPlayerParams()
     TryReadJsonFloat(json, "walkSpeed", m_debugPlayerParams.walkSpeed);
     TryReadJsonFloat(json, "runSpeed", m_debugPlayerParams.runSpeed);
     TryReadJsonFloat(json, "ropeSpeed", m_debugPlayerParams.ropeSpeed);
-    TryReadJsonFloat(json, "attackPower", m_debugPlayerParams.attackPower);
+    m_debugPlayerParams.attackPower = kPlayerBaseAttack;
     TryReadJsonFloat(json, "runCostPerSecond", m_debugPlayerParams.runCostPerSecond);
     TryReadJsonFloat(json, "ropeCostPerSecond", m_debugPlayerParams.ropeCostPerSecond);
     TryReadJsonFloat(json, "attackCost", m_debugPlayerParams.attackCost);
@@ -3972,6 +4997,207 @@ bool SceneNarakuProto::SaveDebugPlayerParams() const
     return stream.good();
 }
 
+void SceneNarakuProto::InitializeNewProgress()
+{
+    m_money = 0;
+    m_level = 1;
+    m_currentExp = 0;
+    m_levelProtection = 0;
+    m_level100OverflowExp = 0;
+    m_fullness = 75.0f;
+    m_storedFoodCount = 0;
+    m_loadoutFoodCount = 0;
+    m_storedInventory.clear();
+    m_loadoutRelics.fill(0);
+    m_identifiedRelics.fill(false);
+    m_ownedHeadArmor.fill(false);
+    m_ownedBodyArmor.fill(false);
+    m_ownedWeapons.fill(false);
+    m_ownedHeadArmor[static_cast<std::size_t>(ArmorTier::Leather)] = true;
+    m_ownedBodyArmor[static_cast<std::size_t>(ArmorTier::Leather)] = true;
+    m_ownedWeapons[static_cast<std::size_t>(WeaponTier::RustyPickaxe)] = true;
+    m_equippedHeadArmor = ArmorTier::Leather;
+    m_equippedBodyArmor = ArmorTier::Leather;
+    m_equippedWeapon = WeaponTier::RustyPickaxe;
+    m_nextRelicAcquisitionOrder = 1;
+    m_uniqueRelicReturned = false;
+    m_uniqueRelicCodexUnlocked = false;
+    m_uniqueRelicAchievementUnlocked = false;
+    m_uniqueRelicStoryUnlocked = false;
+}
+
+bool SceneNarakuProto::SaveProgress() const
+{
+    const std::wstring directory = kProgressDirectory;
+    const std::wstring temporaryPath = kProgressTempPath;
+    const std::wstring finalPath = kProgressPath;
+    _wmkdir(directory.c_str());
+    std::ofstream stream(temporaryPath, std::ios::binary | std::ios::trunc);
+    if (!stream) return false;
+
+    auto writeBoolArray = [&stream](const char* key, const auto& values)
+    {
+        stream << key << '=';
+        for (std::size_t i = 0; i < values.size(); ++i)
+        {
+            if (i > 0) stream << ',';
+            stream << (values[i] ? 1 : 0);
+        }
+        stream << '\n';
+    };
+    auto writeIntArray = [&stream](const char* key, const auto& values)
+    {
+        stream << key << '=';
+        for (std::size_t i = 0; i < values.size(); ++i)
+        {
+            if (i > 0) stream << ',';
+            stream << values[i];
+        }
+        stream << '\n';
+    };
+
+    stream << "NARAKU_PROTO_SAVE\n";
+    stream << "version=" << kSaveVersion << '\n';
+    stream << "money=" << m_money << '\n';
+    stream << "level=" << m_level << '\n';
+    stream << "exp=" << m_currentExp << '\n';
+    stream << "overflowExp=" << m_level100OverflowExp << '\n';
+    stream << "protection=" << m_levelProtection << '\n';
+    stream << std::fixed << std::setprecision(2) << "fullness=" << m_fullness << '\n';
+    stream << "storedFood=" << m_storedFoodCount << '\n';
+    stream << "loadoutFood=" << m_loadoutFoodCount << '\n';
+    stream << "equippedHead=" << static_cast<int>(m_equippedHeadArmor) << '\n';
+    stream << "equippedBody=" << static_cast<int>(m_equippedBodyArmor) << '\n';
+    stream << "equippedWeapon=" << static_cast<int>(m_equippedWeapon) << '\n';
+    stream << "nextOrder=" << m_nextRelicAcquisitionOrder << '\n';
+    stream << "uniqueReturned=" << (m_uniqueRelicReturned ? 1 : 0) << '\n';
+    stream << "uniqueCodex=" << (m_uniqueRelicCodexUnlocked ? 1 : 0) << '\n';
+    stream << "uniqueAchievement=" << (m_uniqueRelicAchievementUnlocked ? 1 : 0) << '\n';
+    stream << "uniqueStory=" << (m_uniqueRelicStoryUnlocked ? 1 : 0) << '\n';
+    writeBoolArray("identified", m_identifiedRelics);
+    writeBoolArray("ownedHead", m_ownedHeadArmor);
+    writeBoolArray("ownedBody", m_ownedBodyArmor);
+    writeBoolArray("ownedWeapon", m_ownedWeapons);
+    writeIntArray("loadoutRelics", m_loadoutRelics);
+    stream << "relicCount=" << m_storedInventory.size() << '\n';
+    for (const RelicItem& item : m_storedInventory)
+    {
+        std::string safeName = item.name;
+        std::replace(safeName.begin(), safeName.end(), '|', '/');
+        stream << "relic=" << static_cast<int>(item.type) << '|' << item.maxUses << '|' << item.remainingUses << '|'
+            << item.acquisitionOrder << '|' << (item.broken ? 1 : 0) << '|' << (item.stabilized ? 1 : 0) << '|'
+            << (item.autoTrigger ? 1 : 0) << '|' << safeName << '\n';
+    }
+    stream.close();
+    if (!stream.good()) return false;
+
+    std::ifstream verify(temporaryPath, std::ios::binary);
+    std::ostringstream verifyBuffer;
+    verifyBuffer << verify.rdbuf();
+    const std::string saved = verifyBuffer.str();
+    if (!verify.good() && !verify.eof()) return false;
+    if (saved.find("NARAKU_PROTO_SAVE\nversion=1\n") != 0 ||
+        saved.find("\nmoney=") == std::string::npos || saved.find("\nlevel=") == std::string::npos ||
+        saved.find("\nexp=") == std::string::npos || saved.find("\nfullness=") == std::string::npos ||
+        saved.find("\nrelicCount=") == std::string::npos) return false;
+    verify.close();
+    return MoveFileExW(temporaryPath.c_str(), finalPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != FALSE;
+}
+
+bool SceneNarakuProto::LoadProgress()
+{
+    const std::wstring path = kProgressPath;
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) return false;
+    std::string magic;
+    std::getline(stream, magic);
+    if (magic != "NARAKU_PROTO_SAVE") return false;
+
+    std::map<std::string, std::string> values;
+    std::vector<std::string> relicLines;
+    std::string line;
+    while (std::getline(stream, line))
+    {
+        const std::size_t separator = line.find('=');
+        if (separator == std::string::npos) continue;
+        const std::string key = line.substr(0, separator);
+        const std::string value = line.substr(separator + 1);
+        if (key == "relic") relicLines.push_back(value);
+        else values[key] = value;
+    }
+    try
+    {
+        if (!values.count("version") || !values.count("money") || !values.count("level")) return false;
+        const int version = std::stoi(values["version"]);
+        if (version != kSaveVersion && version != kPreviousSaveVersion) return false;
+        if (version == kSaveVersion && (!values.count("exp") || !values.count("fullness") || !values.count("relicCount"))) return false;
+        m_money = std::max(0, std::stoi(values["money"]));
+        m_level = std::max(1, std::min(100, std::stoi(values["level"])));
+        m_currentExp = values.count("exp") ? std::max(0, std::stoi(values["exp"])) : 0;
+        m_fullness = values.count("fullness")
+            ? std::max(0.0f, std::min(kFullnessMaximum, std::stof(values["fullness"])))
+            : 75.0f;
+        if (values.count("overflowExp")) m_level100OverflowExp = std::max<std::int64_t>(0, std::stoll(values["overflowExp"]));
+        if (values.count("protection")) m_levelProtection = std::max(0, std::stoi(values["protection"]));
+        if (values.count("storedFood")) m_storedFoodCount = std::max(0, std::stoi(values["storedFood"]));
+        if (values.count("loadoutFood")) m_loadoutFoodCount = std::max(0, std::stoi(values["loadoutFood"]));
+        if (values.count("equippedHead")) m_equippedHeadArmor = static_cast<ArmorTier>(std::max(0, std::min(static_cast<int>(ArmorTier::Count) - 1, std::stoi(values["equippedHead"]))));
+        if (values.count("equippedBody")) m_equippedBodyArmor = static_cast<ArmorTier>(std::max(0, std::min(static_cast<int>(ArmorTier::Count) - 1, std::stoi(values["equippedBody"]))));
+        if (values.count("equippedWeapon")) m_equippedWeapon = static_cast<WeaponTier>(std::max(0, std::min(static_cast<int>(WeaponTier::Count) - 1, std::stoi(values["equippedWeapon"]))));
+        if (values.count("nextOrder")) m_nextRelicAcquisitionOrder = std::max<std::uint64_t>(1, std::stoull(values["nextOrder"]));
+        if (values.count("uniqueReturned")) m_uniqueRelicReturned = std::stoi(values["uniqueReturned"]) != 0;
+        if (values.count("uniqueCodex")) m_uniqueRelicCodexUnlocked = std::stoi(values["uniqueCodex"]) != 0;
+        if (values.count("uniqueAchievement")) m_uniqueRelicAchievementUnlocked = std::stoi(values["uniqueAchievement"]) != 0;
+        if (values.count("uniqueStory")) m_uniqueRelicStoryUnlocked = std::stoi(values["uniqueStory"]) != 0;
+
+        auto readArray = [&values](const char* key, auto& target)
+        {
+            if (!values.count(key)) return;
+            std::istringstream input(values[key]);
+            std::string token;
+            std::size_t index = 0;
+            while (std::getline(input, token, ',') && index < target.size())
+            {
+                target[index++] = std::stoi(token);
+            }
+        };
+        readArray("identified", m_identifiedRelics);
+        readArray("ownedHead", m_ownedHeadArmor);
+        readArray("ownedBody", m_ownedBodyArmor);
+        readArray("ownedWeapon", m_ownedWeapons);
+        readArray("loadoutRelics", m_loadoutRelics);
+
+        m_storedInventory.clear();
+        for (const std::string& relicLine : relicLines)
+        {
+            std::vector<std::string> parts;
+            std::istringstream input(relicLine);
+            std::string part;
+            while (std::getline(input, part, '|')) parts.push_back(part);
+            if (parts.size() < 8) throw std::runtime_error("invalid relic record");
+            const int typeValue = std::stoi(parts[0]);
+            if (typeValue < 0 || typeValue >= static_cast<int>(RelicType::Count)) throw std::runtime_error("invalid relic type");
+            RelicItem item = CreateRelic(static_cast<RelicType>(typeValue), parts[7]);
+            item.maxUses = std::max(0, std::stoi(parts[1]));
+            item.remainingUses = std::max(0, std::stoi(parts[2]));
+            item.acquisitionOrder = std::stoull(parts[3]);
+            item.broken = std::stoi(parts[4]) != 0;
+            item.stabilized = std::stoi(parts[5]) != 0;
+            item.autoTrigger = std::stoi(parts[6]) != 0;
+            if (item.broken) item.value = 5;
+            m_storedInventory.push_back(item);
+        }
+        if (values.count("relicCount") && static_cast<std::size_t>(std::stoull(values["relicCount"])) != m_storedInventory.size())
+            throw std::runtime_error("relic count mismatch");
+    }
+    catch (...)
+    {
+        InitializeNewProgress();
+        return false;
+    }
+    return true;
+}
+
 void SceneNarakuProto::ClampDebugPlayerParams()
 {
     // 速度、攻撃力、各種消費量、回復量は負値にしないよう安全側へ丸めます。
@@ -3989,18 +5215,6 @@ void SceneNarakuProto::ClampDebugPlayerParams()
     m_debugPlayerParams.upperLayerAlpha = std::max(0.0f, std::min(m_debugPlayerParams.upperLayerAlpha, 0.30f));
 }
 
-float SceneNarakuProto::GetMiningSpeedMultiplier() const
-{
-    switch (m_equippedWeapon)
-    {
-    case WeaponTier::NormalPickaxe: return 1.35f;
-    case WeaponTier::SturdyPickaxe: return 1.80f;
-    case WeaponTier::SharpPickaxe: return 2.00f;
-    case WeaponTier::RelicPickaxe: return 2.50f;
-    default: return 1.00f;
-    }
-}
-
 const char* SceneNarakuProto::GetRelicTypeName(RelicType type) const
 {
     switch (type)
@@ -4010,8 +5224,10 @@ const char* SceneNarakuProto::GetRelicTypeName(RelicType type) const
     case RelicType::ArmorUpgrade: return u8"装備強化遺物";
     case RelicType::Offensive: return u8"攻撃的遺物";
     case RelicType::Survival: return u8"生存的遺物";
-    case RelicType::Cash: return u8"換金用遺物";
+    case RelicType::CashLow: return u8"換金用遺物（低）";
+    case RelicType::CashHigh: return u8"換金用遺物（高）";
     case RelicType::MentalRecovery: return u8"精神力回復遺物";
+    case RelicType::Unique: return u8"欲望の揺籃";
     default: return u8"不明な遺物";
     }
 }
@@ -4033,8 +5249,10 @@ float SceneNarakuProto::GetRelicWeight(RelicType type) const
     case RelicType::ArmorUpgrade: return 5.0f;
     case RelicType::Offensive: return 8.0f;
     case RelicType::Survival: return 3.0f;
-    case RelicType::Cash: return 10.0f;
+    case RelicType::CashLow: return 2.0f;
+    case RelicType::CashHigh: return 10.0f;
     case RelicType::MentalRecovery: return 2.0f;
+    case RelicType::Unique: return 100.0f;
     default: return 0.0f;
     }
 }
@@ -4043,32 +5261,114 @@ int SceneNarakuProto::GetRelicSellValue(RelicType type) const
 {
     switch (type)
     {
-    case RelicType::ArmamentUpgrade: return 10;
+    case RelicType::ArmamentUpgrade: return 60;
     case RelicType::WeaponUpgrade:
-    case RelicType::ArmorUpgrade: return 15;
-    case RelicType::Offensive: return 50;
+    case RelicType::ArmorUpgrade: return 70;
+    case RelicType::Offensive: return 0;
     case RelicType::Survival: return 60;
-    case RelicType::Cash: return 30;
+    case RelicType::CashLow: return 5;
+    case RelicType::CashHigh: return 60;
     case RelicType::MentalRecovery: return 5;
+    case RelicType::Unique: return 0;
     default: return 0;
     }
 }
 
-SceneNarakuProto::RelicItem SceneNarakuProto::CreateRelic(RelicType type, const std::string& sourceName) const
+SceneNarakuProto::RelicItem SceneNarakuProto::CreateRelic(RelicType type, const std::string& sourceName)
 {
     RelicItem item;
-    item.name = sourceName;
+    item.name = type == RelicType::Unique ? u8"欲望の揺籃" : sourceName;
     item.type = type;
     item.weight = GetRelicWeight(type);
     item.value = GetRelicSellValue(type);
+    item.acquisitionOrder = m_nextRelicAcquisitionOrder++;
+    if (type == RelicType::Offensive)
+    {
+        item.maxUses = RandomInt(15, 20);
+        item.remainingUses = item.maxUses;
+    }
     return item;
 }
 
-SceneNarakuProto::RelicItem SceneNarakuProto::CreateRandomRelic(const std::string& sourceName) const
+SceneNarakuProto::RelicItem SceneNarakuProto::CreateRandomRelic(const std::string& sourceName)
 {
-    static std::mt19937 randomEngine(std::random_device{}());
-    static std::uniform_int_distribution<int> distribution(0, static_cast<int>(RelicType::Count) - 1);
-    return CreateRelic(static_cast<RelicType>(distribution(randomEngine)), sourceName);
+    const std::array<int, 5>& weights = GetRulesForDepth(GetCurrentDepth()).dropWeights;
+    const int roll = RandomInt(1, 100);
+    int cumulative = weights[0];
+    if (roll <= cumulative) return CreateRelic(RelicType::CashLow, sourceName);
+    cumulative += weights[1];
+    if (roll <= cumulative) return CreateRelic(RelicType::CashHigh, sourceName);
+    cumulative += weights[2];
+    if (roll <= cumulative)
+    {
+        return CreateRelic(static_cast<RelicType>(RandomInt(
+            static_cast<int>(RelicType::ArmamentUpgrade), static_cast<int>(RelicType::ArmorUpgrade))), sourceName);
+    }
+    cumulative += weights[3];
+    if (roll <= cumulative)
+    {
+        const RelicType specials[] = { RelicType::Offensive, RelicType::Survival, RelicType::MentalRecovery };
+        return CreateRelic(specials[RandomInt(0, 2)], sourceName);
+    }
+    return CreateRelic(RelicType::Unique, u8"欲望の揺籃");
+}
+
+int SceneNarakuProto::GetRelicActivity(const RelicItem& item) const
+{
+    if (item.stabilized || item.broken) return 0;
+    switch (item.type)
+    {
+    case RelicType::CashLow: return 1;
+    case RelicType::CashHigh: return 3;
+    case RelicType::ArmamentUpgrade:
+    case RelicType::WeaponUpgrade:
+    case RelicType::ArmorUpgrade:
+    case RelicType::MentalRecovery: return 2;
+    case RelicType::Offensive:
+    case RelicType::Survival: return 4;
+    case RelicType::Unique: return 8;
+    default: return 0;
+    }
+}
+
+int SceneNarakuProto::GetCurrentActivity() const
+{
+    int activity = 0;
+    for (const RelicItem& item : m_inventory) activity += GetRelicActivity(item);
+    return activity;
+}
+
+bool SceneNarakuProto::IsRelicSellable(const RelicItem& item) const
+{
+    if (item.type == RelicType::Unique) return false;
+    if (item.type == RelicType::Offensive && !item.broken) return false;
+    return item.value > 0;
+}
+
+bool SceneNarakuProto::UseMentalRecoveryRelic(int inventoryIndex)
+{
+    if (inventoryIndex < 0 || inventoryIndex >= static_cast<int>(m_inventory.size())) return false;
+    const RelicItem& item = m_inventory[inventoryIndex];
+    if (item.type != RelicType::MentalRecovery || item.broken || m_player.mental >= GetMaxMental()) return false;
+    m_player.mental = std::min(GetMaxMental(), m_player.mental + 10.0f * GetMentalRecoveryMultiplier());
+    m_inventory.erase(m_inventory.begin() + inventoryIndex);
+    AddMessage(u8"精神力回復遺物を使用しました。");
+    return true;
+}
+
+bool SceneNarakuProto::TryConsumeSurvivalRelic(bool hpLethal, bool mentalLethal)
+{
+    for (RelicItem& item : m_inventory)
+    {
+        if (item.type != RelicType::Survival || item.broken || !item.autoTrigger) continue;
+        item.broken = true;
+        item.value = 5;
+        if (hpLethal) m_player.hp = 1.0f;
+        if (mentalLethal) m_player.mental = 1.0f;
+        AddMessage(u8"生存的遺物が致命傷を防ぎ、破損しました。");
+        return true;
+    }
+    return false;
 }
 
 void SceneNarakuProto::UseFood()
@@ -4079,14 +5379,35 @@ void SceneNarakuProto::UseFood()
         ShowCenterNotification(u8"食料がない！");
         return;
     }
-    if (m_player.hp >= 10.0f)
+    if (m_foodUseTimer > 0.0f) return;
+    if (m_player.hp >= GetMaxHp() && m_fullness >= kFullnessMaximum)
     {
-        AddMessage(u8"体力が満タンのため食料を使いませんでした。");
+        AddMessage(u8"体力と満腹度が満タンのため食料を使いませんでした。");
         return;
     }
-    --m_foodCount;
-    m_player.hp = std::min(10.0f, m_player.hp + 2.0f);
-    AddMessage(u8"食料を使い、体力を2回復しました。");
+    m_foodUseTimer = 0.5f;
+    AddMessage(u8"食料を食べ始めました。");
+}
+
+bool SceneNarakuProto::TryUseRestaurant()
+{
+    if (m_money < kRestaurantPrice)
+    {
+        ShowCenterNotification(u8"所持金が足りません。");
+        return false;
+    }
+    if (m_fullness >= kFullnessMaximum && m_player.hp >= GetMaxHp() && m_player.mental >= GetMaxMental())
+    {
+        ShowCenterNotification(u8"今は食事をする必要がありません。");
+        return false;
+    }
+    m_money -= kRestaurantPrice;
+    m_fullness = kFullnessMaximum;
+    m_player.hp = std::min(GetMaxHp(), m_player.hp + GetMaxHp() * kRestaurantHpRatio);
+    m_player.mental = std::min(GetMaxMental(), m_player.mental + GetMaxMental() * kRestaurantMentalRatio);
+    SaveProgress();
+    ShowCenterNotification(u8"食事をして満腹になりました。");
+    return true;
 }
 
 const char* SceneNarakuProto::GetArmorName(ArmorTier tier) const
@@ -4100,6 +5421,20 @@ const char* SceneNarakuProto::GetArmorName(ArmorTier tier) const
     case ArmorTier::RelicEnhanced: return u8"遺物で強化されたシリーズ";
     case ArmorTier::Relic: return u8"遺物装備";
     default: return u8"不明な装備";
+    }
+}
+
+const char* SceneNarakuProto::GetArmorEffectText(ArmorTier tier, bool headSlot) const
+{
+    switch (tier)
+    {
+    case ArmorTier::Leather: return headSlot ? u8"防御力+4%" : u8"防御力+6%";
+    case ArmorTier::Iron: return headSlot ? u8"防御力+10%" : u8"防御力+15%";
+    case ArmorTier::RelicCovered: return headSlot ? u8"攻撃力+4% / 防御力+16%" : u8"攻撃力+6% / 防御力+24%";
+    case ArmorTier::RelicHardened: return headSlot ? u8"防御力+32%" : u8"防御力+48%";
+    case ArmorTier::RelicEnhanced: return headSlot ? u8"攻撃力+10% / 防御力+24%" : u8"攻撃力+15% / 防御力+36%";
+    case ArmorTier::Relic: return headSlot ? u8"攻撃力+10% / 防御力+30%" : u8"攻撃力+15% / 防御力+45%";
+    default: return u8"効果なし";
     }
 }
 
@@ -4122,12 +5457,25 @@ const char* SceneNarakuProto::GetWeaponName(WeaponTier tier) const
     }
 }
 
+const char* SceneNarakuProto::GetWeaponEffectText(WeaponTier tier) const
+{
+    switch (tier)
+    {
+    case WeaponTier::RustyPickaxe: return u8"攻撃力+0% / 採掘速度+0%";
+    case WeaponTier::NormalPickaxe: return u8"攻撃力+0% / 採掘速度+35%";
+    case WeaponTier::SturdyPickaxe: return u8"攻撃力+0% / 採掘速度+80%";
+    case WeaponTier::SharpPickaxe: return u8"攻撃力+0% / 採掘速度+100%";
+    case WeaponTier::RelicPickaxe: return u8"攻撃力+0% / 採掘速度+150%";
+    default: return u8"効果なし";
+    }
+}
+
 bool SceneNarakuProto::TryBuyArmor(ArmorTier tier, bool headSlot, bool useMaterials)
 {
-    static const int materialPrices[][2] = { { 10, 15 }, { 15, 20 }, { 20, 30 }, { 25, 35 }, { 35, 40 }, { 50, 60 } };
-    static const int moneyPrices[][2] = { { 10, 15 }, { 30, 40 }, { 40, 60 }, { 50, 70 }, { 70, 80 }, { 100, 120 } };
-    static const int armamentCosts[] = { 0, 0, 1, 2, 2, 3 };
-    static const int armorCosts[] = { 0, 0, 1, 1, 2, 5 };
+    static const int materialPrices[][2] = { { 10, 15 }, { 150, 200 }, { 200, 300 }, { 250, 350 }, { 350, 400 }, { 5000, 6000 } };
+    static const int moneyPrices[][2] = { { 10, 15 }, { 150, 200 }, { 1000, 1500 }, { 1250, 1750 }, { 1750, 2000 }, { 25000, 30000 } };
+    static const int armamentCosts[][2] = { { 0, 0 }, { 0, 0 }, { 3, 4 }, { 4, 6 }, { 7, 10 }, { 17, 19 } };
+    static const int armorCosts[][2] = { { 0, 0 }, { 0, 0 }, { 5, 7 }, { 7, 9 }, { 5, 7 }, { 15, 19 } };
     const std::size_t tierIndex = static_cast<std::size_t>(tier);
     const int slotIndex = headSlot ? 0 : 1;
     std::array<bool, static_cast<std::size_t>(ArmorTier::Count)>& owned = headSlot ? m_ownedHeadArmor : m_ownedBodyArmor;
@@ -4136,7 +5484,8 @@ bool SceneNarakuProto::TryBuyArmor(ArmorTier tier, bool headSlot, bool useMateri
     const int price = useMaterials ? materialPrices[tierIndex][slotIndex] : moneyPrices[tierIndex][slotIndex];
     const std::size_t armamentIndex = static_cast<std::size_t>(RelicType::ArmamentUpgrade);
     const std::size_t armorIndex = static_cast<std::size_t>(RelicType::ArmorUpgrade);
-    if (m_money < price || (useMaterials && (m_storedRelics[armamentIndex] < armamentCosts[tierIndex] || m_storedRelics[armorIndex] < armorCosts[tierIndex])))
+    if (m_money < price || (useMaterials && (CountStoredRelics(RelicType::ArmamentUpgrade) < armamentCosts[tierIndex][slotIndex] ||
+        CountStoredRelics(RelicType::ArmorUpgrade) < armorCosts[tierIndex][slotIndex])))
     {
         AddMessage(u8"購入に必要な金額または遺物が不足しています。");
         return false;
@@ -4145,29 +5494,31 @@ bool SceneNarakuProto::TryBuyArmor(ArmorTier tier, bool headSlot, bool useMateri
     m_money -= price;
     if (useMaterials)
     {
-        m_storedRelics[armamentIndex] -= armamentCosts[tierIndex];
-        m_storedRelics[armorIndex] -= armorCosts[tierIndex];
-        m_loadoutRelics[armamentIndex] = std::min(m_loadoutRelics[armamentIndex], m_storedRelics[armamentIndex]);
-        m_loadoutRelics[armorIndex] = std::min(m_loadoutRelics[armorIndex], m_storedRelics[armorIndex]);
+        RemoveStoredRelics(RelicType::ArmamentUpgrade, armamentCosts[tierIndex][slotIndex]);
+        RemoveStoredRelics(RelicType::ArmorUpgrade, armorCosts[tierIndex][slotIndex]);
+        m_loadoutRelics[armamentIndex] = std::min(m_loadoutRelics[armamentIndex], CountStoredRelics(RelicType::ArmamentUpgrade));
+        m_loadoutRelics[armorIndex] = std::min(m_loadoutRelics[armorIndex], CountStoredRelics(RelicType::ArmorUpgrade));
     }
     owned[tierIndex] = true;
     AddMessage(u8"装備を購入しました。");
+    SaveProgress();
     return true;
 }
 
 bool SceneNarakuProto::TryBuyWeapon(WeaponTier tier, bool useMaterials)
 {
-    static const int materialPrices[] = { 5, 10, 25, 50, 150 };
-    static const int moneyPrices[] = { 5, 10, 25, 50, 400 };
-    static const int armamentCosts[] = { 0, 0, 0, 0, 2 };
-    static const int weaponCosts[] = { 0, 0, 0, 0, 3 };
+    static const int materialPrices[] = { 5, 500, 1250, 1500, 5000 };
+    static const int moneyPrices[] = { 5, 500, 1250, 1500, 25000 };
+    static const int armamentCosts[] = { 0, 0, 0, 0, 11 };
+    static const int weaponCosts[] = { 0, 0, 0, 0, 21 };
     const std::size_t tierIndex = static_cast<std::size_t>(tier);
     if (m_ownedWeapons[tierIndex]) return false;
 
     const int price = useMaterials ? materialPrices[tierIndex] : moneyPrices[tierIndex];
     const std::size_t armamentIndex = static_cast<std::size_t>(RelicType::ArmamentUpgrade);
     const std::size_t weaponIndex = static_cast<std::size_t>(RelicType::WeaponUpgrade);
-    if (m_money < price || (useMaterials && (m_storedRelics[armamentIndex] < armamentCosts[tierIndex] || m_storedRelics[weaponIndex] < weaponCosts[tierIndex])))
+    if (m_money < price || (useMaterials && (CountStoredRelics(RelicType::ArmamentUpgrade) < armamentCosts[tierIndex] ||
+        CountStoredRelics(RelicType::WeaponUpgrade) < weaponCosts[tierIndex])))
     {
         AddMessage(u8"購入に必要な金額または遺物が不足しています。");
         return false;
@@ -4176,13 +5527,14 @@ bool SceneNarakuProto::TryBuyWeapon(WeaponTier tier, bool useMaterials)
     m_money -= price;
     if (useMaterials)
     {
-        m_storedRelics[armamentIndex] -= armamentCosts[tierIndex];
-        m_storedRelics[weaponIndex] -= weaponCosts[tierIndex];
-        m_loadoutRelics[armamentIndex] = std::min(m_loadoutRelics[armamentIndex], m_storedRelics[armamentIndex]);
-        m_loadoutRelics[weaponIndex] = std::min(m_loadoutRelics[weaponIndex], m_storedRelics[weaponIndex]);
+        RemoveStoredRelics(RelicType::ArmamentUpgrade, armamentCosts[tierIndex]);
+        RemoveStoredRelics(RelicType::WeaponUpgrade, weaponCosts[tierIndex]);
+        m_loadoutRelics[armamentIndex] = std::min(m_loadoutRelics[armamentIndex], CountStoredRelics(RelicType::ArmamentUpgrade));
+        m_loadoutRelics[weaponIndex] = std::min(m_loadoutRelics[weaponIndex], CountStoredRelics(RelicType::WeaponUpgrade));
     }
     m_ownedWeapons[tierIndex] = true;
     AddMessage(u8"武器を購入しました。");
+    SaveProgress();
     return true;
 }
 
@@ -4201,11 +5553,6 @@ float SceneNarakuProto::GetCurrentWeight() const
     return weight;
 }
 
-float SceneNarakuProto::GetMaxWeight() const
-{
-    return HasRelicArmorSetEffect() ? 200.0f : kMaxWeight;
-}
-
 float SceneNarakuProto::GetPickupWeightLimit() const
 {
     return std::max(kPickupWeightLimit, GetMaxWeight());
@@ -4218,22 +5565,22 @@ float SceneNarakuProto::GetWeightRate() const
 
 float SceneNarakuProto::GetMoveSpeed() const
 {
-    // まず通常歩行速度を基準にします。
-    float speed = m_debugPlayerParams.walkSpeed;
+    const float levelMove = 1.0f + (2.50f - 1.0f) * GetLevelGrowth();
+    float speed = m_debugPlayerParams.walkSpeed * levelMove * (1.0f + GetEquipmentBonus().walkSpeed);
 
     // 重量70%以上では移動速度を25%下げます。
     if (GetWeightRate() >= 0.70f) speed *= 0.75f;
 
-    if (HasRelicArmorSetEffect()) speed *= kRelicArmorWalkMultiplier;
-
     // 重量補正済みの歩行速度を返します。
-    return speed;
+    return RoundToHundredth(speed);
 }
 
 float SceneNarakuProto::GetStaminaCost(float baseCost) const
 {
-    // 重量90%以上ではスタミナ消費を2倍にします。
-    return GetWeightRate() >= 0.90f ? baseCost * 2.0f : baseCost;
+    float cost = GetWeightRate() >= 0.90f ? baseCost * 2.0f : baseCost;
+    if (m_fullness <= 10.0f) cost *= 1.50f;
+    else if (m_fullness <= 30.0f) cost *= 1.25f;
+    return cost;
 }
 
 bool SceneNarakuProto::CanSpendStamina(float baseCost) const
@@ -4246,6 +5593,293 @@ void SceneNarakuProto::SpendStamina(float baseCost)
 {
     // 重量補正後の消費量を差し引き、0未満にならないようにします。
     m_player.stamina = std::max(0.0f, m_player.stamina - GetStaminaCost(baseCost));
+}
+
+int SceneNarakuProto::GetCurrentDepth() const
+{
+    if (m_mode == Mode::Loading && m_loadingSourceGateIndex >= 0 &&
+        m_loadingSourceGateIndex < static_cast<int>(m_layerGates.size()))
+    {
+        const int destination = m_layerGates[m_loadingSourceGateIndex].destinationAreaIndex;
+        if (destination >= 0 && destination < static_cast<int>(m_areas.size()))
+            return ClampDepth(m_areas[destination].depth);
+    }
+    if (m_currentAreaIndex >= 0 && m_currentAreaIndex < static_cast<int>(m_areas.size()))
+    {
+        return ClampDepth(m_areas[m_currentAreaIndex].depth);
+    }
+    return 1;
+}
+
+float SceneNarakuProto::GetDepthExpMultiplier(int depth) const { return GetRulesForDepth(depth).regularExp; }
+float SceneNarakuProto::GetDepthMovementExpMultiplier(int depth) const { return GetRulesForDepth(depth).movementExp; }
+float SceneNarakuProto::GetDepthHungerMultiplier(int depth) const { return GetRulesForDepth(depth).hunger; }
+float SceneNarakuProto::GetDepthRewardMultiplier(int depth) const { return GetRulesForDepth(depth).reward; }
+float SceneNarakuProto::GetDepthStayRewardMultiplier(int depth) const { return GetRulesForDepth(depth).stayReward; }
+
+float SceneNarakuProto::GetLevelGrowth() const
+{
+    const float t = static_cast<float>(std::max(0, std::min(99, m_level - 1))) / 99.0f;
+    return (1.0f - std::exp(-0.5f * t)) / (1.0f - std::exp(-0.5f));
+}
+
+SceneNarakuProto::EquipmentBonus SceneNarakuProto::GetEquipmentBonus() const
+{
+    EquipmentBonus bonus;
+    auto addArmor = [&bonus](ArmorTier tier, bool head)
+    {
+        const float slot = head ? 0.4f : 0.6f;
+        switch (tier)
+        {
+        case ArmorTier::Leather: bonus.defense += 0.10f * slot; break;
+        case ArmorTier::Iron: bonus.defense += 0.25f * slot; break;
+        case ArmorTier::RelicCovered: bonus.attack += 0.10f * slot; bonus.defense += 0.40f * slot; break;
+        case ArmorTier::RelicHardened: bonus.defense += 0.80f * slot; break;
+        case ArmorTier::RelicEnhanced: bonus.attack += 0.25f * slot; bonus.defense += 0.60f * slot; break;
+        case ArmorTier::Relic:
+            bonus.attack += head ? 0.10f : 0.15f;
+            bonus.defense += head ? 0.30f : 0.45f;
+            break;
+        default: break;
+        }
+    };
+    addArmor(m_equippedHeadArmor, true);
+    addArmor(m_equippedBodyArmor, false);
+    if (HasRelicArmorSetEffect())
+    {
+        bonus.maxWeight += 1.00f;
+        bonus.walkSpeed += 0.20f;
+        bonus.runSpeed += 1.00f;
+        bonus.hpRecoveryPerSecond += 2.0f;
+        bonus.attack += 0.25f;
+        bonus.miningSpeed += 0.50f;
+    }
+    switch (m_equippedWeapon)
+    {
+    case WeaponTier::NormalPickaxe: bonus.miningSpeed += 0.35f; break;
+    case WeaponTier::SturdyPickaxe: bonus.miningSpeed += 0.80f; break;
+    case WeaponTier::SharpPickaxe: bonus.miningSpeed += 1.00f; break;
+    case WeaponTier::RelicPickaxe: bonus.miningSpeed += 1.50f; break;
+    default: break;
+    }
+    return bonus;
+}
+
+float SceneNarakuProto::GetMaxHp() const
+{
+    const float levelValue = kPlayerBaseMaxHp + (1200.0f - kPlayerBaseMaxHp) * GetLevelGrowth();
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().maxHp));
+}
+
+float SceneNarakuProto::GetMaxStamina() const
+{
+    const float levelValue = kPlayerBaseMaxStamina + (800.0f - kPlayerBaseMaxStamina) * GetLevelGrowth();
+    const float hungerScale = m_fullness <= 10.0f ? 0.70f : (m_fullness <= 25.0f ? 0.90f : 1.0f);
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().maxStamina) * hungerScale);
+}
+
+float SceneNarakuProto::GetMaxMental() const
+{
+    const float levelValue = kPlayerBaseMaxMental + (700.0f - kPlayerBaseMaxMental) * GetLevelGrowth();
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().maxMental));
+}
+
+float SceneNarakuProto::GetMaxWeight() const
+{
+    const float levelValue = kMaxWeight + (500.0f - kMaxWeight) * GetLevelGrowth();
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().maxWeight));
+}
+
+float SceneNarakuProto::GetStaminaRecoveryMultiplier() const
+{
+    const float levelValue = 1.0f + (5.40f - 1.0f) * GetLevelGrowth();
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().staminaRecovery));
+}
+
+float SceneNarakuProto::GetMentalRecoveryMultiplier() const
+{
+    const float levelValue = 1.0f + (2.50f - 1.0f) * GetLevelGrowth();
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().mentalRecovery));
+}
+
+float SceneNarakuProto::GetAttackPower() const
+{
+    const float levelValue = kPlayerBaseAttack * (1.0f + (3.0f - 1.0f) * GetLevelGrowth());
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().attack));
+}
+
+float SceneNarakuProto::GetDefenseMultiplier() const
+{
+    const float levelValue = kPlayerBaseDefense * (1.0f + (4.50f - 1.0f) * GetLevelGrowth());
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().defense));
+}
+
+float SceneNarakuProto::GetRunSpeed() const
+{
+    const float levelMove = 1.0f + (2.50f - 1.0f) * GetLevelGrowth();
+    return RoundToHundredth(m_debugPlayerParams.runSpeed * levelMove * (1.0f + GetEquipmentBonus().runSpeed));
+}
+
+float SceneNarakuProto::GetRopeSpeed(bool ascending) const
+{
+    const float maximum = ascending ? 2.50f : 12.0f;
+    const float levelSpeed = 1.0f + (maximum - 1.0f) * GetLevelGrowth();
+    const EquipmentBonus bonus = GetEquipmentBonus();
+    return RoundToHundredth(m_debugPlayerParams.ropeSpeed * levelSpeed *
+        (1.0f + (ascending ? bonus.ropeAscentSpeed : bonus.ropeDescentSpeed)));
+}
+
+float SceneNarakuProto::GetMiningSpeedMultiplier() const
+{
+    const float levelSpeed = 1.0f + (10.0f - 1.0f) * GetLevelGrowth();
+    return RoundToHundredth(levelSpeed * (1.0f + GetEquipmentBonus().miningSpeed));
+}
+
+void SceneNarakuProto::PreserveResourceRatios(float oldMaxHp, float oldMaxStamina, float oldMaxMental)
+{
+    const float hpRatio = oldMaxHp > 0.0f ? m_player.hp / oldMaxHp : 1.0f;
+    const float staminaRatio = oldMaxStamina > 0.0f ? m_player.stamina / oldMaxStamina : 1.0f;
+    const float mentalRatio = oldMaxMental > 0.0f ? m_player.mental / oldMaxMental : 1.0f;
+    m_player.hp = std::max(0.0f, std::min(GetMaxHp(), GetMaxHp() * hpRatio));
+    m_player.stamina = std::max(0.0f, std::min(GetMaxStamina(), GetMaxStamina() * staminaRatio));
+    m_player.mental = std::max(0.0f, std::min(GetMaxMental(), GetMaxMental() * mentalRatio));
+}
+
+int SceneNarakuProto::GetRequiredExp(int level) const
+{
+    static const int anchorLevels[] = { 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 99 };
+    static const int anchorExp[] = { 100, 1000, 4000, 7500, 12000, 25000, 87500, 156000, 468000, 785625, 1500000 };
+    level = std::max(1, std::min(99, level));
+    for (int i = 0; i < 10; ++i)
+    {
+        if (level > anchorLevels[i + 1]) continue;
+        const float span = static_cast<float>(anchorLevels[i + 1] - anchorLevels[i]);
+        const float t = span > 0.0f ? static_cast<float>(level - anchorLevels[i]) / span : 0.0f;
+        const double ratio = static_cast<double>(anchorExp[i + 1]) / static_cast<double>(anchorExp[i]);
+        return static_cast<int>(std::llround(static_cast<double>(anchorExp[i]) * std::pow(ratio, t)));
+    }
+    return anchorExp[10];
+}
+
+void SceneNarakuProto::AwardExp(int amount)
+{
+    if (amount <= 0) return;
+    if (m_level >= 100)
+    {
+        m_level100OverflowExp += amount;
+        while (m_level100OverflowExp >= kLevel100ProtectionExp && m_levelProtection < std::numeric_limits<int>::max())
+        {
+            m_level100OverflowExp -= kLevel100ProtectionExp;
+            ++m_levelProtection;
+        }
+        return;
+    }
+
+    m_currentExp += amount;
+    while (m_level < 100)
+    {
+        const int required = GetRequiredExp(m_level);
+        if (m_currentExp < required) break;
+        const float oldHp = GetMaxHp();
+        const float oldStamina = GetMaxStamina();
+        const float oldMental = GetMaxMental();
+        m_currentExp -= required;
+        ++m_level;
+        PreserveResourceRatios(oldHp, oldStamina, oldMental);
+        ShowCenterNotification(u8"レベルが上がった！");
+    }
+    if (m_level >= 100 && m_currentExp > 0)
+    {
+        m_level100OverflowExp += m_currentExp;
+        m_currentExp = 0;
+        while (m_level100OverflowExp >= kLevel100ProtectionExp && m_levelProtection < std::numeric_limits<int>::max())
+        {
+            m_level100OverflowExp -= kLevel100ProtectionExp;
+            ++m_levelProtection;
+        }
+    }
+}
+
+std::string SceneNarakuProto::FormatExp(std::int64_t value) const
+{
+    if (value < 1000) return std::to_string(value);
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(1) << static_cast<double>(value) / 1000.0 << 'k';
+    return stream.str();
+}
+
+int SceneNarakuProto::GetDeathLevelLoss(DeathCause cause) const
+{
+    switch (cause)
+    {
+    case DeathCause::Fall: return 5;
+    case DeathCause::UpperLoad: return 3;
+    case DeathCause::Enemy:
+    case DeathCause::Starvation: return 2;
+    default: return 1;
+    }
+}
+
+void SceneNarakuProto::ApplyDeathPenalty(DeathCause cause)
+{
+    const float oldHp = GetMaxHp();
+    const float oldStamina = GetMaxStamina();
+    const float oldMental = GetMaxMental();
+    int loss = std::min(GetDeathLevelLoss(cause), std::max(0, m_level - 1));
+    m_result.levelBeforeDeath = m_level;
+    const int protectedLevels = std::min(loss, m_levelProtection);
+    m_levelProtection -= protectedLevels;
+    m_result.protectionConsumed = protectedLevels;
+    loss -= protectedLevels;
+    m_level = std::max(1, m_level - loss);
+    m_result.levelAfterDeath = m_level;
+    m_currentExp = 0;
+    m_level100OverflowExp = 0;
+    PreserveResourceRatios(oldHp, oldStamina, oldMental);
+}
+
+void SceneNarakuProto::ApplyAbandonPenalty()
+{
+    if (m_level <= 1 && m_currentExp <= 0) return;
+    const float progress = static_cast<float>(m_level) +
+        static_cast<float>(m_currentExp) / static_cast<float>(GetRequiredExp(m_level));
+    const float result = std::max(1.0f, progress - 0.5f);
+    m_level = std::max(1, std::min(100, static_cast<int>(std::floor(result))));
+    if (m_level >= 100) m_currentExp = 0;
+    else m_currentExp = static_cast<int>(std::round((result - std::floor(result)) * GetRequiredExp(m_level)));
+}
+
+void SceneNarakuProto::ApplyPlayerDamage(float damage, DeathCause cause, const char* reason)
+{
+    const float applied = std::max(1.0f, damage / std::max(1.0f, GetDefenseMultiplier()));
+    if (cause != DeathCause::Fall && cause != DeathCause::Starvation &&
+        m_player.hp - applied <= 0.0f && TryConsumeSurvivalRelic(true, false)) return;
+    m_player.hp = std::max(0.0f, m_player.hp - applied);
+    if (m_player.hp <= 0.0f) StartDeath(reason, cause);
+}
+
+void SceneNarakuProto::ApplyMentalDamage(float damage, DeathCause cause, const char* reason)
+{
+    if (m_player.mental - damage <= 0.0f && TryConsumeSurvivalRelic(false, true)) return;
+    m_player.mental = std::max(0.0f, m_player.mental - damage);
+    if (m_player.mental <= 0.0f) StartDeath(reason, cause);
+}
+
+int SceneNarakuProto::CountStoredRelics(RelicType type) const
+{
+    return static_cast<int>(std::count_if(m_storedInventory.begin(), m_storedInventory.end(),
+        [type](const RelicItem& item) { return item.type == type; }));
+}
+
+bool SceneNarakuProto::RemoveStoredRelics(RelicType type, int count)
+{
+    if (count < 0 || CountStoredRelics(type) < count) return false;
+    for (auto it = m_storedInventory.begin(); it != m_storedInventory.end() && count > 0;)
+    {
+        if (it->type == type) { it = m_storedInventory.erase(it); --count; }
+        else ++it;
+    }
+    return count == 0;
 }
 
 bool SceneNarakuProto::IsNear(const Vec2& a, const Vec2& b, float range) const
@@ -4907,7 +6541,7 @@ void SceneNarakuProto::DrawMiniMap()
 
     for (const MiningPoint& point : m_miningPoints)
     {
-        const bool visible = point.mined || point.discovered;
+        const bool visible = point.mined || point.discovered || point.sensed;
         if (!visible) continue;
 
         Vec2 p = WorldToCanvas(canvasPos, canvasSize, point.pos, m_mapZoom, m_player.pos);
@@ -4931,6 +6565,13 @@ void SceneNarakuProto::DrawMiniMap()
     for (const EnemyState& enemy : m_enemies)
     {
         if (!enemy.alive) continue;
+        if (enemy.type == EnemyType::Territory)
+        {
+            const Vec2 center = WorldToCanvas(canvasPos, canvasSize, enemy.territoryCenter, m_mapZoom, m_player.pos);
+            const Vec2 edge = WorldToCanvas(canvasPos, canvasSize,
+                Add(enemy.territoryCenter, { enemy.territoryRadius, 0.0f }), m_mapZoom, m_player.pos);
+            draw->AddCircleFilled(ImVec2(center.x, center.y), std::fabs(edge.x - center.x), IM_COL32(20, 15, 28, 80));
+        }
         Vec2 p = WorldToCanvas(canvasPos, canvasSize, enemy.pos, m_mapZoom, m_player.pos);
         ImU32 color = enemy.telegraphTimer > 0.0f ? IM_COL32(255, 200, 60, 255) : IM_COL32(210, 70, 70, 255);
         if (enemy.chargeTimer > 0.0f) color = IM_COL32(255, 80, 40, 255);

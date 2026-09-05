@@ -6,6 +6,7 @@
 #include <DirectXMath.h>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -74,7 +75,7 @@ private:
         float previousWorldY = 0.0f;
 
         /** @brief 体力です。0になると死亡リザルトへ移行します。 */
-        float hp = 10.0f;
+        float hp = 100.0f;
 
         /** @brief 精神力です。上昇負荷の発症で減少します。 */
         float mental = 100.0f;
@@ -129,9 +130,33 @@ private:
         ArmorUpgrade,
         Offensive,
         Survival,
-        Cash,
+        CashLow,
+        CashHigh,
         MentalRecovery,
+        Unique,
         Count
+    };
+
+    enum class EnemyType
+    {
+        Charger,
+        Territory
+    };
+
+    enum class TerritoryRank
+    {
+        Low,
+        Middle,
+        High
+    };
+
+    enum class DeathCause
+    {
+        Other,
+        Enemy,
+        Starvation,
+        UpperLoad,
+        Fall
     };
 
     enum class ArmorTier
@@ -162,13 +187,20 @@ private:
         std::string name;
 
         /** @brief 採掘時に確定する遺物種類です。 */
-        RelicType type = RelicType::Cash;
+        RelicType type = RelicType::CashLow;
 
         /** @brief 遺物種類に応じた重量です。 */
         float weight = 10.0f;
 
         /** @brief 遺物種類に応じた売却価格です。 */
         int value = 30;
+
+        int maxUses = 0;
+        int remainingUses = 0;
+        std::uint64_t acquisitionOrder = 0;
+        bool broken = false;
+        bool stabilized = false;
+        bool autoTrigger = true;
     };
 
     /**
@@ -229,6 +261,8 @@ private:
         /** @brief すでに採掘済みかどうかです。true なら再採掘できません。 */
         bool mined = false;
 
+        bool sensed = false;
+
         /** @brief 採掘完了時に発見される旧器名です。 */
         std::string relicName;
     };
@@ -246,11 +280,26 @@ private:
         /** @brief 体当たり中に進む方向です。予備動作終了時に決定します。 */
         Vec2 chargeDir;
 
+        EnemyType type = EnemyType::Charger;
+        TerritoryRank territoryRank = TerritoryRank::Low;
+        Vec2 spawnPos;
+        Vec2 territoryCenter;
+        std::array<Vec2, 3> patrolPoints = {};
+        int patrolIndex = 0;
+
         /** @brief 敵が存在している深度です。別レイヤーのプレイヤーを追わない判定に使います。 */
         float depth = 0.0f;
 
         /** @brief 敵の体力です。つるはし3回程度で倒せるため3にしています。 */
         float hp = 3.0f;
+        float maxHp = 3.0f;
+        float attackDamage = 10.0f;
+        float searchRange = 8.0f;
+        float territoryRadius = 0.0f;
+        float moveSpeed = 0.75f;
+        float attackInterval = 5.0f;
+        float telegraphDuration = 0.55f;
+        float respawnTimer = 0.0f;
 
         /** @brief 落下中の縦速度です。大きい段差から落ちた時の空中更新に使います。 */
         float verticalSpeed = 0.0f;
@@ -275,6 +324,7 @@ private:
 
         /** @brief 生存しているかどうかです。false なら更新と描画を止めます。 */
         bool alive = true;
+        bool discovered = false;
 
         /** @brief 地面にいるかどうかです。false の間は落下中として扱います。 */
         bool grounded = true;
@@ -284,6 +334,7 @@ private:
 
         /** @brief プレイヤーの現在の1攻撃で既に命中したかどうかです。 */
         bool hitByPlayerAttack = false;
+        bool hitByRelicAttack = false;
 
         /** @brief 着地直後の硬直残り時間です。0より大きい間は通常追跡と体当たり開始を止めます。 */
         float landingRecoveryTimer = 0.0f;
@@ -340,13 +391,28 @@ private:
         Vec2 loadPos;
         float depth = 0.0f;
         int destinationAreaIndex = -1;
+        int connectionId = -1;
         int generationFailures = 0;
         bool disabled = false;
+        bool routeDiscovered = false;
+        bool previewReady = false;
+    };
+
+    struct PlannedLayerGate
+    {
+        bool isEntry = false;
+        int destinationAreaIndex = -1;
+        int connectionId = -1;
     };
 
     struct AreaState
     {
         int depth = 1;
+        int sublayer = 0;
+        int areaNumber = 1;
+        bool generated = false;
+        bool canReturn = false;
+        std::vector<PlannedLayerGate> plannedGates;
         NarakuMap::MapData map;
         std::vector<GroundRelic> groundRelics;
         std::vector<GroundFood> groundFoods;
@@ -361,6 +427,17 @@ private:
         Vec2 returnPoint;
         float returnDepth = 0.0f;
         float worldHalfSize = 1.0f;
+        float sensingTimer = 0.0f;
+        float respawnClock = 0.0f;
+        int discoveredEnemyCount = 0;
+        int discoveredMiningCount = 0;
+        int discoveredCliffCount = 0;
+        int totalCliffCount = 0;
+        bool firstAreaExpAwarded = false;
+        bool firstAreaRewardAwarded = false;
+        std::vector<std::uint8_t> discoveredCells;
+        std::vector<std::uint8_t> discoveredCliffs;
+        std::array<bool, 4> cellExpThresholds = {};
     };
 
     /**
@@ -374,7 +451,7 @@ private:
         std::string reason;
 
         /** @brief 今回の潜行で到達した最大深度です。 */
-        float maxDepth = 0.0f;
+        int maxDepth = 1;
 
         /** @brief 今回の潜行で採掘した旧器数です。 */
         int minedCount = 0;
@@ -390,6 +467,36 @@ private:
 
         /** @brief 今回の帰還で初めて鑑定した遺物種類数です。 */
         int identifiedRelics = 0;
+
+        int explorationReward = 0;
+        int uniqueReward = 0;
+        std::array<int, 5> minedByDepth = {};
+        std::array<int, 5> chargerKillsByDepth = {};
+        std::array<int, 5> territoryKillsByDepth = {};
+        std::array<float, 5> staySecondsByDepth = {};
+        int firstAreaCount = 0;
+        int newRelicTypeCount = 0;
+        int levelBeforeDeath = 1;
+        int levelAfterDeath = 1;
+        int protectionConsumed = 0;
+    };
+
+    struct EquipmentBonus
+    {
+        float maxHp = 0.0f;
+        float maxStamina = 0.0f;
+        float maxMental = 0.0f;
+        float maxWeight = 0.0f;
+        float staminaRecovery = 0.0f;
+        float mentalRecovery = 0.0f;
+        float attack = 0.0f;
+        float defense = 0.0f;
+        float walkSpeed = 0.0f;
+        float runSpeed = 0.0f;
+        float miningSpeed = 0.0f;
+        float ropeAscentSpeed = 0.0f;
+        float ropeDescentSpeed = 0.0f;
+        float hpRecoveryPerSecond = 0.0f;
     };
 
     /**
@@ -470,6 +577,9 @@ private:
         /** @brief 帰還地点で帰還するか確認している状態です。 */
         ReturnConfirm,
 
+        /** @brief 探窟放棄前の確認状態です。 */
+        AbandonConfirm,
+
         /** @brief 生還後の鑑定結果と帰還先を表示している状態です。 */
         ReturnResult,
 
@@ -484,6 +594,9 @@ private:
 
         /** @brief 頭、胴装備とつるはしを購入する状態です。 */
         Armory,
+
+        /** @brief 地上で満腹度と体力を回復する状態です。 */
+        Restaurant,
 
         /** @brief 初回の層間口で接続先エリアを生成している状態です。 */
         Loading,
@@ -514,6 +627,11 @@ private:
     /** @brief 深度差から上昇負荷ゲージを加算または回復します。 */
     void UpdateUpperLoad(float dt);
 
+    void UpdateHunger(float dt);
+    void UpdateMentalAbilities(float dt);
+    void UpdateExplorationDiscovery();
+    void UpdateRespawns(float dt);
+
     void UpdateLoading();
     void UpdateLayerTransition(float dt);
 
@@ -533,7 +651,7 @@ private:
     bool IsShiftPress() const;
 
     /** @brief 死亡リザルトへ移行し、所持旧器とピンを失わせます。 */
-    void StartDeath(const char* reason);
+    void StartDeath(const char* reason, DeathCause cause = DeathCause::Other);
 
     /** @brief 帰還処理を確定し、持ち帰った遺物を鑑定して自宅在庫へ移します。 */
     void FinishReturn();
@@ -543,6 +661,7 @@ private:
 
     /** @brief 死亡後に再挑戦用の新しい潜行を開始します。 */
     void RestartAfterDeath();
+    void AbandonDive();
 
     /** @brief DirectXのデバッグ形状で3Dフィールドを描画します。 */
     void Draw3DField();
@@ -608,6 +727,7 @@ private:
 
     /** @brief 帰還地点での確認ウィンドウを描画します。 */
     void DrawReturnConfirm();
+    void DrawAbandonConfirm();
 
     /** @brief 自宅の装備変更、持ち込み品選択、潜行開始UIを描画します。 */
     void DrawHome();
@@ -617,6 +737,9 @@ private:
 
     /** @brief 武具屋の武具購入UIを描画します。 */
     void DrawArmory();
+    void DrawCurrentStatus();
+    void DrawRestaurant();
+    void DrawRouteInfo();
 
     /** @brief 所持品表示中に使う簡易地図とピン操作を描画します。 */
     void DrawMapControls();
@@ -650,6 +773,13 @@ private:
     /** @brief 装備中のつるはしによる採掘速度倍率を返します。 */
     float GetMiningSpeedMultiplier() const;
 
+    int GetCurrentDepth() const;
+    float GetDepthExpMultiplier(int depth) const;
+    float GetDepthMovementExpMultiplier(int depth) const;
+    float GetDepthHungerMultiplier(int depth) const;
+    float GetDepthRewardMultiplier(int depth) const;
+    float GetDepthStayRewardMultiplier(int depth) const;
+
     /** @brief 遺物種類に対応する表示名を返します。 */
     const char* GetRelicTypeName(RelicType type) const;
 
@@ -663,28 +793,41 @@ private:
     int GetRelicSellValue(RelicType type) const;
 
     /** @brief 指定種類の遺物アイテムを作成します。 */
-    RelicItem CreateRelic(RelicType type, const std::string& sourceName) const;
+    RelicItem CreateRelic(RelicType type, const std::string& sourceName);
 
     /** @brief 7種類から均等抽選した遺物を作成します。 */
-    RelicItem CreateRandomRelic(const std::string& sourceName) const;
+    RelicItem CreateRandomRelic(const std::string& sourceName);
+
+    int GetRelicActivity(const RelicItem& item) const;
+    int GetCurrentActivity() const;
+    bool IsRelicSellable(const RelicItem& item) const;
+    bool UseMentalRecoveryRelic(int inventoryIndex);
+    bool TryConsumeSurvivalRelic(bool hpLethal, bool mentalLethal);
 
     /** @brief 食料を1個使い、体力を2回復します。 */
     void UseFood();
 
+    bool TryUseRestaurant();
+
     /** @brief 装備名を返します。 */
     const char* GetArmorName(ArmorTier tier) const;
+    const char* GetArmorEffectText(ArmorTier tier, bool headSlot) const;
 
     /** @brief 頭と胴に遺物装備を揃えているか判定します。 */
     bool HasRelicArmorSetEffect() const;
 
     /** @brief 武器名を返します。 */
     const char* GetWeaponName(WeaponTier tier) const;
+    const char* GetWeaponEffectText(WeaponTier tier) const;
 
     /** @brief 所持金と素材を確認して装備を購入します。 */
     bool TryBuyArmor(ArmorTier tier, bool headSlot, bool useMaterials);
 
     /** @brief 所持金と素材を確認して武器を購入します。 */
     bool TryBuyWeapon(WeaponTier tier, bool useMaterials);
+
+    int CountStoredRelics(RelicType type) const;
+    bool RemoveStoredRelics(RelicType type, int count);
 
     /** @brief 現在の重量上限に対する現在重量の割合を返します。 */
     float GetWeightRate() const;
@@ -700,6 +843,27 @@ private:
 
     /** @brief 指定した基礎消費量を重量補正込みで実際に消費します。 */
     void SpendStamina(float baseCost);
+
+    EquipmentBonus GetEquipmentBonus() const;
+    float GetLevelGrowth() const;
+    float GetMaxHp() const;
+    float GetMaxStamina() const;
+    float GetMaxMental() const;
+    float GetStaminaRecoveryMultiplier() const;
+    float GetMentalRecoveryMultiplier() const;
+    float GetAttackPower() const;
+    float GetDefenseMultiplier() const;
+    float GetRunSpeed() const;
+    float GetRopeSpeed(bool ascending) const;
+    void PreserveResourceRatios(float oldMaxHp, float oldMaxStamina, float oldMaxMental);
+    int GetRequiredExp(int level) const;
+    void AwardExp(int amount);
+    std::string FormatExp(std::int64_t value) const;
+    void ApplyPlayerDamage(float damage, DeathCause cause, const char* reason);
+    void ApplyMentalDamage(float damage, DeathCause cause, const char* reason);
+    void ApplyDeathPenalty(DeathCause cause);
+    void ApplyAbandonPenalty();
+    int GetDeathLevelLoss(DeathCause cause) const;
 
     /** @brief 2点が指定距離以内かどうかを判定します。 */
     bool IsNear(const Vec2& a, const Vec2& b, float range) const;
@@ -731,10 +895,27 @@ private:
     void SaveCurrentAreaState();
     void ActivateArea(int areaIndex, bool placeAtEntry);
     void BuildCurrentAreaRuntime(bool placeAtStart);
+    bool BuildDiveStructure();
+    bool GeneratePlannedArea(int areaIndex, std::string& outError);
+    bool AssignPlannedGates(int areaIndex);
+    const char* GetSublayerName(int sublayer) const;
     void TryUseLayerGate(int gateIndex);
     void BeginLayerTransition(int sourceGateIndex, int destinationAreaIndex);
     bool LoadDebugPlayerParams();
     bool SaveDebugPlayerParams() const;
+    bool SaveProgress() const;
+    bool LoadProgress();
+    void InitializeNewProgress();
+    void SpawnEnemiesForCurrentArea();
+    bool RespawnEnemy(EnemyState& enemy);
+    EnemyState CreateEnemy(EnemyType type, int depth, const Vec2& position) const;
+    Vec2 FindEnemySpawnPoint(float minimumPlayerDistance, bool requireTerritory, bool* found) const;
+    bool HasTerritoryTreeDensity(const Vec2& position) const;
+    void AwardEnemyDefeat(const EnemyState& enemy);
+    int CalculateReturnReward() const;
+    void ActivateMiningSense();
+    void ActivateUpperLoadWard();
+    bool TryPreventUpperLoad();
 
     /** @brief プレイヤーの近くにある未発見採掘ポイントを発見済みにします。 */
     void DiscoverNearbyMiningPoints();
@@ -849,6 +1030,8 @@ private:
     /** @brief 現在所持している旧器一覧です。 */
     std::vector<RelicItem> m_inventory;
 
+    std::vector<RelicItem> m_storedInventory;
+
     /** @brief フィールド上に置かれている旧器一覧です。 */
     std::vector<GroundRelic> m_groundRelics;
 
@@ -945,6 +1128,9 @@ private:
     /** @brief 現在のシーン内モードです。 */
     Mode m_mode = Mode::Explore;
 
+    /** @brief Tキー画面で地図タブを表示しているかどうかです。 */
+    bool m_inventoryMapShowingMap = false;
+
     /** @brief 現在の潜行結果です。帰還/死亡リザルトで表示します。 */
     RunResult m_result;
 
@@ -987,6 +1173,30 @@ private:
     /** @brief 地上で持っている所持金です。 */
     int m_money = 0;
 
+    int m_level = 1;
+    int m_currentExp = 0;
+    int m_levelProtection = 0;
+    std::int64_t m_level100OverflowExp = 0;
+    float m_fullness = 75.0f;
+    std::array<float, 5> m_movementExpByDepth = {};
+    std::uint64_t m_nextRelicAcquisitionOrder = 1;
+    bool m_uniqueRelicReturned = false;
+    bool m_uniqueRelicCodexUnlocked = false;
+    bool m_uniqueRelicAchievementUnlocked = false;
+    bool m_uniqueRelicStoryUnlocked = false;
+    float m_qHoldTime = 0.0f;
+    bool m_qWasPressed = false;
+    bool m_qLongTriggered = false;
+    float m_upperLoadWardTimer = 0.0f;
+    float m_miningSenseTimer = 0.0f;
+    DeathCause m_pendingDeathCause = DeathCause::Other;
+    bool m_attackRelicTriggered = false;
+    float m_foodUseTimer = 0.0f;
+    float m_lastFrameMovementDistance = 0.0f;
+    bool m_lastFrameRunning = false;
+    bool m_lastFrameRopeMoving = false;
+    bool m_diedSinceLastDive = false;
+
     /** @brief 潜行中に持っている食料数です。 */
     int m_foodCount = 0;
 
@@ -997,8 +1207,6 @@ private:
     int m_loadoutFoodCount = 0;
 
     /** @brief 自宅に保管している鑑定済み遺物数です。 */
-    std::array<int, static_cast<std::size_t>(RelicType::Count)> m_storedRelics = {};
-
     /** @brief 次回潜行へ持ち込む鑑定済み遺物数です。 */
     std::array<int, static_cast<std::size_t>(RelicType::Count)> m_loadoutRelics = {};
 
@@ -1074,6 +1282,7 @@ private:
     struct EnvironmentModelResource
     {
         std::string id;
+        bool isTree = false;
         Model* model = nullptr;
         DirectX::XMFLOAT3 placementAnchor = {};
     };

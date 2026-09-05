@@ -257,7 +257,6 @@ void SceneNarakuPieceEditor::RenderTerrainPreviewToTexture()
 
 XMFLOAT2 SceneNarakuPieceEditor::GetPreviewViewportSize() const
 {
-    EDITOR_PROFILE_FUNCTION();
     // 条件に該当する場合は、現在の処理をここで終了します。
     if (m_previewImageSize.x >= 1.0f && m_previewImageSize.y >= 1.0f)
     {
@@ -675,9 +674,13 @@ void SceneNarakuPieceEditor::UpdateCameraMatrices()
 
     const XMFLOAT2 viewportSize = GetPreviewViewportSize();
     const float aspect = viewportSize.x / viewportSize.y;
-    XMStoreFloat4x4(
-        &m_projectionMatrix,
-        XMMatrixPerspectiveFovLH(XMConvertToRadians(kCameraFovDegrees), aspect, kCameraNearPlane, kCameraFarPlane));
+    const XMMATRIX projection = XMMatrixPerspectiveFovLH(
+        XMConvertToRadians(kCameraFovDegrees),
+        aspect,
+        kCameraNearPlane,
+        kCameraFarPlane);
+    XMStoreFloat4x4(&m_projectionMatrix, projection);
+    XMStoreFloat4x4(&m_viewProjectionMatrix, XMLoadFloat4x4(&m_viewMatrix) * projection);
 }
 
 void SceneNarakuPieceEditor::ResetCamera()
@@ -691,12 +694,9 @@ void SceneNarakuPieceEditor::ResetCamera()
 
 bool SceneNarakuPieceEditor::ProjectWorldToScreen(const XMFLOAT3& worldPos, XMFLOAT2& outScreen) const
 {
-    EDITOR_PROFILE_FUNCTION();
-    const XMMATRIX view = XMLoadFloat4x4(&m_viewMatrix);
-    const XMMATRIX projection = XMLoadFloat4x4(&m_projectionMatrix);
     const XMVECTOR clip = XMVector3TransformCoord(
         XMVectorSet(worldPos.x, worldPos.y, worldPos.z, 1.0f),
-        view * projection);
+        XMLoadFloat4x4(&m_viewProjectionMatrix));
 
     XMFLOAT3 ndc = {};
     XMStoreFloat3(&ndc, clip);
@@ -715,7 +715,7 @@ bool SceneNarakuPieceEditor::ProjectWorldToScreen(const XMFLOAT3& worldPos, XMFL
 bool SceneNarakuPieceEditor::PickTerrainVertex(POINT mousePos, int& outX, int& outZ) const
 {
     EDITOR_PROFILE_FUNCTION();
-    float bestDistance = kPickThresholdPx;
+    float bestDistanceSquared = kPickThresholdPx * kPickThresholdPx;
     bool found = false;
 
     // 指定した範囲を順に走査し、対象要素を処理します。
@@ -733,11 +733,11 @@ bool SceneNarakuPieceEditor::PickTerrainVertex(POINT mousePos, int& outX, int& o
 
             const float dx = static_cast<float>(mousePos.x) - screen.x;
             const float dy = static_cast<float>(mousePos.y) - screen.y;
-            const float distance = std::sqrt(dx * dx + dy * dy);
-            // 条件に該当する場合は、`bestDistance` の状態を更新します。
-            if (distance < bestDistance)
+            const float distanceSquared = dx * dx + dy * dy;
+            // 条件に該当する場合は、最短距離の二乗値を更新します。
+            if (distanceSquared < bestDistanceSquared)
             {
-                bestDistance = distance;
+                bestDistanceSquared = distanceSquared;
                 outX = x;
                 outZ = z;
                 found = true;
@@ -757,7 +757,7 @@ bool SceneNarakuPieceEditor::PickTerrainCell(POINT mousePos, int& outX, int& out
         return false;
     }
 
-    float bestDistance = kCellPickThresholdPx;
+    float bestDistanceSquared = kCellPickThresholdPx * kCellPickThresholdPx;
     bool found = false;
 
     // 指定した範囲を順に走査し、対象要素を処理します。
@@ -776,11 +776,11 @@ bool SceneNarakuPieceEditor::PickTerrainCell(POINT mousePos, int& outX, int& out
 
             const float dx = static_cast<float>(mousePos.x) - screen.x;
             const float dy = static_cast<float>(mousePos.y) - screen.y;
-            const float distance = std::sqrt(dx * dx + dy * dy);
-            // 条件に該当する場合は、`bestDistance` の状態を更新します。
-            if (distance < bestDistance)
+            const float distanceSquared = dx * dx + dy * dy;
+            // 条件に該当する場合は、最短距離の二乗値を更新します。
+            if (distanceSquared < bestDistanceSquared)
             {
-                bestDistance = distance;
+                bestDistanceSquared = distanceSquared;
                 outX = x;
                 outZ = z;
                 found = true;

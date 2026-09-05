@@ -155,6 +155,15 @@ private:
         size_t insertionOrder = 0;
     };
 
+    /** @brief Hierarchyウィンドウで再利用する表示用情報です。 */
+    struct PieceHierarchyDisplayEntry
+    {
+        size_t sourceIndex = 0;
+        std::wstring normalizedRelativePath;
+        std::string label;
+        std::string tooltip;
+    };
+
     /**
      * @brief Hierarchy一覧の並び順種別です。
      */
@@ -467,6 +476,9 @@ private:
      * @return 表示順に並べ替えた項目ポインタ一覧です。
      */
     std::vector<const PieceHierarchyEntry*> BuildSortedPieceHierarchyEntries() const;
+
+    /** @brief 登録内容とソート設定からHierarchy表示キャッシュを再構築します。 */
+    void RebuildPieceHierarchyDisplayCache();
 
     /**
      * @brief Hierarchy用の日時表示ラベルを作成します。
@@ -1218,6 +1230,9 @@ private:
     /** @brief プレビュー描画に使用する射影行列です。 */
     DirectX::XMFLOAT4X4 m_projectionMatrix = {};
 
+    /** @brief ピッキングの座標変換で再利用するビュー射影行列です。 */
+    DirectX::XMFLOAT4X4 m_viewProjectionMatrix = {};
+
     /** @brief カメラ回転時にY方向操作を反転するかどうかです。 */
     bool m_invertOrbitY = false;
 
@@ -1317,8 +1332,20 @@ private:
     /** @brief 環境モデルAssetsウィンドウの表示状態です。 */
     bool m_showEnvironmentAssetsWindow = true;
 
+    /** @brief ネイティブメニューへ最後に反映したウィンドウ表示状態です。 */
+    mutable unsigned int m_lastNativeMenuStateMask = 0xffffffffU;
+
+    /** @brief ネイティブメニューへ最後に反映した編集状態ラベルです。 */
+    mutable std::wstring m_lastNativeMenuStatusLabel;
+
     /** @brief 保存済み小ステージの登録一覧です。 */
     std::vector<PieceHierarchyEntry> m_pieceHierarchyEntries;
+
+    /** @brief 毎フレームのソートと文字列変換を避けるHierarchy表示キャッシュです。 */
+    std::vector<PieceHierarchyDisplayEntry> m_pieceHierarchyDisplayEntries;
+
+    /** @brief Hierarchy表示キャッシュの再構築が必要かどうかです。 */
+    bool m_pieceHierarchyDisplayDirty = true;
 
     /** @brief Hierarchy一覧の並び順です。 */
     PieceHierarchySortMode m_pieceHierarchySortMode = PieceHierarchySortMode::Insertion;

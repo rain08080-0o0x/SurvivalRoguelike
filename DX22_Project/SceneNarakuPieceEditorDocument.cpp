@@ -22,6 +22,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 
 using namespace DirectX;
 #include "NarakuPieceEditorInternal.h"
@@ -476,9 +477,13 @@ void SceneNarakuPieceEditor::DrawPieceHierarchyWindow()
     if (ImGui::Combo(u8"並び順", &sortMode, sortModeLabels, IM_ARRAYSIZE(sortModeLabels)))
     {
         m_pieceHierarchySortMode = static_cast<PieceHierarchySortMode>(sortMode);
+        m_pieceHierarchyDisplayDirty = true;
     }
     ImGui::SameLine();
-    ImGui::Checkbox(u8"降順", &m_pieceHierarchySortDescending);
+    if (ImGui::Checkbox(u8"降順", &m_pieceHierarchySortDescending))
+    {
+        m_pieceHierarchyDisplayDirty = true;
+    }
 
     ImGui::Separator();
     // 条件に該当する場合は、`ImGui::TextUnformatted` の処理を実行します。
@@ -489,50 +494,44 @@ void SceneNarakuPieceEditor::DrawPieceHierarchyWindow()
         return;
     }
 
-    const std::wstring currentPath = ToLowerWide(NormalizePathSeparators(GetCurrentEditingPieceRelativePath()));
-    const std::vector<const PieceHierarchyEntry*> sortedEntries = BuildSortedPieceHierarchyEntries();
-    // 対象コレクションの各要素を順に処理します。
-    for (const PieceHierarchyEntry* entry : sortedEntries)
+    if (m_pieceHierarchyDisplayDirty)
     {
-        const std::wstring prefix =
-            L"[" + BuildHierarchyDateLabel(entry->lastModified) + L" : " + (entry->isCompleted ? L"完成" : L"下書き") + L"] ";
-        const std::string label = WideToUtf8(prefix + entry->fileName);
-        const bool isSelected = ToLowerWide(NormalizePathSeparators(entry->relativePath)) == currentPath;
-        // 条件に該当する場合は、追加条件を確認して処理を絞り込みます。
-        if (ImGui::Selectable(label.c_str(), isSelected))
-        {
-            // 条件に該当する場合は、その要素を処理対象から除外します。
-            if (!ConfirmDiscardDirtyChanges(L"読込"))
-            {
-                continue;
-            }
+        RebuildPieceHierarchyDisplayCache();
+    }
 
-            const std::wstring absolutePath = ResolvePieceHierarchyPath(entry->relativePath);
-            // 条件に該当する場合は、`HandleMissingHierarchyEntry` の処理を実行します。
-            if (!PathExists(absolutePath))
+    const std::wstring currentPath = ToLowerWide(NormalizePathSeparators(GetCurrentEditingPieceRelativePath()));
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(m_pieceHierarchyDisplayEntries.size()));
+    while (clipper.Step())
+    {
+        for (int index = clipper.DisplayStart; index < clipper.DisplayEnd; ++index)
+        {
+            const PieceHierarchyDisplayEntry& displayEntry =
+                m_pieceHierarchyDisplayEntries[static_cast<size_t>(index)];
+            const PieceHierarchyEntry& entry = m_pieceHierarchyEntries[displayEntry.sourceIndex];
+            const bool isSelected = displayEntry.normalizedRelativePath == currentPath;
+            if (ImGui::Selectable(displayEntry.label.c_str(), isSelected))
             {
-                HandleMissingHierarchyEntry(*entry);
-                ImGui::End();
-                return;
-            }
-            else
-            {
-                // 条件に該当する場合は、`HandleMissingHierarchyEntry` の処理を実行します。
-                if (!LoadPieceFromPath(absolutePath))
+                if (!ConfirmDiscardDirtyChanges(L"読込"))
                 {
-                    HandleMissingHierarchyEntry(*entry);
+                    continue;
+                }
+
+                const std::wstring absolutePath = ResolvePieceHierarchyPath(entry.relativePath);
+                if (!PathExists(absolutePath) || !LoadPieceFromPath(absolutePath))
+                {
+                    HandleMissingHierarchyEntry(entry);
                     ImGui::End();
                     return;
                 }
                 ImGui::End();
                 return;
             }
-        }
 
-        // 条件に該当する場合は、`ImGui::SetTooltip` の処理を実行します。
-        if (ImGui::IsItemHovered())
-        {
-            ImGui::SetTooltip("%s", WideToUtf8(entry->relativePath).c_str());
+            if (ImGui::IsItemHovered())
+            {
+                ImGui::SetTooltip("%s", displayEntry.tooltip.c_str());
+            }
         }
     }
 
@@ -615,6 +614,8 @@ bool SceneNarakuPieceEditor::ReloadPieceHierarchyEntries()
 {
     EDITOR_PROFILE_FUNCTION();
     m_pieceHierarchyEntries.clear();
+    m_pieceHierarchyDisplayEntries.clear();
+    m_pieceHierarchyDisplayDirty = true;
     m_nextPieceHierarchyInsertionOrder = 0;
     const std::wstring configPath = ResolvePieceHierarchyPath(GetPieceHierarchyConfigPath());
     // 条件に該当する場合は、`SetMessage` の処理を実行します。
@@ -749,6 +750,10 @@ bool SceneNarakuPieceEditor::RegisterPieceHierarchyEntry(const std::wstring& pat
             entry.relativePath = normalizedPath;
             entry.isCompleted = isCompleted;
             entry.lastModified = nextLastModified;
+            if (changed)
+            {
+                m_pieceHierarchyDisplayDirty = true;
+            }
             return changed;
         }
     }
@@ -760,6 +765,7 @@ bool SceneNarakuPieceEditor::RegisterPieceHierarchyEntry(const std::wstring& pat
     entry.lastModified = lastModified;
     entry.insertionOrder = m_nextPieceHierarchyInsertionOrder++;
     m_pieceHierarchyEntries.push_back(entry);
+    m_pieceHierarchyDisplayDirty = true;
     return true;
 }
 
@@ -781,6 +787,7 @@ bool SceneNarakuPieceEditor::RemovePieceHierarchyEntry(const std::wstring& path)
     }
 
     m_pieceHierarchyEntries.erase(it, m_pieceHierarchyEntries.end());
+    m_pieceHierarchyDisplayDirty = true;
     return true;
 }
 
@@ -849,6 +856,29 @@ std::vector<const SceneNarakuPieceEditor::PieceHierarchyEntry*> SceneNarakuPiece
         std::reverse(entries.begin(), entries.end());
     }
     return entries;
+}
+
+void SceneNarakuPieceEditor::RebuildPieceHierarchyDisplayCache()
+{
+    EDITOR_PROFILE_FUNCTION();
+    m_pieceHierarchyDisplayEntries.clear();
+    m_pieceHierarchyDisplayEntries.reserve(m_pieceHierarchyEntries.size());
+
+    const std::vector<const PieceHierarchyEntry*> sortedEntries = BuildSortedPieceHierarchyEntries();
+    for (const PieceHierarchyEntry* entry : sortedEntries)
+    {
+        PieceHierarchyDisplayEntry displayEntry;
+        displayEntry.sourceIndex = static_cast<size_t>(entry - m_pieceHierarchyEntries.data());
+        displayEntry.normalizedRelativePath = ToLowerWide(NormalizePathSeparators(entry->relativePath));
+        const std::wstring prefix =
+            L"[" + BuildHierarchyDateLabel(entry->lastModified) + L" : " +
+            (entry->isCompleted ? L"完成" : L"下書き") + L"] ";
+        displayEntry.label = WideToUtf8(prefix + entry->fileName);
+        displayEntry.tooltip = WideToUtf8(entry->relativePath);
+        m_pieceHierarchyDisplayEntries.push_back(std::move(displayEntry));
+    }
+
+    m_pieceHierarchyDisplayDirty = false;
 }
 
 std::wstring SceneNarakuPieceEditor::BuildHierarchyDateLabel(const std::wstring& lastModified) const

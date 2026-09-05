@@ -576,6 +576,7 @@ namespace
         int gridSize,
         int startX,
         int startZ,
+        bool requireStartReturn,
         bool allowCentralFallback,
         GridPlacement& outPlacement,
         std::stringstream& logStream,
@@ -611,7 +612,7 @@ namespace
         if (gridX == gridSize - 1) logStream << "  - East: Blocked (Right border)\n";
         else logStream << "  - East: Not Blocked\n";
 
-        const bool isStartCell = (gridX == startX && gridZ == startZ);
+        const bool isStartCell = requireStartReturn && (gridX == startX && gridZ == startZ);
         const CellRequirement requirement = GetCellRequirement(gridX, gridZ, gridSize);
         const std::vector<const LoadedPiece*>* pool =
             &candidatePools.pools[static_cast<int>(requirement.category)];
@@ -1255,8 +1256,9 @@ namespace NarakuStageGenerator
         const char* gridLabel,
         const wchar_t* defaultOutputMapPath,
         const wchar_t* outputMapPath,
-        bool requireLayerEntry,
-        bool requireLayerExit,
+        int layerEntryCount,
+        int layerExitCount,
+        bool requireStartReturn,
         std::string* outError)
     {
         std::stringstream logStream;
@@ -1294,6 +1296,7 @@ namespace NarakuStageGenerator
                         gridSize,
                         startPosition.x,
                         startPosition.z,
+                        requireStartReturn,
                         allowCentralFallback,
                         placement,
                         logStream,
@@ -1336,17 +1339,21 @@ namespace NarakuStageGenerator
             return false;
         }
 
-        if (requireLayerEntry && !InjectLayerTransitionPiece(
-            NarakuPiece::LayerTransitionRole::Entry, candidates, placements, logStream))
+        for (int index = 0; index < layerEntryCount; ++index)
         {
-            if (outError != nullptr) *outError = logStream.str();
-            return false;
+            if (!InjectLayerTransitionPiece(NarakuPiece::LayerTransitionRole::Entry, candidates, placements, logStream))
+            {
+                if (outError != nullptr) *outError = logStream.str();
+                return false;
+            }
         }
-        if (requireLayerExit && !InjectLayerTransitionPiece(
-            NarakuPiece::LayerTransitionRole::Exit, candidates, placements, logStream))
+        for (int index = 0; index < layerExitCount; ++index)
         {
-            if (outError != nullptr) *outError = logStream.str();
-            return false;
+            if (!InjectLayerTransitionPiece(NarakuPiece::LayerTransitionRole::Exit, candidates, placements, logStream))
+            {
+                if (outError != nullptr) *outError = logStream.str();
+                return false;
+            }
         }
 
         NarakuMap::MapData mapData = {};
@@ -1405,8 +1412,9 @@ namespace NarakuStageGenerator
             "3x3",
             kDefault3x3OutputMapPath,
             outputMapPath,
-            false,
-            false,
+            0,
+            0,
+            true,
             outError);
     }
 
@@ -1417,15 +1425,17 @@ namespace NarakuStageGenerator
             "4x4",
             kDefault4x4OutputMapPath,
             outputMapPath,
-            false,
-            false,
+            0,
+            0,
+            true,
             outError);
     }
 
     bool GenerateFixed4x4AreaMap(
         const wchar_t* outputMapPath,
-        bool requireLayerEntry,
-        bool requireLayerExit,
+        int layerEntryCount,
+        int layerExitCount,
+        bool requireStartReturn,
         std::string* outError)
     {
         return GenerateFixedGridMap(
@@ -1433,8 +1443,9 @@ namespace NarakuStageGenerator
             "4x4 area",
             kDefault4x4OutputMapPath,
             outputMapPath,
-            requireLayerEntry,
-            requireLayerExit,
+            layerEntryCount,
+            layerExitCount,
+            requireStartReturn,
             outError);
     }
 }

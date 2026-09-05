@@ -157,7 +157,10 @@ void SceneNarakuPieceEditor::DeleteSelectedEnvironmentObject()
 void SceneNarakuPieceEditor::Draw()
 {
     EDITOR_PROFILE_FUNCTION();
-    RenderTerrainPreviewToTexture();
+    if (m_showPreviewWindow)
+    {
+        RenderTerrainPreviewToTexture();
+    }
     OpenRequestedPopups();
     DrawEditorWindow();
     DrawPreviewWindow();
@@ -304,22 +307,49 @@ void SceneNarakuPieceEditor::SyncNativeMenuState(HMENU menuBar) const
         return;
     }
 
-    SetMenuCheckState(menuBar, MenuTogglePieceBasicWindow, m_showPieceBasicWindow);
-    SetMenuCheckState(menuBar, MenuTogglePieceConnectionWindow, m_showPieceConnectionWindow);
-    SetMenuCheckState(menuBar, MenuToggleTerrainEditWindow, m_showTerrainEditWindow);
-    SetMenuCheckState(menuBar, MenuToggleGridObjectPlacementWindow, m_showGridObjectPlacementWindow);
-    SetMenuCheckState(menuBar, MenuToggleGridObjectSelectionWindow, m_showGridObjectSelectionWindow);
-    SetMenuCheckState(menuBar, MenuTogglePieceFileAndValidationWindow, m_showPieceFileAndValidationWindow);
-    SetMenuCheckState(menuBar, MenuTogglePreviewWindow, m_showPreviewWindow);
-    SetMenuCheckState(menuBar, MenuToggleHeightGridWindow, m_showHeightGridWindow);
-    SetMenuCheckState(menuBar, MenuTogglePieceHierarchyWindow, m_showPieceHierarchyWindow);
-    SetMenuCheckState(menuBar, MenuToggleEnvironmentAssetsWindow, m_showEnvironmentAssetsWindow);
-    SetMenuItemLabel(menuBar, MenuFileStatus, BuildEditingStatusLabel());
+    const unsigned int stateMask =
+        (m_showPieceBasicWindow ? 1U << 0 : 0U) |
+        (m_showPieceConnectionWindow ? 1U << 1 : 0U) |
+        (m_showTerrainEditWindow ? 1U << 2 : 0U) |
+        (m_showGridObjectPlacementWindow ? 1U << 3 : 0U) |
+        (m_showGridObjectSelectionWindow ? 1U << 4 : 0U) |
+        (m_showPieceFileAndValidationWindow ? 1U << 5 : 0U) |
+        (m_showPreviewWindow ? 1U << 6 : 0U) |
+        (m_showHeightGridWindow ? 1U << 7 : 0U) |
+        (m_showPieceHierarchyWindow ? 1U << 8 : 0U) |
+        (m_showEnvironmentAssetsWindow ? 1U << 9 : 0U);
+    bool menuChanged = false;
+    if (stateMask != m_lastNativeMenuStateMask)
+    {
+        SetMenuCheckState(menuBar, MenuTogglePieceBasicWindow, m_showPieceBasicWindow);
+        SetMenuCheckState(menuBar, MenuTogglePieceConnectionWindow, m_showPieceConnectionWindow);
+        SetMenuCheckState(menuBar, MenuToggleTerrainEditWindow, m_showTerrainEditWindow);
+        SetMenuCheckState(menuBar, MenuToggleGridObjectPlacementWindow, m_showGridObjectPlacementWindow);
+        SetMenuCheckState(menuBar, MenuToggleGridObjectSelectionWindow, m_showGridObjectSelectionWindow);
+        SetMenuCheckState(menuBar, MenuTogglePieceFileAndValidationWindow, m_showPieceFileAndValidationWindow);
+        SetMenuCheckState(menuBar, MenuTogglePreviewWindow, m_showPreviewWindow);
+        SetMenuCheckState(menuBar, MenuToggleHeightGridWindow, m_showHeightGridWindow);
+        SetMenuCheckState(menuBar, MenuTogglePieceHierarchyWindow, m_showPieceHierarchyWindow);
+        SetMenuCheckState(menuBar, MenuToggleEnvironmentAssetsWindow, m_showEnvironmentAssetsWindow);
+        m_lastNativeMenuStateMask = stateMask;
+        menuChanged = true;
+    }
+
+    const std::wstring statusLabel = BuildEditingStatusLabel();
+    if (statusLabel != m_lastNativeMenuStatusLabel)
+    {
+        SetMenuItemLabel(menuBar, MenuFileStatus, statusLabel);
+        m_lastNativeMenuStatusLabel = statusLabel;
+        menuChanged = true;
+    }
 
     // 条件に該当する場合は、`DrawMenuBar` の処理を実行します。
-    if (HWND window = GetPreviewHostWindow())
+    if (menuChanged)
     {
-        DrawMenuBar(window);
+        if (HWND window = GetPreviewHostWindow())
+        {
+            DrawMenuBar(window);
+        }
     }
 }
 

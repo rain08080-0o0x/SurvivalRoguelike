@@ -28,19 +28,16 @@ using namespace DirectX;
 
 int SceneNarakuPieceEditor::GetHeightIndex(int x, int z) const
 {
-    EDITOR_PROFILE_FUNCTION();
     return z * m_piece.gridWidth + x;
 }
 
 bool SceneNarakuPieceEditor::IsValidVertex(int x, int z) const
 {
-    EDITOR_PROFILE_FUNCTION();
     return x >= 0 && z >= 0 && x < m_piece.gridWidth && z < m_piece.gridDepth;
 }
 
 float SceneNarakuPieceEditor::GetHeight(int x, int z) const
 {
-    EDITOR_PROFILE_FUNCTION();
     // 条件に該当する場合は、現在の処理をここで終了します。
     if (!IsValidVertex(x, z))
     {
@@ -79,7 +76,6 @@ void SceneNarakuPieceEditor::SetHeight(int x, int z, float height)
 
 XMFLOAT3 SceneNarakuPieceEditor::GetVertexWorldPosition(int x, int z) const
 {
-    EDITOR_PROFILE_FUNCTION();
     const float offsetX = (static_cast<float>(m_piece.gridWidth - 1) * m_piece.cellSize) * 0.5f;
     const float offsetZ = (static_cast<float>(m_piece.gridDepth - 1) * m_piece.cellSize) * 0.5f;
     return
@@ -92,7 +88,6 @@ XMFLOAT3 SceneNarakuPieceEditor::GetVertexWorldPosition(int x, int z) const
 
 XMFLOAT3 SceneNarakuPieceEditor::GetCellWorldPosition(int cellX, int cellZ) const
 {
-    EDITOR_PROFILE_FUNCTION();
     const XMFLOAT3 p00 = GetVertexWorldPosition(cellX, cellZ);
     const XMFLOAT3 p10 = GetVertexWorldPosition(cellX + 1, cellZ);
     const XMFLOAT3 p01 = GetVertexWorldPosition(cellX, cellZ + 1);
@@ -107,7 +102,6 @@ XMFLOAT3 SceneNarakuPieceEditor::GetCellWorldPosition(int cellX, int cellZ) cons
 
 bool SceneNarakuPieceEditor::IsValidCell(int cellX, int cellZ) const
 {
-    EDITOR_PROFILE_FUNCTION();
     return cellX >= 0 && cellZ >= 0 &&
         cellX < std::max(0, m_piece.gridWidth - 1) &&
         cellZ < std::max(0, m_piece.gridDepth - 1);
@@ -115,13 +109,11 @@ bool SceneNarakuPieceEditor::IsValidCell(int cellX, int cellZ) const
 
 int SceneNarakuPieceEditor::GetCellIndex(int cellX, int cellZ) const
 {
-    EDITOR_PROFILE_FUNCTION();
     return cellZ * std::max(0, m_piece.gridWidth - 1) + cellX;
 }
 
 NarakuPiece::CellData* SceneNarakuPieceEditor::GetCellData(int cellX, int cellZ)
 {
-    EDITOR_PROFILE_FUNCTION();
     // 条件に該当する場合は、現在の処理をここで終了します。
     if (!IsValidCell(cellX, cellZ))
     {
@@ -140,7 +132,6 @@ NarakuPiece::CellData* SceneNarakuPieceEditor::GetCellData(int cellX, int cellZ)
 
 const NarakuPiece::CellData* SceneNarakuPieceEditor::GetCellData(int cellX, int cellZ) const
 {
-    EDITOR_PROFILE_FUNCTION();
     // 条件に該当する場合は、現在の処理をここで終了します。
     if (!IsValidCell(cellX, cellZ))
     {
@@ -411,7 +402,6 @@ bool SceneNarakuPieceEditor::DeleteSelectedGridObject()
 
 bool SceneNarakuPieceEditor::IsVertexSelected(int x, int z) const
 {
-    EDITOR_PROFILE_FUNCTION();
     return std::any_of(
         m_selectedVertices.begin(),
         m_selectedVertices.end(),
@@ -423,7 +413,6 @@ bool SceneNarakuPieceEditor::IsVertexSelected(int x, int z) const
 
 bool SceneNarakuPieceEditor::IsCellSelected(int cellX, int cellZ) const
 {
-    EDITOR_PROFILE_FUNCTION();
     return std::any_of(
         m_selectedCells.begin(),
         m_selectedCells.end(),

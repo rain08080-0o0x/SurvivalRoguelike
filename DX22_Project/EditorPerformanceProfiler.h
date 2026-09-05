@@ -20,6 +20,9 @@ public:
     /** @brief 現在フレームの集計を開始し、直前フレームの値を確定します。 */
     static void BeginFrame();
 
+    /** @brief 計測結果ウィンドウが開いており、計測処理が有効かを返します。 */
+    static bool IsRecordingEnabled();
+
     /** @brief 指定した分類と名前へ計測値を加算します。 */
     static void Record(Category category, const char* name, double elapsedMilliseconds);
 
@@ -56,6 +59,7 @@ private:
     std::string m_className;
     Clock::time_point m_startedAt;
     bool m_recordsClass = false;
+    bool m_active = false;
 };
 
 #define EDITOR_PROFILE_JOIN_IMPL(left, right) left##right

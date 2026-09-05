@@ -23,7 +23,8 @@ namespace NarakuStageGenerator
     /** @brief 層入口・層出口の有無を指定して4x4エリアを生成します。 */
     bool GenerateFixed4x4AreaMap(
         const wchar_t* outputMapPath,
-        bool requireLayerEntry,
-        bool requireLayerExit,
+        int layerEntryCount,
+        int layerExitCount,
+        bool requireStartReturn,
         std::string* outError = nullptr);
 }
