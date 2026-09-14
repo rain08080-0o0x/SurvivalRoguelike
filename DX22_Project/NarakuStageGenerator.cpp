@@ -417,7 +417,7 @@ namespace
             }
         };
 
-        // 1. 蛹怜・縺ｮ蛻､螳・
+        // 1. 北側の判定
         if (gridZ == 0)
         {
             if (candidate.data.edgeCategories.north != NarakuPiece::StageCategory::Blocked)
@@ -443,7 +443,7 @@ namespace
             }
         }
 
-        // 2. 蜊怜・縺ｮ蛻､螳・
+        // 2. 南側の判定
         if (gridZ == gridSize - 1)
         {
             if (candidate.data.edgeCategories.south != NarakuPiece::StageCategory::Blocked)
@@ -461,7 +461,7 @@ namespace
             }
         }
 
-        // 3. 隘ｿ蛛ｴ縺ｮ蛻､螳・
+        // 3. 西側の判定
         if (gridX == 0)
         {
             if (candidate.data.edgeCategories.west != NarakuPiece::StageCategory::Blocked)
@@ -487,7 +487,7 @@ namespace
             }
         }
 
-        // 4. 譚ｱ蛛ｴ縺ｮ蛻､螳・
+        // 4. 東側の判定
         if (gridX == gridSize - 1)
         {
             if (candidate.data.edgeCategories.east != NarakuPiece::StageCategory::Blocked)
@@ -754,7 +754,7 @@ namespace
             return false;
         }
 
-        // matchedCandidates縺ｮ荳ｭ縺九ｉ繝ｩ繝ｳ繝繝縺ｧ驕ｸ蜃ｺ
+        // 条件に一致した候補からランダムに選出する。
         int randomIndex = std::rand() % static_cast<int>(matchedCandidates.size());
         const LoadedPiece* selectedPiece = matchedCandidates[randomIndex];
         std::string selectedFileName = WideToUtf8(GetFileNamePart(selectedPiece->sourcePath));
@@ -1151,10 +1151,7 @@ namespace
             const NarakuPiece::StartReturnCandidate& startReturn = piece.startReturnCandidate;
             if (startReturn.enabled)
             {
-                /// 螟門捉繧ｻ繝ｫ繧る幕蟋句呵｣懊↓菴ｿ縺・ゅ・繝・・螟悶∈縺ｮ遘ｻ蜍輔・繝ｩ繝ｳ繧ｿ繧､繝縺ｮ遽・峇蛻､螳壹〒諡貞凄縺吶ｋ縲・
-                // 3x3蟆上せ繝・・繧ｸ逕滓・譎ゅ・幕蟋句慍轤ｹ・医せ繧ｿ繝ｼ繝医ヴ繝ｼ繧ｹ・峨′螟也ｸ・ｼ・ridX/Z縺檎ｫｯ・峨↓縺ゅｋ蝣ｴ蜷医・
-                // 螟門・縺ｮ1繝槭せ縺ｯApplyBoundaryClosure縺ｫ繧医▲縺ｦ蠑ｷ蛻ｶ逧・↓螢・ｼ・locked・峨↓縺輔ｌ縺ｾ縺吶・
-                // 縺昴％縺ｫ繝励Ξ繧､繝､繝ｼ縺後せ繝昴・繝ｳ縺励※螢√・荳ｭ縺ｫ蝓九∪繧九・繧帝∩縺代ｋ縺溘ａ縲√せ繝昴・繝ｳ繧ｻ繝ｫ繧・繝槭せ蜀・・縺ｫ縺壹ｉ縺励∪縺吶・
+                // Editorで指定された開始・帰還候補セルを優先候補として追加する。
                 TryAppendCandidateFromCell(
                     placements,
                     layers,
@@ -1367,7 +1364,7 @@ namespace NarakuStageGenerator
             std::wstring wpath = placement.piece->sourcePath;
             size_t lastSlash = wpath.find_last_of(L"\\/");
             std::wstring wfilename = (lastSlash == std::wstring::npos) ? wpath : wpath.substr(lastSlash + 1);
-            mapData.pieceNames[index] = std::string(wfilename.begin(), wfilename.end());
+            mapData.pieceNames[index] = WideToUtf8(wfilename);
 
             NarakuMap::TerrainLayer layer = BuildTerrainLayer(placement, gridSize, static_cast<int>(index));
             AppendMiningPoints(placement, layer, mapData);

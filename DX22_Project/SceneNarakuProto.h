@@ -31,6 +31,11 @@ public:
     /** @brief Scene 基底クラス経由で破棄されるため virtual destructor にしています。 */
     ~SceneNarakuProto() override;
 
+#if defined(NARAKU_EDITOR_BUILD)
+    /** @brief 同一プレビュー設定を2回生成し、段階・接続・配置の一致を検証します。 */
+    static bool VerifyPreviewGenerationDeterminism(std::string& outError);
+#endif
+
     /** @brief 1フレーム分の入力、移動、採掘、敵、上昇負荷を更新します。 */
     void Update() override;
 

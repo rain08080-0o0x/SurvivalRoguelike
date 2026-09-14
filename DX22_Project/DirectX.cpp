@@ -1,4 +1,4 @@
-﻿#include "DirectX.h"
+#include "DirectX.h"
 #include "Texture.h"
 // ImGui
 #include "imgui.h"
@@ -381,7 +381,7 @@ void InitImGui(HWND hWnd)
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 
 	ImGui::StyleColorsDark();
-#ifdef _DEBUG
+#if defined(NARAKU_EDITOR_BUILD) || !defined(NARAKU_GAME_BUILD)
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable; // OS外にウィンドウを出せる
 #endif

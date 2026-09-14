@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "id": "second_base",
+  "displayName": "第二拠点",
+  "lastModified": "2026/09/10 03:10:00",
+  "abyssLayer": 0,
+  "sublayerTag": "none",
+  "sizePreset": "16x16",
+  "gridWidth": 16,
+  "gridDepth": 16,
+  "cellSize": 2,
+  "stageRole": "base",
+  "baseType": "second_base",
+  "stageCategory": "plain_low",
+  "edgeCategories": { "north": "plain_low", "south": "plain_low", "east": "plain_low", "west": "plain_low" },
+  "lockedEdges": { "north": true, "south": true, "east": true, "west": true }
+}

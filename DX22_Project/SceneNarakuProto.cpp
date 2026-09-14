@@ -19,6 +19,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <direct.h>
 #include <fstream>
 #include <iomanip>
@@ -37,6 +38,46 @@ namespace
     constexpr const wchar_t* kProgressTempPath = L"Assets/Save/naraku_proto_save.tmp";
     constexpr int kSaveVersion = 1;
     constexpr int kPreviousSaveVersion = 0;
+
+    struct EditorPreviewConfiguration
+    {
+        unsigned long long seed = 1;
+        int depth = 1;
+        int sublayer = 0;
+        int area = 1;
+        std::array<int, 15> areaCounts = {};
+    };
+
+    EditorPreviewConfiguration LoadEditorPreviewConfiguration()
+    {
+        EditorPreviewConfiguration result;
+#if defined(NARAKU_EDITOR_BUILD)
+        std::ifstream stream("Assets/Config/naraku_editor_preview.cfg");
+        std::string line;
+        while (std::getline(stream, line))
+        {
+            const std::size_t separator = line.find('=');
+            if (separator == std::string::npos) continue;
+            const std::string key = line.substr(0, separator);
+            const std::string value = line.substr(separator + 1);
+            try
+            {
+                if (key == "seed") result.seed = std::stoull(value);
+                else if (key == "depth") result.depth = std::stoi(value);
+                else if (key == "sublayer") result.sublayer = std::stoi(value);
+                else if (key == "area") result.area = std::stoi(value);
+                else if (key.rfind("areaCount", 0) == 0)
+                {
+                    const int stage = std::stoi(key.substr(9));
+                    if (stage >= 0 && stage < static_cast<int>(result.areaCounts.size()))
+                        result.areaCounts[static_cast<std::size_t>(stage)] = std::stoi(value);
+                }
+            }
+            catch (...) {}
+        }
+#endif
+        return result;
+    }
 
     struct DepthRules
     {
@@ -104,18 +145,31 @@ namespace
         return kDepthRules[static_cast<std::size_t>(ClampDepth(depth) - 1)];
     }
 
-    float RandomFloat(float minimum, float maximum)
+    std::mt19937& RuntimeRandomEngine()
     {
         static std::mt19937 engine(std::random_device{}());
+        return engine;
+    }
+
+    void SeedRuntimeRandom(unsigned long long seed)
+    {
+        const unsigned int low = static_cast<unsigned int>(seed);
+        const unsigned int high = static_cast<unsigned int>(seed >> 32);
+        std::seed_seq sequence = { low, high };
+        RuntimeRandomEngine().seed(sequence);
+        std::srand(low ^ high);
+    }
+
+    float RandomFloat(float minimum, float maximum)
+    {
         std::uniform_real_distribution<float> distribution(minimum, maximum);
-        return distribution(engine);
+        return distribution(RuntimeRandomEngine());
     }
 
     int RandomInt(int minimum, int maximum)
     {
-        static std::mt19937 engine(std::random_device{}());
         std::uniform_int_distribution<int> distribution(minimum, maximum);
-        return distribution(engine);
+        return distribution(RuntimeRandomEngine());
     }
 
     std::wstring Utf8ToWide(const std::string& text)
@@ -325,13 +379,18 @@ SceneNarakuProto::SceneNarakuProto()
     InitializeNewProgress();
     LoadProgress();
 
+#if defined(NARAKU_EDITOR_BUILD)
+    StartDive();
+#else
     // フィールドを準備し、最初は自宅で持ち物を決められる状態にします。
     ResetRun();
     m_mode = Mode::Home;
+#endif
 }
 
 SceneNarakuProto::~SceneNarakuProto()
 {
+#if !defined(NARAKU_EDITOR_BUILD)
     if (m_mode == Mode::Explore || m_mode == Mode::Inventory || m_mode == Mode::RelicPrompt ||
         m_mode == Mode::ReturnConfirm || m_mode == Mode::AbandonConfirm || m_mode == Mode::Loading || m_mode == Mode::LayerTransition)
     {
@@ -340,12 +399,55 @@ SceneNarakuProto::~SceneNarakuProto()
         m_foodCount = 0;
     }
     SaveProgress();
+#endif
     ReleaseEnvironmentModels();
     ReleaseEnemyBillboardBatch();
     ReleaseTerrainFloorBatch();
     SAFE_DELETE(m_skyModel);
     SAFE_DELETE(m_attackHitTexture);
 }
+
+#if defined(NARAKU_EDITOR_BUILD)
+bool SceneNarakuProto::VerifyPreviewGenerationDeterminism(std::string& outError)
+{
+    const auto createSignature = [](const SceneNarakuProto& scene)
+    {
+        std::ostringstream signature;
+        std::array<int, 15> stageCounts = {};
+        for (const AreaState& area : scene.m_areas)
+        {
+            const int stage = (area.depth - 1) * 3 + area.sublayer;
+            if (stage >= 0 && stage < 15) ++stageCounts[static_cast<std::size_t>(stage)];
+            signature << area.depth << ',' << area.sublayer << ',' << area.areaNumber << ':';
+            for (const PlannedLayerGate& gate : area.plannedGates)
+                signature << gate.isEntry << ',' << gate.destinationAreaIndex << ',' << gate.connectionId << ';';
+            signature << '|';
+            for (const std::string& pieceName : area.map.pieceNames) signature << pieceName << ';';
+            signature << '\n';
+        }
+        signature << "counts:";
+        for (int count : stageCounts) signature << count << ',';
+        return signature.str();
+    };
+
+    std::string firstSignature;
+    {
+        SceneNarakuProto first;
+        firstSignature = createSignature(first);
+    }
+    std::string secondSignature;
+    {
+        SceneNarakuProto second;
+        secondSignature = createSignature(second);
+    }
+    if (firstSignature != secondSignature)
+    {
+        outError = u8"段階別エリア数・接続ID・小ステージ配置IDが一致しません。";
+        return false;
+    }
+    return true;
+}
+#endif
 
 void SceneNarakuProto::InitializeTerrainFloorBatch()
 {
@@ -722,25 +824,50 @@ bool SceneNarakuProto::ResetRun()
     m_pendingRelicDepth = 0.0f;
     m_money = keepMoney;
 
+#if defined(NARAKU_EDITOR_BUILD)
+    const EditorPreviewConfiguration preview = LoadEditorPreviewConfiguration();
+    SeedRuntimeRandom(preview.seed);
+#endif
+
     if (!BuildDiveStructure())
     {
         m_mode = Mode::Home;
         return false;
     }
 
+    int initialAreaIndex = -1;
     for (int areaIndex = 0; areaIndex < static_cast<int>(m_areas.size()); ++areaIndex)
     {
-        if (!m_areas[areaIndex].canReturn) continue;
+        if (m_areas[areaIndex].canReturn) initialAreaIndex = areaIndex;
+#if defined(NARAKU_EDITOR_BUILD)
+        if (m_areas[areaIndex].depth == preview.depth &&
+            m_areas[areaIndex].sublayer == preview.sublayer &&
+            m_areas[areaIndex].areaNumber == preview.area)
+        {
+            initialAreaIndex = areaIndex;
+            break;
+        }
+#endif
+    }
+
+    for (int areaIndex = 0; areaIndex < static_cast<int>(m_areas.size()); ++areaIndex)
+    {
+        if (areaIndex != initialAreaIndex) continue;
         m_currentAreaIndex = areaIndex;
         int entryCount = 0;
         int exitCount = 0;
         for (const PlannedLayerGate& gate : m_areas[areaIndex].plannedGates)
             gate.isEntry ? ++entryCount : ++exitCount;
+#if defined(NARAKU_EDITOR_BUILD)
+        _wmkdir(L"Assets/Temp");
+        constexpr const wchar_t* generated4x4MapPath = L"Assets/Temp/generated_naraku_preview_4x4.json";
+#else
         constexpr const wchar_t* generated4x4MapPath = L"Assets/Maps/generated_naraku_map_4x4.json";
+#endif
         for (int attempt = 0; attempt < kMapGenerationMaxAttempts; ++attempt)
         {
             if (NarakuStageGenerator::GenerateFixed4x4AreaMap(
-                    generated4x4MapPath, entryCount, exitCount, true, &mapError) &&
+                    generated4x4MapPath, entryCount, exitCount, m_areas[areaIndex].canReturn, &mapError) &&
                 NarakuMap::LoadMap(generated4x4MapPath, m_runtimeMap, &mapError))
             {
                 generated = true;
@@ -748,6 +875,9 @@ bool SceneNarakuProto::ResetRun()
                 break;
             }
         }
+#if defined(NARAKU_EDITOR_BUILD)
+        _wremove(generated4x4MapPath);
+#endif
         break;
     }
 
@@ -884,6 +1014,29 @@ bool SceneNarakuProto::ResetRun()
         m_result.firstAreaCount = 1;
         AwardExp(static_cast<int>(100.0f * GetDepthExpMultiplier(1)));
         SaveCurrentAreaState();
+#if defined(NARAKU_EDITOR_BUILD)
+        const int previewStartArea = m_currentAreaIndex;
+        for (int previewArea = 0; previewArea < static_cast<int>(m_areas.size()); ++previewArea)
+        {
+            if (previewArea == previewStartArea) continue;
+            std::string previewError;
+            if (!GeneratePlannedArea(previewArea, previewError))
+            {
+                m_mode = Mode::Home;
+                const AreaState& failedArea = m_areas[static_cast<std::size_t>(previewArea)];
+                std::ostringstream failure;
+                failure << u8"生成プレビュー失敗: 第" << failedArea.depth << u8"層 "
+                    << GetSublayerName(failedArea.sublayer) << u8" エリア" << failedArea.areaNumber
+                    << " / seed=" << preview.seed << " / " << previewError;
+                AddMessage(failure.str());
+                return false;
+            }
+        }
+        ActivateArea(previewStartArea, false);
+        m_player.pos = m_startPoint;
+        m_player.depth = m_startDepth;
+        m_player.feetWorldY = GetGroundWorldY(m_player.pos, m_player.depth);
+#endif
     }
     if (!generated)
     {
@@ -898,13 +1051,16 @@ bool SceneNarakuProto::BuildDiveStructure()
     constexpr int maximumGatesPerArea = 4;
     constexpr int maximumAttempts = 2000;
 
+    const EditorPreviewConfiguration preview = LoadEditorPreviewConfiguration();
     for (int attempt = 0; attempt < maximumAttempts; ++attempt)
     {
         m_areas.clear();
         std::array<std::vector<int>, stageCount> stageAreas;
         for (int stage = 0; stage < stageCount; ++stage)
         {
-            const int areaCount = RandomInt(2, 4);
+            const int configuredAreaCount = preview.areaCounts[static_cast<std::size_t>(stage)];
+            const int areaCount = configuredAreaCount >= 1 && configuredAreaCount <= 3
+                ? configuredAreaCount + 1 : RandomInt(2, 4);
             for (int number = 0; number < areaCount; ++number)
             {
                 const int areaIndex = static_cast<int>(m_areas.size());
@@ -1077,7 +1233,12 @@ bool SceneNarakuProto::GeneratePlannedArea(int areaIndex, std::string& outError)
     for (const PlannedLayerGate& gate : area.plannedGates) gate.isEntry ? ++entryCount : ++exitCount;
 
     wchar_t generatedPath[128] = {};
+#if defined(NARAKU_EDITOR_BUILD)
+    _wmkdir(L"Assets/Temp");
+    std::swprintf(generatedPath, 128, L"Assets/Temp/generated_preview_area_%03d.json", areaIndex);
+#else
     std::swprintf(generatedPath, 128, L"Assets/Maps/generated_area_%03d.json", areaIndex);
+#endif
     NarakuMap::MapData generatedMap;
     bool generated = false;
     for (int attempt = 0; attempt < kMapGenerationMaxAttempts; ++attempt)
@@ -1088,6 +1249,9 @@ bool SceneNarakuProto::GeneratePlannedArea(int areaIndex, std::string& outError)
         { generated = true; break; }
     }
     if (!generated) return false;
+#if defined(NARAKU_EDITOR_BUILD)
+    _wremove(generatedPath);
+#endif
 
     m_runtimeMap = std::move(generatedMap);
     m_currentAreaIndex = areaIndex;
@@ -1490,12 +1654,14 @@ void SceneNarakuProto::Update()
         return;
     }
 
+#if defined(_DEBUG) || defined(NARAKU_EDITOR_BUILD)
     // Cキーで当たり判定デバッグ表示を切り替えます。
     if (IsKeyTrigger('C'))
     {
         m_showCollisionDebug = !m_showCollisionDebug;
         AddMessage(m_showCollisionDebug ? "Collision Debug: ON" : "Collision Debug: OFF");
     }
+#endif
 
     // Tキーで探索と所持品表示を切り替えます。
     if (IsKeyTrigger('T'))
@@ -1527,6 +1693,21 @@ void SceneNarakuProto::Update()
 
 void SceneNarakuProto::UpdateExplore(float dt)
 {
+#if defined(NARAKU_EDITOR_BUILD)
+    UpdateCameraControls();
+    ClampDebugPlayerParams();
+    m_player.previousDepth = m_player.depth;
+    m_player.previousWorldY = m_player.feetWorldY;
+    UpdateMovement(dt);
+    DiscoverNearbyMiningPoints();
+    UpdateExplorationDiscovery();
+    m_player.hp = GetMaxHp();
+    m_player.stamina = GetMaxStamina();
+    m_player.mental = GetMaxMental();
+    m_fullness = kFullnessMaximum;
+    if (IsKeyTrigger('F')) TryInteract();
+    return;
+#endif
     // 探索モード中だけ右ドラッグによるカメラ回転を受け付けます。
     UpdateCameraControls();
 
@@ -2389,6 +2570,11 @@ void SceneNarakuProto::TryInteract()
         return;
     }
 
+#if defined(NARAKU_EDITOR_BUILD)
+    // Editor歩行確認では層間出入口とロープだけを操作対象にします。
+    return;
+#endif
+
     // フィールドに置かれた旧器が近くにあれば拾う確認へ移ります。
     for (GroundRelic& relic : m_groundRelics)
     {
@@ -2949,6 +3135,11 @@ bool SceneNarakuProto::IsShiftPress() const
 
 void SceneNarakuProto::StartDeath(const char* reason, DeathCause cause)
 {
+#if defined(NARAKU_EDITOR_BUILD)
+    m_player.hp = GetMaxHp();
+    m_player.mental = GetMaxMental();
+    return;
+#endif
     // すでに死亡リザルト中なら二重処理を防ぎます。
     if (m_mode == Mode::DeathResult)
     {
@@ -3150,11 +3341,11 @@ void SceneNarakuProto::Draw()
     DrawHud();
     if (m_mode == Mode::Explore) DrawRouteInfo();
 
-    // プレイテスト中にプレイヤー性能を調整するデバッグUIを描画します。
+#if defined(_DEBUG) || defined(NARAKU_EDITOR_BUILD)
+    // Debug版とEditor歩行確認でのみ調整・位置情報を表示します。
     DrawDebugPlayerTuning();
-
-    // プレイヤーの位置・高さ・現在小ステージ名デバッグウィンドウを描画します。
     DrawPlayerPositionDebug();
+#endif
 
     // 所持品モードでは所持品と地図ピンUIを重ねます。
     if (m_mode == Mode::Inventory)
@@ -3708,6 +3899,7 @@ void SceneNarakuProto::Draw3DField()
     // プレイヤーを青い箱で描きます。
     DrawDebugBox3D(playerCenter, { 0.55f, 1.2f, 0.55f });
 
+#if defined(_DEBUG) || defined(NARAKU_EDITOR_BUILD)
     if (m_showCollisionDebug)
     {
         // 帰還範囲のデバッグ表示を追加
@@ -3724,6 +3916,7 @@ void SceneNarakuProto::Draw3DField()
         }
 
     }
+#endif
 
     if (m_attackHitTexture != nullptr && !m_attackHitEffects.empty())
     {
@@ -4044,6 +4237,7 @@ void SceneNarakuProto::DrawHud()
     ImGui::End();
 }
 
+#if defined(_DEBUG) || defined(NARAKU_EDITOR_BUILD)
 void SceneNarakuProto::DrawDebugPlayerTuning()
 {
     // 調整ウィンドウの初期位置をHUDの右側へ置きます。
@@ -4147,6 +4341,8 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
     // プレイテスト専用の調整ウィンドウを閉じます。
     ImGui::End();
 }
+
+#endif
 
 void SceneNarakuProto::DrawInventory()
 {
@@ -4305,60 +4501,6 @@ void SceneNarakuProto::DrawRelicPrompt()
     }
 
     // 旧器確認ウィンドウを閉じます。
-    ImGui::End();
-}
-
-void SceneNarakuProto::DrawResult()
-{
-    ImGui::SetNextWindowPos(ImVec2(390.0f, 160.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(540.0f, 360.0f), ImGuiCond_Always);
-    ImGui::Begin(m_mode == Mode::DeathResult ? u8"死亡リザルト" : u8"帰還リザルト", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-    ImGui::Text(u8"結果: %s", m_result.reason.c_str());
-    ImGui::Text(u8"最大到達深度: 第%d層", m_result.maxDepth);
-    ImGui::Text(u8"採掘した遺物: %d", m_result.minedCount);
-    ImGui::Separator();
-
-    if (m_mode == Mode::ReturnResult)
-    {
-        ImGui::Text(u8"持ち帰った遺物: %d", m_result.carriedRelics);
-        ImGui::Text(u8"今回初めて鑑定した種類: %d", m_result.identifiedRelics);
-        int miningReward = 0;
-        int defeatReward = 0;
-        int stayReward = 0;
-        for (int i = 0; i < 5; ++i)
-        {
-            const int depth = i + 1;
-            miningReward += static_cast<int>(std::llround(m_result.minedByDepth[i] * 5.0 * GetDepthRewardMultiplier(depth)));
-            defeatReward += static_cast<int>(std::llround((m_result.chargerKillsByDepth[i] * 10.0 + m_result.territoryKillsByDepth[i] * 20.0) * GetDepthRewardMultiplier(depth)));
-            stayReward += static_cast<int>(std::llround(std::min(300.0f, m_result.staySecondsByDepth[i]) * GetDepthStayRewardMultiplier(depth)));
-        }
-        ImGui::Text(u8"内訳 採掘:%dG / 撃破:%dG / 滞在:%dG", miningReward, defeatReward, stayReward);
-        ImGui::Text(u8"内訳 初到達:%dG / 新種:%dG", m_result.firstAreaCount * 150, m_result.newRelicTypeCount * 150);
-        ImGui::Text(u8"探索報酬: %dG", m_result.explorationReward);
-        if (m_result.uniqueReward > 0) ImGui::Text(u8"欲望の揺籃 持ち帰り報酬: %dG", m_result.uniqueReward);
-        ImGui::Text(u8"遺物の売却見込額: %d", m_result.saleAmount);
-        ImGui::Spacing();
-        if (ImGui::Button(u8"商店へ", ImVec2(120.0f, 0.0f))) m_mode = Mode::GeneralShop;
-        ImGui::SameLine();
-        if (ImGui::Button(u8"武具屋へ", ImVec2(120.0f, 0.0f))) m_mode = Mode::Armory;
-        ImGui::SameLine();
-        if (ImGui::Button(u8"自宅へ", ImVec2(120.0f, 0.0f))) m_mode = Mode::Home;
-        if (ImGui::Button(u8"持ち込みなしですぐに再潜行", ImVec2(372.0f, 0.0f)))
-        {
-            m_loadoutFoodCount = 0;
-            m_loadoutRelics.fill(0);
-            StartDive();
-        }
-    }
-    else
-    {
-        ImGui::Text(u8"失った遺物: %d", m_result.lostRelics);
-        ImGui::Text(u8"レベル: %d -> %d", m_result.levelBeforeDeath, m_result.levelAfterDeath);
-        ImGui::Text(u8"消費した保護: %d", m_result.protectionConsumed);
-        if (ImGui::Button(u8"再挑戦")) RestartAfterDeath();
-        ImGui::SameLine();
-        if (ImGui::Button(u8"自宅へ")) m_mode = Mode::Home;
-    }
     ImGui::End();
 }
 
@@ -5028,6 +5170,9 @@ void SceneNarakuProto::InitializeNewProgress()
 
 bool SceneNarakuProto::SaveProgress() const
 {
+#if defined(NARAKU_EDITOR_BUILD)
+    return true;
+#endif
     const std::wstring directory = kProgressDirectory;
     const std::wstring temporaryPath = kProgressTempPath;
     const std::wstring finalPath = kProgressPath;
@@ -5106,6 +5251,9 @@ bool SceneNarakuProto::SaveProgress() const
 
 bool SceneNarakuProto::LoadProgress()
 {
+#if defined(NARAKU_EDITOR_BUILD)
+    return false;
+#endif
     const std::wstring path = kProgressPath;
     std::ifstream stream(path, std::ios::binary);
     if (!stream) return false;
@@ -6587,6 +6735,7 @@ void SceneNarakuProto::DrawMiniMap()
     ImGui::End();
 }
 
+#if defined(_DEBUG) || defined(NARAKU_EDITOR_BUILD)
 void SceneNarakuProto::DrawPlayerPositionDebug()
 {
     // デバッグウィンドウを表示します。
@@ -6683,6 +6832,8 @@ void SceneNarakuProto::DrawPlayerPositionDebug()
     }
     ImGui::End();
 }
+
+#endif
 
 void SceneNarakuProto::DrawMiningProgressBar()
 {

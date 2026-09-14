@@ -5,6 +5,7 @@
 
 #include <Windows.h>
 #include <DirectXMath.h>
+#include <array>
 #include <string>
 
 class Texture;
@@ -103,7 +104,15 @@ public:
         /** @brief 高精細セル上限を 2048 に設定します。 */
         MenuDetailedLimit2048,
         /** @brief 高精細セル上限を 4096 に設定します。 */
-        MenuDetailedLimit4096
+        MenuDetailedLimit4096,
+        /** @brief EditorのMapsをゲーム側へ検証付きで発行します。 */
+        MenuPublishMaps,
+        /** @brief 直近の発行バックアップをゲーム側へ復元します。 */
+        MenuRestorePublishedMaps,
+        /** @brief 15段階生成プレビュー設定を表示します。 */
+        MenuToggleGeneratedPreview,
+        /** @brief 現在の生成設定で歩行確認を開始します。 */
+        MenuStartGeneratedWalkPreview
     };
 
     /**
@@ -528,6 +537,9 @@ private:
      * @brief 主要な操作履歴を表示するログウィンドウを描画します。
      */
     void DrawOperationLogWindow();
+
+    /** @brief 15段階生成と歩行開始の設定ウィンドウを描画します。 */
+    void DrawGeneratedPreviewWindow();
 
     /**
      * @brief プレイテスト起動要求を処理します。
@@ -1162,6 +1174,23 @@ private:
 
     /** @brief 操作説明ウィンドウの表示有無です。 */
     bool m_showHelpWindow = true;
+
+    /** @brief 15段階生成プレビュー設定の表示有無です。 */
+    bool m_showGeneratedPreviewWindow = false;
+
+    /** @brief プレビュー用64bitシードです。 */
+    unsigned long long m_generatedPreviewSeed = 1;
+
+    /** @brief trueなら再生成しても現在のシードを維持します。 */
+    bool m_generatedPreviewSeedFixed = true;
+
+    /** @brief 歩行開始する親深度、上中下、エリア番号です。 */
+    int m_generatedPreviewDepth = 1;
+    int m_generatedPreviewSublayer = 0;
+    int m_generatedPreviewArea = 1;
+
+    /** @brief 各段階のエリア数です。0はゲームと同じ2～4抽選です。 */
+    std::array<int, 15> m_generatedPreviewAreaCounts = {};
 
     /** @brief 床プレビューをセル単位で高精細描画するかどうかです。false の時はレイヤー単位の簡易描画を使います。 */
     bool m_useDetailedFloorPreview = false;

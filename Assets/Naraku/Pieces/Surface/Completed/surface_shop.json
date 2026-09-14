@@ -1,0 +1,6 @@
+{
+  "version": 1, "id": "surface_shop", "displayName": "地上・商店", "abyssLayer": 0,
+  "sublayerTag": "none", "isSurface": true, "sizePreset": "8x8", "gridWidth": 8, "gridDepth": 8, "cellSize": 2,
+  "heights": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "surfaceFacility": { "type": "shop", "cell": { "x": 2, "z": 2 }, "facing": "south", "modelPath": "", "offset": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 1, "y": 1, "z": 1 }, "rotationQuarterTurns": 0 }
+}

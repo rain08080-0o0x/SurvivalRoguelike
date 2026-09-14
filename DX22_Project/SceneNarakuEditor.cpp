@@ -13,6 +13,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <ctime>
+#include <fstream>
 #include <cstdio>
 #include <string>
 
@@ -146,6 +149,26 @@ bool SceneNarakuEditor::HandleNativeMenuCommand(unsigned int commandId)
         return true;
     case MenuCreateNewMap:
         CreateNewMap();
+        return true;
+    case MenuPublishMaps:
+    {
+        const int result = std::system("powershell -NoProfile -ExecutionPolicy Bypass -File ..\\Tools\\Publish-NarakuMaps.ps1 -Action Publish");
+        m_lastIoMessage = result == 0 ? u8"ゲーム側へMapsを発行しました。" : u8"実行中なので保存できません";
+        AppendOperationLog(m_lastIoMessage);
+        return true;
+    }
+    case MenuRestorePublishedMaps:
+    {
+        const int result = std::system("powershell -NoProfile -ExecutionPolicy Bypass -File ..\\Tools\\Publish-NarakuMaps.ps1 -Action Restore");
+        m_lastIoMessage = result == 0 ? u8"直近のMaps発行バックアップを復元しました。" : u8"Mapsの復元に失敗しました。";
+        AppendOperationLog(m_lastIoMessage);
+        return true;
+    }
+    case MenuToggleGeneratedPreview:
+        m_showGeneratedPreviewWindow = !m_showGeneratedPreviewWindow;
+        return true;
+    case MenuStartGeneratedWalkPreview:
+        TryLaunchPlaytest();
         return true;
     case MenuToggleAutoFocus:
         m_autoFocusSelection = !m_autoFocusSelection;
@@ -322,6 +345,7 @@ void SceneNarakuEditor::SyncNativeMenuState(HMENU menuBar) const
     SetMenuCheckState(menuBar, MenuToggleFeatureWindow, m_showFeatureWindow);
     SetMenuCheckState(menuBar, MenuToggleOperationLogWindow, m_showOperationLogWindow);
     SetMenuCheckState(menuBar, MenuToggleHelpWindow, m_showHelpWindow);
+    SetMenuCheckState(menuBar, MenuToggleGeneratedPreview, m_showGeneratedPreviewWindow);
 
     const UINT alphaIds[] =
     {
@@ -1381,7 +1405,90 @@ void SceneNarakuEditor::DrawEditorUi()
         DrawHelpWindow();
     }
 
+    if (m_showGeneratedPreviewWindow)
+    {
+        DrawGeneratedPreviewWindow();
+    }
+
     DrawTransientPopups();
+}
+
+void SceneNarakuEditor::DrawGeneratedPreviewWindow()
+{
+    EDITOR_PROFILE_WINDOW(u8"15段階生成プレビュー");
+    ImGui::SetNextWindowSize(ImVec2(430.0f, 330.0f), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin(u8"15段階生成プレビュー", &m_showGeneratedPreviewWindow))
+    {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::TextUnformatted(u8"ゲームと同じ生成器で第一層上層～第五層下層を構成します。");
+    ImGui::InputScalar(u8"乱数シード", ImGuiDataType_U64, &m_generatedPreviewSeed);
+    ImGui::Checkbox(u8"シードを固定", &m_generatedPreviewSeedFixed);
+    ImGui::SliderInt(u8"開始深度", &m_generatedPreviewDepth, 1, 5);
+    const char* sublayers[] = { u8"上層", u8"中層", u8"下層" };
+    ImGui::Combo(u8"開始段階", &m_generatedPreviewSublayer, sublayers, 3);
+    ImGui::SliderInt(u8"開始エリア番号", &m_generatedPreviewArea, 1, 4);
+    const char* areaModes[] = { u8"ゲーム抽選（2～4）", "2", "3", "4" };
+    if (ImGui::BeginChild("PreviewAreaCounts", ImVec2(0.0f, 120.0f), true))
+    {
+        for (int stage = 0; stage < 15; ++stage)
+        {
+            ImGui::PushID(stage);
+            const char* layer = sublayers[stage % 3];
+            ImGui::SetNextItemWidth(150.0f);
+            ImGui::Combo("##count", &m_generatedPreviewAreaCounts[static_cast<std::size_t>(stage)], areaModes, 4);
+            ImGui::SameLine();
+            ImGui::Text(u8"第%d層 %s", stage / 3 + 1, layer);
+            ImGui::PopID();
+        }
+    }
+    ImGui::EndChild();
+    ImGui::Separator();
+
+    if (ImGui::Button(u8"15段階を再生成して歩行確認", ImVec2(250.0f, 0.0f)))
+    {
+        const int selectedStage = (m_generatedPreviewDepth - 1) * 3 + m_generatedPreviewSublayer;
+        const int selectedAreaMode = m_generatedPreviewAreaCounts[static_cast<std::size_t>(selectedStage)];
+        if (selectedAreaMode > 0)
+        {
+            m_generatedPreviewArea = std::min(m_generatedPreviewArea, selectedAreaMode + 1);
+        }
+        if (!m_generatedPreviewSeedFixed)
+        {
+            m_generatedPreviewSeed =
+                (static_cast<unsigned long long>(std::time(nullptr)) << 32) ^
+                static_cast<unsigned long long>(std::clock());
+        }
+        std::ofstream config("Assets/Config/naraku_editor_preview.cfg", std::ios::trunc);
+        if (!config)
+        {
+            m_lastIoMessage = u8"生成プレビュー設定を保存できません。";
+        }
+        else
+        {
+            config << "seed=" << m_generatedPreviewSeed << '\n';
+            config << "depth=" << m_generatedPreviewDepth << '\n';
+            config << "sublayer=" << m_generatedPreviewSublayer << '\n';
+            config << "area=" << m_generatedPreviewArea << '\n';
+            for (int stage = 0; stage < 15; ++stage)
+            {
+                config << "areaCount" << stage << '=' <<
+                    m_generatedPreviewAreaCounts[static_cast<std::size_t>(stage)] << '\n';
+            }
+            config.close();
+            TryLaunchPlaytest();
+        }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(u8"シードをコピー"))
+    {
+        const std::string seed = std::to_string(m_generatedPreviewSeed);
+        ImGui::SetClipboardText(seed.c_str());
+    }
+    ImGui::TextWrapped(u8"歩行確認中は敵が停止し、採掘・各資源消費・死亡・本番セーブ更新を無効化します。");
+    ImGui::End();
 }
 
 // Draw file IO controls and the top-level edit mode selector.

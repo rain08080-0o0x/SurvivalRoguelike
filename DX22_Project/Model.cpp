@@ -1,9 +1,12 @@
-﻿#include "Model.h"
+#include "Model.h"
 #include "DirectXTex/TextureLoad.h"
 #include <algorithm>
 #include <assimp/Importer.hpp>
+#include <assimp/IOStream.hpp>
+#include <assimp/IOSystem.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <cstdio>
 
 #ifdef _DEBUG
 #include "Geometory.h"
@@ -172,6 +175,114 @@ void Model::SetPixelShader(PixelShader* ps)
 	m_pPS = ps;
 }
 
+namespace
+{
+	std::wstring Utf8ToWideHelper(const char* utf8Str)
+	{
+		if (utf8Str == nullptr || *utf8Str == '\0') return L"";
+		int len = MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, NULL, 0);
+		if (len <= 0) return L"";
+		std::wstring wide(len, L'\0');
+		MultiByteToWideChar(CP_UTF8, 0, utf8Str, -1, &wide[0], len);
+		if (!wide.empty() && wide.back() == L'\0') wide.pop_back();
+		return wide;
+	}
+
+	std::string WideToUtf8Helper(const std::wstring& wideStr)
+	{
+		if (wideStr.empty()) return "";
+		int len = WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, NULL, 0, NULL, NULL);
+		if (len <= 0) return "";
+		std::string utf8(len, '\0');
+		WideCharToMultiByte(CP_UTF8, 0, wideStr.c_str(), -1, &utf8[0], len, NULL, NULL);
+		if (!utf8.empty() && utf8.back() == '\0') utf8.pop_back();
+		return utf8;
+	}
+
+	std::wstring GetAbsolutePath(const std::wstring& path)
+	{
+		const DWORD required = GetFullPathNameW(path.c_str(), 0, nullptr, nullptr);
+		if (required == 0) return path;
+		std::wstring absolute(required, L'\0');
+		const DWORD written = GetFullPathNameW(path.c_str(), required, &absolute[0], nullptr);
+		if (written == 0 || written >= required) return path;
+		absolute.resize(written);
+		return absolute;
+	}
+
+	class Utf8FileStream final : public Assimp::IOStream
+	{
+	public:
+		explicit Utf8FileStream(FILE* file) : m_file(file) {}
+		~Utf8FileStream() override { if (m_file != nullptr) std::fclose(m_file); }
+		size_t Read(void* buffer, size_t size, size_t count) override { return std::fread(buffer, size, count, m_file); }
+		size_t Write(const void* buffer, size_t size, size_t count) override { return std::fwrite(buffer, size, count, m_file); }
+		aiReturn Seek(size_t offset, aiOrigin origin) override
+		{
+			int seekOrigin = SEEK_SET;
+			if (origin == aiOrigin_CUR) seekOrigin = SEEK_CUR;
+			else if (origin == aiOrigin_END) seekOrigin = SEEK_END;
+			return _fseeki64(m_file, static_cast<__int64>(offset), seekOrigin) == 0 ? aiReturn_SUCCESS : aiReturn_FAILURE;
+		}
+		size_t Tell() const override { return static_cast<size_t>(_ftelli64(m_file)); }
+		size_t FileSize() const override
+		{
+			const __int64 current = _ftelli64(m_file);
+			_fseeki64(m_file, 0, SEEK_END);
+			const __int64 size = _ftelli64(m_file);
+			_fseeki64(m_file, current, SEEK_SET);
+			return static_cast<size_t>(size);
+		}
+		void Flush() override { std::fflush(m_file); }
+
+	private:
+		FILE* m_file;
+	};
+
+	class Utf8FileIOSystem final : public Assimp::IOSystem
+	{
+	public:
+		explicit Utf8FileIOSystem(const std::wstring& sourcePath)
+		{
+			const size_t separator = sourcePath.find_last_of(L"\\/");
+			m_baseDirectory = separator == std::wstring::npos ? L"" : sourcePath.substr(0, separator + 1);
+		}
+		bool Exists(const char* file) const override
+		{
+			const DWORD attributes = GetFileAttributesW(ResolvePath(file).c_str());
+			return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+		}
+		char getOsSeparator() const override { return '\\'; }
+		Assimp::IOStream* Open(const char* file, const char* mode = "rb") override
+		{
+			if (mode == nullptr || mode[0] != 'r') return nullptr;
+			FILE* handle = nullptr;
+			if (_wfopen_s(&handle, ResolvePath(file).c_str(), L"rb") != 0 || handle == nullptr) return nullptr;
+			return new Utf8FileStream(handle);
+		}
+		void Close(Assimp::IOStream* file) override { delete file; }
+
+	private:
+		std::wstring ResolvePath(const char* file) const
+		{
+			std::wstring path = Utf8ToWideHelper(file);
+			if (path.size() >= 2 && path[1] == L':') return path;
+			if (!path.empty() && (path[0] == L'\\' || path[0] == L'/')) return path;
+			return m_baseDirectory + path;
+		}
+		std::wstring m_baseDirectory;
+	};
+
+	const aiScene* ReadAssimpSceneFromPath(Assimp::Importer& importer, const char* file, int flag)
+	{
+		const std::wstring absolutePath = GetAbsolutePath(Utf8ToWideHelper(file));
+		const std::string absolutePathUtf8 = WideToUtf8Helper(absolutePath);
+		if (absolutePathUtf8.empty()) return nullptr;
+		importer.SetIOHandler(new Utf8FileIOSystem(absolutePath));
+		return importer.ReadFile(absolutePathUtf8, flag);
+	}
+}
+
 /*
 * @brief モデルデータ読み込み
 * @param[in] file 読み込むモデルファイルへのパス
@@ -194,7 +305,7 @@ bool Model::Load(const char* file, float scale, Flip flip)
 	//flag |= aiProcess_MakeLeftHanded;
 
 	// assimpで読み込み
-	const aiScene* pScene = importer.ReadFile(file, flag);
+	const aiScene* pScene = ReadAssimpSceneFromPath(importer, file, flag);
 	if (!pScene) {
 #ifdef _DEBUG
 		m_errorStr = importer.GetErrorString();
@@ -350,7 +461,7 @@ Model::AnimeNo Model::AddAnimation(const char* file)
 	if (m_loadFlip == Flip::XFlip)  flag |= aiProcess_MakeLeftHanded;
 
 	// assimpで読み込み
-	const aiScene* pScene = importer.ReadFile(file, flag);
+	const aiScene* pScene = ReadAssimpSceneFromPath(importer, file, flag);
 	if (!pScene)
 	{
 #ifdef _DEBUG

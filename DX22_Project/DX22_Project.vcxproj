@@ -1,14 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
-    <ProjectConfiguration Include="Debug|Win32">
-      <Configuration>Debug</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|Win32">
-      <Configuration>Release</Configuration>
-      <Platform>Win32</Platform>
-    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
@@ -26,19 +18,6 @@
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-    <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
@@ -57,12 +36,6 @@
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -70,48 +43,16 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <OutDir>$(MSBuildThisFileDirectory)..\Output\$(Configuration)\Legacy\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\Intermediate\$(Configuration)\Legacy\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(ProjectDir);$(IncludePath)</IncludePath>
+    <OutDir>$(MSBuildThisFileDirectory)..\Output\$(Configuration)\Legacy\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)..\Intermediate\$(Configuration)\Legacy\</IntDir>
   </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-    </ClCompile>
-    <Link>
-      <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-    </ClCompile>
-    <Link>
-      <SubSystem>Windows</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -175,14 +116,10 @@
     <ClCompile Include="MeshBuffer.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="NewLastBossEditor.cpp" />
-    <ClCompile Include="NarakuPieceEditorHistory.cpp" />
-    <ClCompile Include="NarakuPieceData.cpp" />
-    <ClCompile Include="NarakuStageGenerator.cpp" />
     <ClCompile Include="ParticleEffectPreset.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="ParticleEmitter2D.cpp" />
     <ClCompile Include="PolylineEffect.cpp" />
-    <ClCompile Include="NarakuMapData.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="SceneCastleEditor.cpp" />
     <ClCompile Include="Scene3DEditor.cpp" />
@@ -190,15 +127,7 @@
     <ClCompile Include="SceneFinalBossEditor.cpp" />
     <ClCompile Include="SceneEffectDebug.cpp" />
     <ClCompile Include="SceneGame.cpp" />
-    <ClCompile Include="SceneNarakuEditor.cpp" />
-    <ClCompile Include="SceneNarakuPieceEditor.cpp" />
-    <ClCompile Include="SceneNarakuPieceEditorDocument.cpp" />
-    <ClCompile Include="SceneNarakuPieceEditorEditing.cpp" />
-    <ClCompile Include="SceneNarakuPieceEditorEnvironment.cpp" />
-    <ClCompile Include="SceneNarakuPieceEditorPreview.cpp" />
-    <ClCompile Include="SceneNarakuPieceEditorWindows.cpp" />
-    <ClCompile Include="SceneManager.cpp" />
-    <ClCompile Include="SceneNarakuProto.cpp" />
+    <ClCompile Include="LegacySceneManager.cpp" />
     <ClCompile Include="SceneResult.cpp" />
     <ClCompile Include="SceneTitle.cpp" />
     <ClCompile Include="ScoreLite.cpp" />
@@ -206,7 +135,7 @@
     <ClCompile Include="ShaderList.cpp" />
     <ClCompile Include="Sound.cpp" />
     <ClCompile Include="Sprite.cpp" />
-    <ClCompile Include="Startup.cpp" />
+    <ClCompile Include="LegacyStartup.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="TrailEffect.cpp" />
     <ClCompile Include="Transfer.cpp" />
@@ -253,11 +182,6 @@
     <ClInclude Include="MainImGui.h" />
     <ClInclude Include="MeshBuffer.h" />
     <ClInclude Include="Model.h" />
-    <ClInclude Include="NarakuMapData.h" />
-    <ClInclude Include="NarakuPieceEditorHistory.h" />
-    <ClInclude Include="NarakuPieceEditorInternal.h" />
-    <ClInclude Include="NarakuPieceData.h" />
-    <ClInclude Include="NarakuStageGenerator.h" />
     <ClInclude Include="NewLastBossEditor.h" />
     <ClInclude Include="ParticleEffectPreset.h" />
     <ClInclude Include="Player.h" />
@@ -270,10 +194,7 @@
     <ClInclude Include="SceneFinalBossEditor.h" />
     <ClInclude Include="SceneEffectDebug.h" />
     <ClInclude Include="SceneGame.h" />
-    <ClInclude Include="SceneNarakuEditor.h" />
-    <ClInclude Include="SceneNarakuPieceEditor.h" />
     <ClInclude Include="SceneManager.h" />
-    <ClInclude Include="SceneNarakuProto.h" />
     <ClInclude Include="SceneResult.h" />
     <ClInclude Include="SceneTitle.h" />
     <ClInclude Include="ScoreLite.h" />
@@ -295,6 +216,9 @@
     <Text Include="_model.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="StageLegacyAssets" AfterTargets="Build">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\Tools\Stage-RuntimeAssets.ps1&quot; -Role Legacy -Configuration $(Configuration) -ProjectDirectory &quot;$(ProjectDir).&quot; -OutputDirectory &quot;$(OutDir).&quot;" />
+  </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

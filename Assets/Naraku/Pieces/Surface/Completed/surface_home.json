@@ -1,0 +1,6 @@
+{
+  "version": 1, "id": "surface_home", "displayName": "地上・自宅", "abyssLayer": 0,
+  "sublayerTag": "none", "isSurface": true, "sizePreset": "8x8", "gridWidth": 8, "gridDepth": 8, "cellSize": 2,
+  "heights": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  "surfaceFacility": { "type": "home", "cell": { "x": 2, "z": 2 }, "facing": "south", "modelPath": "Assets/Model/ground/shack7.fbx", "offset": { "x": 0, "y": 0, "z": 0 }, "scale": { "x": 1, "y": 1, "z": 1 }, "rotationQuarterTurns": 0 }
+}

@@ -10,18 +10,23 @@
 #include "SceneManager.h"
 #include "SceneNarakuEditor.h"
 #include "SceneNarakuPieceEditor.h"
+#include "SceneNarakuProto.h"
+#include <cstring>
+#include <fstream>
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
 	HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-// timeGetTime蜻ｨ繧翫・菴ｿ逕ｨ
-// timeGetTime蜻ｨ繧翫・菴ｿ逕ｨ
+// timeGetTimeを使用するためのライブラリ。
 #pragma comment(lib, "winmm.lib")
 
-//--- 繝励Ο繝医ち繧､繝怜ｮ｣險
+// ウィンドウプロシージャの宣言。
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 namespace
 {
+	constexpr UINT MenuShowNarakuOverview = 49001;
+	constexpr UINT MenuShowNarakuPieceEditor = 49002;
+	constexpr UINT MenuRestartNarakuPreview = 49003;
 	bool g_isFullscreen = false;
 	HWND g_mainWindow = nullptr;
 	HMENU g_editorMenuBar = nullptr;
@@ -44,6 +49,9 @@ namespace
 		AppendMenuW(fileMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(fileMenu, MF_STRING, SceneNarakuEditor::MenuOpenMap, L"\x958B\x304F...");
 		AppendMenuW(fileMenu, MF_STRING, SceneNarakuEditor::MenuCreateNewMap, L"\x65B0\x898F");
+		AppendMenuW(fileMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(fileMenu, MF_STRING, SceneNarakuEditor::MenuPublishMaps, L"Publish Maps to Game");
+		AppendMenuW(fileMenu, MF_STRING, SceneNarakuEditor::MenuRestorePublishedMaps, L"Restore Last Published Maps");
 
 		AppendMenuW(alphaMenu, MF_STRING, SceneNarakuEditor::MenuFrontAlpha015, L"0.15");
 		AppendMenuW(alphaMenu, MF_STRING, SceneNarakuEditor::MenuFrontAlpha030, L"0.30");
@@ -86,6 +94,14 @@ namespace
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuToggleOperationLogWindow, L"\x64CD\x4F5C\x30ED\x30B0");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuToggleHelpWindow, L"\x64CD\x4F5C\x8AAC\x660E");
 		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuToggleGeneratedPreview, L"Generated Preview");
+		AppendMenuW(viewMenu, MF_STRING, MenuShowNarakuOverview, L"Overview");
+		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuStartGeneratedWalkPreview, L"Walk");
+		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuToggleGeneratedPreview, L"Generation Settings");
+		AppendMenuW(viewMenu, MF_STRING, MenuRestartNarakuPreview, L"Return to Start");
+		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(viewMenu, MF_STRING, MenuShowNarakuPieceEditor, L"Piece Editor");
+		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuSnapTopView, L"\x771F\x4E0A\x30D3\x30E5\x30FC");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuFocusSelection, L"\x9078\x629E\x5BFE\x8C61\x3078\x30D5\x30A9\x30FC\x30AB\x30B9");
 
@@ -123,6 +139,8 @@ namespace
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuToggleHeightGridWindow, L"\x9AD8\x3055\x30B0\x30EA\x30C3\x30C9");
 		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuPieceEditor::MenuTogglePieceHierarchyWindow, L"\x5C0F\x30B9\x30C6\x30FC\x30B8Hierarchy");
+		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(viewMenu, MF_STRING, MenuShowNarakuOverview, L"Stage Editor");
 
 		AppendMenuW(modelsMenu, MF_STRING, SceneNarakuPieceEditor::MenuNewEnvironmentModel, L"New Model...");
 		AppendMenuW(modelsMenu, MF_STRING, SceneNarakuPieceEditor::MenuDeleteEnvironmentModel, L"Delete...");
@@ -174,6 +192,10 @@ namespace
 		{
 			targetMenu = g_pieceEditorMenuBar;
 		}
+		else if (SceneManager::GetCurrent() == SceneManager::SCENE_NARAKU_PROTO)
+		{
+			targetMenu = g_editorMenuBar;
+		}
 
 		if (GetMenu(hWnd) != targetMenu)
 		{
@@ -193,6 +215,22 @@ namespace
 
 	bool DispatchNativeEditorMenu(HWND hWnd, UINT commandId)
 	{
+		if (commandId == MenuShowNarakuOverview)
+		{
+			SceneManager::ChangeScene(SceneManager::SCENE_NARAKU_EDITOR);
+			return true;
+		}
+		if (commandId == MenuShowNarakuPieceEditor)
+		{
+			SceneManager::ChangeScene(SceneManager::SCENE_NARAKU_PIECE_EDITOR);
+			return true;
+		}
+		if (commandId == MenuRestartNarakuPreview &&
+			SceneManager::GetCurrent() == SceneManager::SCENE_NARAKU_PROTO)
+		{
+			SceneManager::ReloadCurrentScene();
+			return true;
+		}
 		SceneNarakuEditor* editor = GetNarakuEditorScene();
 		if (editor != nullptr)
 		{
@@ -280,19 +318,19 @@ bool IsAppFullscreen()
 }
 
 
-// 繧ｨ繝ｳ繝医Μ繝昴う繝ｳ繝・
+// エントリーポイント。
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
 #ifdef _DEBUG
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
-	//--- 螟画焚螳｣險
+	// ウィンドウ生成に使用する変数。
 	WNDCLASSEX wcex;
 	HWND hWnd;
 	MSG message;
 
-	// 繧ｦ繧｣繝ｳ繝峨け繝ｩ繧ｹ諠・ｱ縺ｮ險ｭ螳・
+	// ウィンドウクラスを設定する。
 	ZeroMemory(&wcex, sizeof(wcex));
 	wcex.hInstance = hInstance;
 	wcex.lpszClassName = "Class Name";
@@ -304,21 +342,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
 
-	// 繧ｦ繧｣繝ｳ繝峨え繧ｯ繝ｩ繧ｹ諠・ｱ縺ｮ逋ｻ骭ｲ
+	// ウィンドウクラスを登録する。
 	if (!RegisterClassEx(&wcex))
 	{
 		MessageBox(NULL, "Failed to RegisterClassEx", "Error", MB_OK);
 		return 0;
 	}
 
-	// 繧ｦ繧｣繝ｳ繝峨え縺ｮ菴懈・
+	// ウィンドウを生成する。
 	RECT rect = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
 	DWORD style = WS_CAPTION | WS_SYSMENU;
 	DWORD exStyle = WS_EX_OVERLAPPEDWINDOW;
 	AdjustWindowRectEx(&rect, style, false, exStyle);
 	hWnd = CreateWindowEx(
 		exStyle, wcex.lpszClassName,
-		APP_TITLE, style,
+		"NarakuEditor", style,
 		CW_USEDEFAULT,CW_USEDEFAULT,
 		rect.right - rect.left, rect.bottom - rect.top,
 		HWND_DESKTOP,
@@ -326,7 +364,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	);
 	g_mainWindow = hWnd;
 
-	// 繧ｦ繧｣繝ｳ繝峨え縺ｮ陦ｨ遉ｺ
+	// ウィンドウを表示する。
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
@@ -337,7 +375,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	if (clientWidth == 0) clientWidth = SCREEN_WIDTH;
 	if (clientHeight == 0) clientHeight = SCREEN_HEIGHT;
 
-	// 蛻晄悄蛹門・逅・
+	// 描画とシーンを初期化する。
 	if (FAILED(Init(hWnd, clientWidth, clientHeight)))
 	{
 		Uninit();
@@ -345,16 +383,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		return 0;
 	}
 
+	if (lpCmdLine != nullptr && std::strstr(lpCmdLine, "--verify-generation") != nullptr)
+	{
+		std::string verifyError;
+		const bool verified = SceneNarakuProto::VerifyPreviewGenerationDeterminism(verifyError);
+		if (!verified)
+		{
+			OutputDebugStringA(verifyError.c_str());
+		}
+		CreateDirectoryW(L"Assets/Temp", nullptr);
+		std::ofstream resultFile("Assets/Temp/generation_parity_result.txt", std::ios::trunc);
+		resultFile << (verified ? "OK" : "ERROR\n" + verifyError);
+		resultFile.close();
+		DeleteFileW(L"Assets/Config/naraku_editor_preview.cfg");
+		Uninit();
+		UnregisterClass(wcex.lpszClassName, hInstance);
+		return verified ? 0 : 2;
+	}
+
 	g_editorMenuBar = CreateNarakuEditorNativeMenu();
 	g_pieceEditorMenuBar = CreateNarakuPieceEditorNativeMenu();
 	UpdateNativeEditorMenu(hWnd);
 
-	//--- FPS蛻ｶ蠕｡
+	// フレームレートを制御する。
 	timeBeginPeriod(1);
 	DWORD countStartTime = timeGetTime();
 	DWORD preExecTime = countStartTime;
 
-	//--- 繧ｦ繧｣繝ｳ繝峨え縺ｮ邂｡逅・
+	// メッセージ処理と更新・描画を繰り返す。
 	while (1)
 	{
 		if (PeekMessage(&message, NULL, 0, 0, PM_NOREMOVE))
@@ -384,7 +440,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 
 
-	// 邨ゆｺ・凾
+	// 終了処理。
 	timeEndPeriod(1);
 	if (g_editorMenuBar != nullptr)
 	{
@@ -398,12 +454,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		g_pieceEditorMenuBar = nullptr;
 	}
 	Uninit();
+	DeleteFileW(L"Assets/Config/naraku_editor_preview.cfg");
 	UnregisterClass(wcex.lpszClassName, hInstance);
 
 	return 0;
 }
 
-// 繧ｦ繧｣繝ｳ繝峨え繝励Ο繧ｷ繝ｼ繧ｸ繝｣
+// ウィンドウプロシージャ。
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	const bool isRepeatKey = (lParam & 0x40000000) != 0;
@@ -431,7 +488,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		break;
 	case WM_SIZE:
-		// 譛蟆丞喧荳ｭ縺ｯ菴輔ｂ縺励↑縺・
+		// 最小化中は描画領域を更新しない。
 		if (wParam != SIZE_MINIMIZED)
 		{
 			UINT width = LOWORD(lParam);
