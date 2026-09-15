@@ -1853,6 +1853,8 @@ void SceneNarakuEditor::DrawLayerWindow()
                 PushUndoSnapshot();
                 textureId = i;
                 layer.groundTextureId = textureId;
+                NarakuMap::EnsureLayerCellGroundTextures(layer);
+                std::fill(layer.cellGroundTextureIds.begin(), layer.cellGroundTextureIds.end(), textureId);
             }
             if (selected)
             {

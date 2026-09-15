@@ -624,6 +624,15 @@ namespace NarakuMap
         }
     }
 
+    void EnsureLayerCellGroundTextures(TerrainLayer& layer)
+    {
+        const int count = GetLayerCellCount(layer);
+        if (static_cast<int>(layer.cellGroundTextureIds.size()) != count)
+        {
+            layer.cellGroundTextureIds.resize(count, layer.groundTextureId);
+        }
+    }
+
     float GetVertexHeight(const TerrainLayer& layer, int gridX, int gridZ)
     {
         if (gridX < 0 || gridZ < 0 || gridX >= layer.gridWidth || gridZ >= layer.gridHeight)
@@ -706,6 +715,33 @@ namespace NarakuMap
 
         const int index = cellZ * (layer.gridWidth - 1) + cellX;
         layer.cellAttributeFlags[index] = flags;
+    }
+
+    int GetCellGroundTextureId(const TerrainLayer& layer, int cellX, int cellZ)
+    {
+        if (!IsCellIndexValid(layer, cellX, cellZ))
+        {
+            return layer.groundTextureId;
+        }
+
+        const int index = cellZ * (layer.gridWidth - 1) + cellX;
+        if (index < 0 || index >= static_cast<int>(layer.cellGroundTextureIds.size()))
+        {
+            return layer.groundTextureId;
+        }
+        return layer.cellGroundTextureIds[index];
+    }
+
+    void SetCellGroundTextureId(TerrainLayer& layer, int cellX, int cellZ, int textureId)
+    {
+        EnsureLayerCellGroundTextures(layer);
+        if (!IsCellIndexValid(layer, cellX, cellZ))
+        {
+            return;
+        }
+
+        const int index = cellZ * (layer.gridWidth - 1) + cellX;
+        layer.cellGroundTextureIds[index] = textureId;
     }
 
     bool HasCellAttributeFlag(const TerrainLayer& layer, int cellX, int cellZ, std::uint32_t flag)
@@ -984,6 +1020,10 @@ namespace NarakuMap
             if (static_cast<int>(layer.cellAttributeFlags.size()) != GetLayerCellCount(layer))
             {
                 issues.push_back({ ValidationIssue::Warning, u8"セル属性配列サイズがグリッドと一致していません。保存時に補正されます。" });
+            }
+            if (!layer.cellGroundTextureIds.empty() && static_cast<int>(layer.cellGroundTextureIds.size()) != GetLayerCellCount(layer))
+            {
+                issues.push_back({ ValidationIssue::Warning, u8"セル別地面テクスチャ配列サイズがグリッドと一致していません。保存時に補正されます。" });
             }
             for (int j = i + 1; j < static_cast<int>(mapData.terrainLayers.size()); ++j)
             {
@@ -1318,6 +1358,7 @@ namespace NarakuMap
             EnsureLayerHeights(layer);
             EnsureLayerVertexEnabled(layer);
             EnsureLayerCellAttributes(layer);
+            EnsureLayerCellGroundTextures(layer);
 
             AppendIndent(out, 2);
             out << "{\n";
@@ -1361,6 +1402,14 @@ namespace NarakuMap
             {
                 if (c > 0) out << ", ";
                 out << layer.cellAttributeFlags[c];
+            }
+            out << "],\n";
+            AppendIndent(out, 3);
+            out << "\"cellGroundTextureIds\": [";
+            for (int c = 0; c < static_cast<int>(layer.cellGroundTextureIds.size()); ++c)
+            {
+                if (c > 0) out << ", ";
+                out << layer.cellGroundTextureIds[c];
             }
             out << "]\n";
             AppendIndent(out, 2);
@@ -1554,6 +1603,20 @@ namespace NarakuMap
                 }
             }
 
+            const JsonValue* cellGroundTexturesValue = nullptr;
+            if (GetObjectValue<JsonValue>(layerValue, "cellGroundTextureIds", cellGroundTexturesValue) &&
+                cellGroundTexturesValue->type == JsonValue::TypeArray)
+            {
+                layer.cellGroundTextureIds.reserve(cellGroundTexturesValue->arrayValue.size());
+                for (const JsonValue& textureValue : cellGroundTexturesValue->arrayValue)
+                {
+                    layer.cellGroundTextureIds.push_back(
+                        textureValue.type == JsonValue::TypeNumber
+                        ? static_cast<int>(textureValue.numberValue)
+                        : layer.groundTextureId);
+                }
+            }
+
             const JsonValue* vertexEnabledValue = nullptr;
             if (GetObjectValue<JsonValue>(layerValue, "vertexEnabled", vertexEnabledValue) && vertexEnabledValue->type == JsonValue::TypeArray)
             {
@@ -1567,6 +1630,7 @@ namespace NarakuMap
             EnsureLayerHeights(layer);
             EnsureLayerVertexEnabled(layer);
             EnsureLayerCellAttributes(layer);
+            EnsureLayerCellGroundTextures(layer);
             loadedMap.terrainLayers.push_back(layer);
         }
 

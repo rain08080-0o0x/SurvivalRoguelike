@@ -631,6 +631,7 @@ void SceneNarakuPieceEditor::RenderTerrainPreviewToTexture()
 
     RenderTarget* previewTarget[] = { m_previewRenderTarget };
     SetRenderTargets(1, previewTarget, m_previewDepthStencil);
+    SetDepthTest(true);
 
     const float clearColor[] = { 0.02f, 0.03f, 0.04f, 1.0f };
     m_previewRenderTarget->Clear(clearColor);
@@ -639,6 +640,7 @@ void SceneNarakuPieceEditor::RenderTerrainPreviewToTexture()
 
     RenderTarget* defaultTarget[] = { GetDefaultRTV() };
     SetRenderTargets(1, defaultTarget, GetDefaultDSV());
+    SetDepthTest(false);
 }
 
 XMFLOAT2 SceneNarakuPieceEditor::GetPreviewViewportSize() const
@@ -743,6 +745,8 @@ void SceneNarakuPieceEditor::DrawTerrainPreview3D() const
     Geometory::SetWorld(world);
     Geometory::SetView(view);
     Geometory::SetProjection(projection);
+    const ShaderList::ExtendedLight previewLight;
+    ShaderList::SetExtendedLight(previewLight);
 
     DrawGroundTextures3D();
 

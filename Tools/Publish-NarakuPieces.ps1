@@ -300,6 +300,58 @@ try {
     if ($pieceFiles.Count -eq 0) {
         throw '発行対象の小ステージJSONがありません。'
     }
+    $surfaceCompletedDirectory = Join-Path $sourcePieces 'Surface\Completed'
+    $surfaceCompletedFiles = if (Test-Path -LiteralPath $surfaceCompletedDirectory) {
+        @(Get-ChildItem -LiteralPath $surfaceCompletedDirectory -File -Filter '*.json')
+    } else { @() }
+    $requiredSurfaceFacilities = [ordered]@{
+        home = 'surface_facility_home'
+        shop = 'surface_facility_shop'
+        armory = 'surface_facility_armory'
+        restaurant_quest_desk = 'surface_facility_restaurant_quest_desk'
+        abyss_entrance = 'surface_facility_abyss_entrance'
+    }
+    $surfacePieceData = @()
+    foreach ($surfaceFile in $surfaceCompletedFiles) {
+        try {
+            $data = Get-Content -LiteralPath $surfaceFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+        catch {
+            throw "地上小ステージJSONの検証に失敗しました: $($surfaceFile.FullName)"
+        }
+        if (-not $data.isSurface -or [int]$data.gridWidth -ne 8 -or [int]$data.gridDepth -ne 8) {
+            throw "完成済み地上小ステージは地上属性付き8x8である必要があります: $($surfaceFile.Name)"
+        }
+        $facilityType = [string]$data.surfaceFacility.type
+        if (-not $requiredSurfaceFacilities.Contains($facilityType)) {
+            throw "完成済み地上小ステージに必須施設属性がありません: $($surfaceFile.Name)"
+        }
+        $surfacePieceData += [PSCustomObject]@{ File = $surfaceFile; Data = $data; Type = $facilityType }
+    }
+
+    $surfaceFacilityCatalogLines = [Collections.Generic.List[string]]::new()
+    foreach ($facilityType in $requiredSurfaceFacilities.Keys) {
+        $matches = @($surfacePieceData | Where-Object { $_.Type -eq $facilityType })
+        if ($matches.Count -eq 0) {
+            throw "完成済み地上小ステージが不足しています。施設属性: $facilityType"
+        }
+        if ($matches.Count -gt 1) {
+            throw "完成済み地上小ステージの施設属性が重複しています。施設属性: $facilityType / ファイル: $($matches.File.Name -join ', ')"
+        }
+        $modelPath = [string]$matches[0].Data.surfaceFacility.modelPath
+        if ([string]::IsNullOrWhiteSpace($modelPath)) {
+            throw "地上施設モデルが指定されていません: $($matches[0].File.Name)"
+        }
+        $relativeModelPath = $modelPath -replace '^Assets[\\/]', ''
+        $sourceModelPath = Join-Path $editorAssets $relativeModelPath
+        if (-not (Test-Path -LiteralPath $sourceModelPath -PathType Leaf)) {
+            throw "地上施設モデルが見つかりません: $modelPath"
+        }
+        $catalogModelPath = $modelPath.Replace('\', '/').Replace('"', '\"')
+        $surfaceFacilityCatalogLines.Add(
+            "`"$($requiredSurfaceFacilities[$facilityType])`" `"$facilityType`" `"$catalogModelPath`" 1 1 1") | Out-Null
+    }
+
     $referencedModelIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($pieceFile in $pieceFiles) {
         try {
@@ -356,6 +408,10 @@ try {
             Copy-Item -LiteralPath $pieceFile.FullName -Destination $destination -Force
         }
         Copy-Item -LiteralPath $sourceCatalog -Destination (Join-Path $stageRoot 'environment_models.cfg') -Force
+        [IO.File]::AppendAllText(
+            (Join-Path $stageRoot 'environment_models.cfg'),
+            "`n$($surfaceFacilityCatalogLines -join "`n")`n",
+            [Text.UTF8Encoding]::new($false))
 
         $modelSyncStarted = $true
         $modelsResult = Sync-DirectoryContent `
@@ -373,6 +429,19 @@ try {
         }
 
         Install-PublishedData -StageRoot $stageRoot -RollbackRoot $rollbackRoot -AssetsRoot $gameAssets
+
+        $runtimeStageScript = Join-Path $PSScriptRoot 'Stage-RuntimeAssets.ps1'
+        $gameProjectDirectory = Join-Path $repositoryRoot 'NarakuGame'
+        foreach ($configuration in @('Debug', 'Release')) {
+            $runtimeOutput = Join-Path $gameOutputRoot "$configuration\Game"
+            if (Test-Path -LiteralPath $runtimeOutput) {
+                & $runtimeStageScript `
+                    -Role Game `
+                    -Configuration $configuration `
+                    -ProjectDirectory $gameProjectDirectory `
+                    -OutputDirectory $runtimeOutput
+            }
+        }
     }
     catch {
         if ($modelSyncStarted) {

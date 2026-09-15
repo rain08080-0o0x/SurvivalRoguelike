@@ -117,6 +117,9 @@ namespace NarakuMap
 
         /** @brief セルごとの属性フラグです。サイズは (gridWidth - 1) * (gridHeight - 1) です。 */
         std::vector<std::uint32_t> cellAttributeFlags;
+
+        /** @brief セルごとの地面テクスチャIDです。空の場合はgroundTextureIdを使用します。 */
+        std::vector<int> cellGroundTextureIds;
     };
 
     /**
@@ -317,6 +320,9 @@ namespace NarakuMap
     /** @brief レイヤーのセル属性配列サイズを (gridWidth - 1) * (gridHeight - 1) に揃えます。 */
     void EnsureLayerCellAttributes(TerrainLayer& layer);
 
+    /** @brief レイヤーのセル別地面テクスチャ配列をグリッドへ揃えます。 */
+    void EnsureLayerCellGroundTextures(TerrainLayer& layer);
+
     /** @brief 指定頂点の高さを返します。範囲外なら 0 を返します。 */
     float GetVertexHeight(const TerrainLayer& layer, int gridX, int gridZ);
 
@@ -334,6 +340,12 @@ namespace NarakuMap
 
     /** @brief 指定セルの属性フラグを設定します。 */
     void SetCellAttributeFlags(TerrainLayer& layer, int cellX, int cellZ, std::uint32_t flags);
+
+    /** @brief 指定セルの地面テクスチャIDを返します。未設定時はレイヤー共通IDを返します。 */
+    int GetCellGroundTextureId(const TerrainLayer& layer, int cellX, int cellZ);
+
+    /** @brief 指定セルの地面テクスチャIDを設定します。 */
+    void SetCellGroundTextureId(TerrainLayer& layer, int cellX, int cellZ, int textureId);
 
     /** @brief 指定セルが特定属性を持つかどうかを返します。 */
     bool HasCellAttributeFlag(const TerrainLayer& layer, int cellX, int cellZ, std::uint32_t flag);

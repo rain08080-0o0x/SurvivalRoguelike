@@ -40,6 +40,7 @@ namespace
     constexpr const wchar_t* kRopeTextureRelativePath = L"Assets/Model/rope/textures/txtr.png";
     constexpr const wchar_t* kRopeSupportModelRelativePath = L"Assets/Model/rope/rope.fbx";
     constexpr const wchar_t* kRopeSupportTextureRelativePath = L"Assets/Base/texture/tree_bark1.jpg";
+    constexpr const wchar_t* kMiningPointModelRelativePath = L"Assets/Model/Mining/garakuta.fbx";
     constexpr float kRopeVisualDiameter = 0.08f;
     constexpr float kRopeSupportHeight = 1.6f;
     constexpr float kRopeAnchorHeight = 1.5f;
@@ -53,9 +54,12 @@ namespace
     constexpr const wchar_t* kWeeklyWorldTempPath = L"Assets/Save/WeeklyWorld/world.tmp";
     constexpr int kSaveVersion = 11;
     constexpr int kPreviousSaveVersion = 10;
-    constexpr std::array<const wchar_t*, 5> kSurfacePieceFiles = {
-        L"surface_home.json", L"surface_shop.json", L"surface_armory.json",
-        L"surface_restaurant.json", L"surface_abyss_entrance.json" };
+    constexpr std::array<NarakuPiece::SurfaceFacilityType, 5> kSurfaceFacilityOrder = {
+        NarakuPiece::SurfaceFacilityType::Home,
+        NarakuPiece::SurfaceFacilityType::Shop,
+        NarakuPiece::SurfaceFacilityType::Armory,
+        NarakuPiece::SurfaceFacilityType::RestaurantQuestDesk,
+        NarakuPiece::SurfaceFacilityType::AbyssEntrance };
     constexpr double kGameDaySeconds = 24.0 * 60.0 * 60.0;
     constexpr double kGameWeekSeconds = 7.0 * kGameDaySeconds;
     // 実時間30分をゲーム内の1日として進めます。
@@ -64,6 +68,19 @@ namespace
     constexpr std::size_t kQuestBoardSize = 7;
     constexpr int kMaximumActiveQuests = 3;
     constexpr std::array<float, 5> kWorldTimeDepthMultipliers = { 1.0f, 1.5f, 4.0f, 10.0f, 30.0f };
+
+    const char* GetSurfaceFacilityModelId(NarakuPiece::SurfaceFacilityType type)
+    {
+        switch (type)
+        {
+        case NarakuPiece::SurfaceFacilityType::Home: return "surface_facility_home";
+        case NarakuPiece::SurfaceFacilityType::Shop: return "surface_facility_shop";
+        case NarakuPiece::SurfaceFacilityType::Armory: return "surface_facility_armory";
+        case NarakuPiece::SurfaceFacilityType::RestaurantQuestDesk: return "surface_facility_restaurant_quest_desk";
+        case NarakuPiece::SurfaceFacilityType::AbyssEntrance: return "surface_facility_abyss_entrance";
+        default: return "";
+        }
+    }
 
     std::string ReadCurrentMapVersion()
     {
@@ -641,6 +658,7 @@ SceneNarakuProto::SceneNarakuProto()
 
     LoadBaseModels();
     LoadRopeModel();
+    LoadMiningPointModel();
 
     // プレイテスト用の調整値を既定値で初期化します。
     ResetDebugPlayerParams();
@@ -716,6 +734,7 @@ SceneNarakuProto::~SceneNarakuProto()
 #endif
     ReleaseBaseModels();
     ReleaseRopeModel();
+    ReleaseMiningPointModel();
     ReleaseEnvironmentModels();
     ReleaseEnemyBillboardBatch();
     ReleaseTerrainFloorBatch();
@@ -2396,6 +2415,67 @@ void SceneNarakuProto::BuildCurrentAreaRuntime(bool placeAtStart)
 
 bool SceneNarakuProto::BuildSurfaceRuntime(bool spawnAtAbyssEntrance)
 {
+    std::array<NarakuPiece::PieceData, kSurfaceFacilityOrder.size()> surfacePieces;
+    std::array<bool, kSurfaceFacilityOrder.size()> foundSurfacePieces = {};
+    const std::wstring completedDirectory = NarakuPiece::GetSurfaceCompletedDirectoryRelativePath();
+    const std::wstring searchPattern = completedDirectory + L"\\*.json";
+    WIN32_FIND_DATAW findData = {};
+    HANDLE findHandle = FindFirstFileW(searchPattern.c_str(), &findData);
+    if (findHandle == INVALID_HANDLE_VALUE)
+    {
+        m_generationFailureSummary = u8"地上マップを読み込めませんでした。";
+        m_generationFailureDetail = "completed surface piece directory is missing or empty";
+        m_openGenerationFailurePopup = true;
+        return false;
+    }
+    do
+    {
+        if ((findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) continue;
+        NarakuPiece::PieceData piece;
+        std::string error;
+        const std::wstring path = completedDirectory + L"\\" + findData.cFileName;
+        if (!NarakuPiece::LoadPieceData(path, piece, &error) || !piece.isSurface)
+        {
+            FindClose(findHandle);
+            m_generationFailureSummary = u8"地上マップを読み込めませんでした。";
+            m_generationFailureDetail = WideToUtf8(findData.cFileName) + ": " +
+                (error.empty() ? "piece is not tagged as surface" : error);
+            m_openGenerationFailurePopup = true;
+            return false;
+        }
+        const auto typeIt = std::find(kSurfaceFacilityOrder.begin(), kSurfaceFacilityOrder.end(), piece.surfaceFacility.type);
+        if (typeIt == kSurfaceFacilityOrder.end())
+        {
+            FindClose(findHandle);
+            m_generationFailureSummary = u8"地上マップを読み込めませんでした。";
+            m_generationFailureDetail = WideToUtf8(findData.cFileName) + ": required surface facility type is not set";
+            m_openGenerationFailurePopup = true;
+            return false;
+        }
+        const std::size_t index = static_cast<std::size_t>(std::distance(kSurfaceFacilityOrder.begin(), typeIt));
+        if (foundSurfacePieces[index])
+        {
+            FindClose(findHandle);
+            m_generationFailureSummary = u8"地上マップを読み込めませんでした。";
+            m_generationFailureDetail = std::string("duplicate surface facility type: ") + NarakuPiece::ToString(piece.surfaceFacility.type);
+            m_openGenerationFailurePopup = true;
+            return false;
+        }
+        surfacePieces[index] = std::move(piece);
+        foundSurfacePieces[index] = true;
+    } while (FindNextFileW(findHandle, &findData));
+    FindClose(findHandle);
+
+    const auto missingType = std::find(foundSurfacePieces.begin(), foundSurfacePieces.end(), false);
+    if (missingType != foundSurfacePieces.end())
+    {
+        const std::size_t index = static_cast<std::size_t>(std::distance(foundSurfacePieces.begin(), missingType));
+        m_generationFailureSummary = u8"地上マップを読み込めませんでした。";
+        m_generationFailureDetail = std::string("missing surface facility type: ") + NarakuPiece::ToString(kSurfaceFacilityOrder[index]);
+        m_openGenerationFailurePopup = true;
+        return false;
+    }
+
     NarakuMap::MapData surfaceMap;
     NarakuMap::TerrainLayer layer;
     layer.id = 1;
@@ -2409,6 +2489,8 @@ bool SceneNarakuProto::BuildSurfaceRuntime(bool spawnAtAbyssEntrance)
     layer.vertexEnabled.assign(layer.heights.size(), 0);
     layer.cellAttributeFlags.assign(static_cast<std::size_t>((layer.gridWidth - 1) * (layer.gridHeight - 1)),
         NarakuMap::CellAttributeRemoved);
+    layer.cellGroundTextureIds.assign(static_cast<std::size_t>((layer.gridWidth - 1) * (layer.gridHeight - 1)),
+        layer.groundTextureId);
 
     const std::array<NarakuPiece::GridPoint, 5> offsets = {
         NarakuPiece::GridPoint{ 0, 0 }, NarakuPiece::GridPoint{ 8, 0 },
@@ -2418,18 +2500,9 @@ bool SceneNarakuProto::BuildSurfaceRuntime(bool spawnAtAbyssEntrance)
     const float originZ = -16.0f;
     m_surfaceFacilities.clear();
 
-    for (std::size_t pieceIndex = 0; pieceIndex < kSurfacePieceFiles.size(); ++pieceIndex)
+    for (std::size_t pieceIndex = 0; pieceIndex < surfacePieces.size(); ++pieceIndex)
     {
-        NarakuPiece::PieceData piece;
-        std::string error;
-        const std::wstring path = NarakuPiece::MakeSurfaceCompletedPiecePath(kSurfacePieceFiles[pieceIndex]);
-        if (!NarakuPiece::LoadPieceData(path, piece, &error) || !piece.isSurface)
-        {
-            m_generationFailureSummary = u8"地上マップを読み込めませんでした。";
-            m_generationFailureDetail = error.empty() ? "surface piece is missing or not tagged as surface" : error;
-            m_openGenerationFailurePopup = true;
-            return false;
-        }
+        const NarakuPiece::PieceData& piece = surfacePieces[pieceIndex];
         const int offsetX = offsets[pieceIndex].x;
         const int offsetZ = offsets[pieceIndex].z;
         for (int z = 0; z <= 8; ++z)
@@ -2457,9 +2530,11 @@ bool SceneNarakuProto::BuildSurfaceRuntime(bool spawnAtAbyssEntrance)
                 const std::size_t globalCell = static_cast<std::size_t>(globalZ * (layer.gridWidth - 1) + globalX);
                 const std::size_t sourceCell = static_cast<std::size_t>(sourceZ * std::max(1, piece.gridWidth - 1) + sourceX);
                 std::uint32_t flags = NarakuMap::CellAttributeNone;
+                int groundTextureId = layer.groundTextureId;
                 if (sourceCell < piece.cells.size())
                 {
                     const NarakuPiece::CellData& cell = piece.cells[sourceCell];
+                    groundTextureId = cell.groundTextureId;
                     if (cell.deleted) flags |= NarakuMap::CellAttributeRemoved;
                     if (!cell.walkable) flags |= NarakuMap::CellAttributeBlocked;
                     if (cell.waterDepth == NarakuPiece::WaterDepth::Puddle) flags |= NarakuMap::CellAttributeWaterPuddle;
@@ -2467,7 +2542,22 @@ bool SceneNarakuProto::BuildSurfaceRuntime(bool spawnAtAbyssEntrance)
                     if (cell.waterDepth == NarakuPiece::WaterDepth::Lake) flags |= NarakuMap::CellAttributeWaterLake | NarakuMap::CellAttributeBlocked;
                 }
                 layer.cellAttributeFlags[globalCell] = flags;
+                layer.cellGroundTextureIds[globalCell] = groundTextureId;
             }
+        }
+
+        for (const NarakuPiece::EnvironmentObjectData& pieceObject : piece.environmentObjects)
+        {
+            NarakuMap::EnvironmentObject object;
+            object.modelId = pieceObject.modelId;
+            object.xz = {
+                originX + (static_cast<float>(offsetX + pieceObject.cell.x) + 0.5f) * layer.cellSize,
+                originZ + (static_cast<float>(offsetZ + pieceObject.cell.z) + 0.5f) * layer.cellSize };
+            object.layerId = layer.id;
+            object.scaleX = pieceObject.scaleX;
+            object.scaleY = pieceObject.scaleY;
+            object.scaleZ = pieceObject.scaleZ;
+            surfaceMap.environmentObjects.push_back(object);
         }
 
         if (piece.surfaceFacility.type != NarakuPiece::SurfaceFacilityType::None)
@@ -2498,7 +2588,7 @@ bool SceneNarakuProto::BuildSurfaceRuntime(bool spawnAtAbyssEntrance)
             if (!piece.surfaceFacility.modelPath.empty())
             {
                 NarakuMap::EnvironmentObject object;
-                object.modelId = piece.surfaceFacility.type == NarakuPiece::SurfaceFacilityType::Home ? "surface_home" : "";
+                object.modelId = GetSurfaceFacilityModelId(piece.surfaceFacility.type);
                 object.xz = { facility.center.x + piece.surfaceFacility.offsetX, facility.center.y + piece.surfaceFacility.offsetZ };
                 object.layerId = layer.id;
                 object.scaleX = piece.surfaceFacility.scaleX;
@@ -2506,7 +2596,7 @@ bool SceneNarakuProto::BuildSurfaceRuntime(bool spawnAtAbyssEntrance)
                 object.scaleZ = piece.surfaceFacility.scaleZ;
                 object.offsetY = piece.surfaceFacility.offsetY;
                 object.rotationQuarterTurns = piece.surfaceFacility.rotationQuarterTurns;
-                if (!object.modelId.empty()) surfaceMap.environmentObjects.push_back(object);
+                surfaceMap.environmentObjects.push_back(object);
             }
         }
     }
@@ -6198,6 +6288,9 @@ void SceneNarakuProto::LoadEnvironmentModels()
                 (minValue.x + maxValue.x) * 0.5f,
                 minValue.y,
                 (minValue.z + maxValue.z) * 0.5f };
+            resource.horizontalSize = std::max(
+                0.001f,
+                std::max(maxValue.x - minValue.x, maxValue.z - minValue.z));
         }
         m_environmentModels.push_back(resource);
     }
@@ -6385,12 +6478,12 @@ ShaderList::ExtendedLight SceneNarakuProto::BuildSceneLight() const
         {
             const float sideHeight = m_player.feetWorldY + 8.0f;
             light.directionalColor = {};
-            light.pointColorEnabled = { 0.90f, 0.90f, 0.90f, 0.90f };
+            light.pointColorEnabled = { 1.0f, 1.0f, 1.0f, 1.60f };
             light.pointPositionRange = {
                 -m_worldHalfSize * 1.25f,
                 sideHeight,
                 -m_worldHalfSize * 1.25f,
-                std::max(1.0f, m_worldHalfSize * 3.0f) };
+                std::max(1.0f, m_worldHalfSize * 8.0f) };
         }
     }
     if (m_portableLightOn && IsPortableLightAvailable())
@@ -6452,10 +6545,10 @@ DirectX::XMFLOAT3 SceneNarakuProto::CalculateSceneLightColor(
             const float dx = position.x - lightX;
             const float dy = worldY - lightY;
             const float dz = position.y - lightZ;
-            const float range = std::max(1.0f, m_worldHalfSize * 3.0f);
+            const float range = std::max(1.0f, m_worldHalfSize * 8.0f);
             const float attenuation = std::max(0.0f,
                 1.0f - std::sqrt(dx * dx + dy * dy + dz * dz) / range);
-            const float side = 0.90f * attenuation * attenuation;
+            const float side = 1.60f * attenuation * attenuation;
             color = { side, side, side };
         }
     }
@@ -6632,6 +6725,117 @@ void SceneNarakuProto::ReleaseRopeModel()
     m_ropeSupportForwardAxis = 2;
 }
 
+void SceneNarakuProto::LoadMiningPointModel()
+{
+    using namespace DirectX;
+    ReleaseMiningPointModel();
+
+    const std::string modelPath = WideToUtf8(ResolveRuntimeAssetPath(kMiningPointModelRelativePath));
+    m_miningPointModel = new Model();
+    if (!m_miningPointModel->LoadStatic(modelPath.c_str(), 1.0f, Model::ZFlip))
+    {
+        SAFE_DELETE(m_miningPointModel);
+        return;
+    }
+
+    XMFLOAT3 minimum = {
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max(),
+        std::numeric_limits<float>::max() };
+    XMFLOAT3 maximum = {
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest(),
+        std::numeric_limits<float>::lowest() };
+    bool hasVertex = false;
+    for (unsigned int meshIndex = 0; meshIndex < m_miningPointModel->GetMeshNum(); ++meshIndex)
+    {
+        const Model::Mesh* mesh = m_miningPointModel->GetMesh(meshIndex);
+        if (mesh == nullptr) continue;
+        for (const Model::Vertex& vertex : mesh->vertices)
+        {
+            minimum.x = std::min(minimum.x, vertex.pos.x);
+            minimum.y = std::min(minimum.y, vertex.pos.y);
+            minimum.z = std::min(minimum.z, vertex.pos.z);
+            maximum.x = std::max(maximum.x, vertex.pos.x);
+            maximum.y = std::max(maximum.y, vertex.pos.y);
+            maximum.z = std::max(maximum.z, vertex.pos.z);
+            hasVertex = true;
+        }
+    }
+    if (!hasVertex)
+    {
+        SAFE_DELETE(m_miningPointModel);
+        return;
+    }
+
+    m_miningPointModelAnchor = {
+        (minimum.x + maximum.x) * 0.5f,
+        minimum.y,
+        (minimum.z + maximum.z) * 0.5f };
+    m_miningPointModelHorizontalSize = std::max(
+        0.001f,
+        std::max(maximum.x - minimum.x, maximum.z - minimum.z));
+}
+
+void SceneNarakuProto::ReleaseMiningPointModel()
+{
+    SAFE_DELETE(m_miningPointModel);
+    m_miningPointModelAnchor = {};
+    m_miningPointModelHorizontalSize = 1.0f;
+}
+
+void SceneNarakuProto::DrawMiningPointModels(
+    const DirectX::XMFLOAT4X4& view,
+    const DirectX::XMFLOAT4X4& projection,
+    const DirectX::XMFLOAT3& cameraPosition)
+{
+    using namespace DirectX;
+    if (m_miningPointModel == nullptr) return;
+
+    ShaderList::SetCameraPos(cameraPosition);
+    ApplySceneLighting();
+
+    for (const MiningPoint& point : m_miningPoints)
+    {
+        const bool visibleInField = point.discovered || point.sensed ||
+            IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
+        if (!visibleInField) continue;
+
+        const int layerIndex = FindLayerIndexAt(point.pos, point.depth);
+        const float cellSize = layerIndex >= 0
+            ? m_runtimeMap.terrainLayers[static_cast<std::size_t>(layerIndex)].cellSize
+            : 2.0f;
+        const float modelScale = cellSize * 0.9f / m_miningPointModelHorizontalSize;
+        const float groundY = GetGroundWorldY(point.pos, point.depth);
+
+        XMFLOAT4X4 wvp[3] = {};
+        XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(
+            XMMatrixTranslation(
+                -m_miningPointModelAnchor.x,
+                -m_miningPointModelAnchor.y,
+                -m_miningPointModelAnchor.z) *
+            XMMatrixScaling(modelScale, modelScale, modelScale) *
+            XMMatrixTranslation(point.pos.x, groundY, point.pos.y)));
+        wvp[1] = view;
+        wvp[2] = projection;
+        ShaderList::SetWVP(wvp);
+        m_miningPointModel->SetVertexShader(ShaderList::GetVS(ShaderList::VS_WORLD));
+        m_miningPointModel->SetPixelShader(ShaderList::GetPS(ShaderList::PS_LAMBERT));
+        for (unsigned int meshIndex = 0; meshIndex < m_miningPointModel->GetMeshNum(); ++meshIndex)
+        {
+            const Model::Mesh* mesh = m_miningPointModel->GetMesh(meshIndex);
+            if (mesh == nullptr) continue;
+            const Model::Material* sourceMaterial = m_miningPointModel->GetMaterial(mesh->materialID);
+            if (sourceMaterial != nullptr)
+            {
+                Model::Material material = *sourceMaterial;
+                ShaderList::SetMaterial(material);
+            }
+            m_miningPointModel->Draw(static_cast<int>(meshIndex));
+        }
+    }
+}
+
 void SceneNarakuProto::DrawEnvironmentObjects(
     const DirectX::XMFLOAT4X4& view,
     const DirectX::XMFLOAT4X4& projection,
@@ -6641,16 +6845,16 @@ void SceneNarakuProto::DrawEnvironmentObjects(
     ShaderList::SetCameraPos(cameraPosition);
     ApplySceneLighting();
 
-    for (const NarakuMap::EnvironmentObject& object : m_runtimeMap.environmentObjects)
+    const auto drawObject = [&](const NarakuMap::EnvironmentObject& object)
     {
         const auto resourceIt = std::find_if(
             m_environmentModels.begin(),
             m_environmentModels.end(),
             [&](const EnvironmentModelResource& resource) { return resource.id == object.modelId; });
-        if (resourceIt == m_environmentModels.end() || resourceIt->model == nullptr) continue;
+        if (resourceIt == m_environmentModels.end() || resourceIt->model == nullptr) return;
 
         const int layerIndex = NarakuMap::FindLayerIndexById(m_runtimeMap, object.layerId);
-        if (layerIndex < 0) continue;
+        if (layerIndex < 0) return;
         const NarakuMap::TerrainLayer& layer = m_runtimeMap.terrainLayers[layerIndex];
         const Vec2 position = { object.xz.x, object.xz.z };
         const float groundY = GetGroundWorldY(position, layer.layerDepth);
@@ -6680,6 +6884,42 @@ void SceneNarakuProto::DrawEnvironmentObjects(
                 ShaderList::SetMaterial(material);
             }
             resourceIt->model->Draw(static_cast<int>(meshIndex));
+        }
+    };
+
+    for (const NarakuMap::EnvironmentObject& object : m_runtimeMap.environmentObjects)
+    {
+        drawObject(object);
+    }
+
+    const bool canReturnHere = m_currentAreaIndex >= 0 &&
+        m_currentAreaIndex < static_cast<int>(m_areas.size()) &&
+        m_areas[static_cast<std::size_t>(m_currentAreaIndex)].canReturn;
+    if (canReturnHere)
+    {
+        const int layerIndex = FindLayerIndexAt(m_returnPoint, m_returnDepth);
+        if (layerIndex >= 0)
+        {
+            const auto resourceIt = std::find_if(
+                m_environmentModels.begin(),
+                m_environmentModels.end(),
+                [](const EnvironmentModelResource& resource)
+                {
+                    return resource.id == "surface_facility_abyss_entrance";
+                });
+            if (resourceIt == m_environmentModels.end() || resourceIt->model == nullptr) return;
+
+            const NarakuMap::TerrainLayer& layer =
+                m_runtimeMap.terrainLayers[static_cast<std::size_t>(layerIndex)];
+            const float modelScale = layer.cellSize * 0.9f / resourceIt->horizontalSize;
+            NarakuMap::EnvironmentObject returnGate;
+            returnGate.modelId = "surface_facility_abyss_entrance";
+            returnGate.xz = { m_returnPoint.x, m_returnPoint.y };
+            returnGate.layerId = layer.id;
+            returnGate.scaleX = modelScale;
+            returnGate.scaleY = modelScale;
+            returnGate.scaleZ = modelScale;
+            drawObject(returnGate);
         }
     }
 }
@@ -7038,6 +7278,7 @@ void SceneNarakuProto::Draw3DField()
     DrawEnvironmentObjects(view, projection, cameraPosition);
     DrawBaseModels(view, projection, cameraPosition);
     DrawRopeModels(view, projection, cameraPosition);
+    DrawMiningPointModels(view, projection, cameraPosition);
 
     // 半透明床は両面から見える方がデバッグしやすいので、カリングを切ります。
     SetCullingMode(D3D11_CULL_NONE);
@@ -7067,7 +7308,6 @@ void SceneNarakuProto::Draw3DField()
     // 実際の有効セルだけを不透明な地形として描画し、削除セルは穴として残します。
     for (const NarakuMap::TerrainLayer& layer : m_runtimeMap.terrainLayers)
     {
-        const XMFLOAT4 layerColor = applyGameplayLayerAlpha(layer, getLayerFloorColor(layer.groundTextureId));
         for (int cellZ = 0; cellZ < layer.gridHeight - 1; ++cellZ)
         {
             for (int cellX = 0; cellX < layer.gridWidth - 1; ++cellX)
@@ -7090,14 +7330,16 @@ void SceneNarakuProto::Draw3DField()
                 const XMFLOAT3 b = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ, -0.05f);
                 const XMFLOAT3 c = GetTerrainVertexWorld3D(layer, cellX, cellZ + 1, -0.05f);
                 const XMFLOAT3 d = GetTerrainVertexWorld3D(layer, cellX + 1, cellZ + 1, -0.05f);
+                const int groundTextureId = NarakuMap::GetCellGroundTextureId(layer, cellX, cellZ);
+                const XMFLOAT4 cellColor = applyGameplayLayerAlpha(layer, getLayerFloorColor(groundTextureId));
                 AppendTerrainFloorCell(
                     a, b, c, d,
                     GetTerrainVertexNormal(layer, cellX, cellZ),
                     GetTerrainVertexNormal(layer, cellX + 1, cellZ),
                     GetTerrainVertexNormal(layer, cellX, cellZ + 1),
                     GetTerrainVertexNormal(layer, cellX + 1, cellZ + 1),
-                    layerColor,
-                    layer.groundTextureId);
+                    cellColor,
+                    groundTextureId);
 
                 XMFLOAT4 waterColor = {};
                 if ((flags & NarakuMap::CellAttributeWaterLake) != 0u)
@@ -7180,13 +7422,6 @@ void SceneNarakuProto::Draw3DField()
     }
     Geometory::DrawLines();
 
-    // 帰還地点を緑の柱で示します。
-    if (m_currentAreaIndex >= 0)
-    {
-        const XMFLOAT3 returnBase = ToWorld3D(m_returnPoint, m_returnDepth, 0.05f);
-        DrawDebugBox3D({ returnBase.x, returnBase.y + 0.25f, returnBase.z }, { 0.9f, 0.5f, 0.9f });
-    }
-
     // モデルを読み込めない場合だけ、従来の上下端表示を残します。
     if (m_ropeModel == nullptr)
     {
@@ -7199,23 +7434,18 @@ void SceneNarakuProto::Draw3DField()
         }
     }
 
-    // 採掘ポイントを箱で描画します。
-    for (const MiningPoint& point : m_miningPoints)
+    // モデルを読み込めない場合だけ、採掘ポイントを従来の箱で描画します。
+    if (m_miningPointModel == nullptr)
     {
-        // 未記録でも、近くまで来た採掘ポイントは現地で見えるようにします。
-        const bool visibleInField = point.discovered || point.sensed || IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
-        if (!visibleInField)
+        for (const MiningPoint& point : m_miningPoints)
         {
-            continue;
+            const bool visibleInField = point.discovered || point.sensed || IsNear(m_player.pos, point.pos, kNearbyMiningVisibleRange);
+            if (!visibleInField) continue;
+
+            const XMFLOAT3 base = ToWorld3D(point.pos, point.depth, 0.15f);
+            const float width = 0.45f + 0.08f * static_cast<float>(point.visualType);
+            DrawDebugBox3D({ base.x, base.y + 0.2f, base.z }, { width, 0.4f, width });
         }
-
-        // 採掘ポイントの位置を深度0の地表として扱います。
-        const XMFLOAT3 base = ToWorld3D(point.pos, point.depth, 0.15f);
-
-        // 見た目4種類は箱の横幅だけ少し変えて区別します。
-        const float width = 0.45f + 0.08f * static_cast<float>(point.visualType);
-        DrawDebugBox3D({ base.x, base.y + 0.2f, base.z }, { width, 0.4f, width });
-
     }
     for (const FishingPoint& point : m_fishingPoints)
     {

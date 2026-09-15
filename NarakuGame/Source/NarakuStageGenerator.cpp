@@ -989,6 +989,7 @@ namespace
         NarakuMap::EnsureLayerHeights(layer);
         NarakuMap::EnsureLayerVertexEnabled(layer);
         NarakuMap::EnsureLayerCellAttributes(layer);
+        NarakuMap::EnsureLayerCellGroundTextures(layer);
         std::fill(layer.vertexEnabled.begin(), layer.vertexEnabled.end(), static_cast<std::uint8_t>(1u));
 
         for (int cellZ = 0; cellZ < piece.gridDepth - 1; ++cellZ)
@@ -1025,6 +1026,7 @@ namespace
                     break;
                 }
                 NarakuMap::SetCellAttributeFlags(layer, cellX, cellZ, flags);
+                NarakuMap::SetCellGroundTextureId(layer, cellX, cellZ, cell.groundTextureId);
             }
         }
 

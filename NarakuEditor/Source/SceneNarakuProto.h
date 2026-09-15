@@ -1112,6 +1112,15 @@ private:
         const DirectX::XMFLOAT4X4& view,
         const DirectX::XMFLOAT4X4& projection,
         const DirectX::XMFLOAT3& cameraPosition);
+    /** @brief 採掘ポイント表示用モデルを読み込み、セル内へ収めるための境界を取得します。 */
+    void LoadMiningPointModel();
+    /** @brief 採掘ポイント表示用モデルを解放します。 */
+    void ReleaseMiningPointModel();
+    /** @brief 発見済みまたは近距離の採掘ポイントをモデルで描画します。 */
+    void DrawMiningPointModels(
+        const DirectX::XMFLOAT4X4& view,
+        const DirectX::XMFLOAT4X4& projection,
+        const DirectX::XMFLOAT3& cameraPosition);
     /** @brief カメラ方向に追従する方位コンパスを画面右上へ描画します。 */
     void DrawCompass() const;
     /** @brief 探索中の右ドラッグ入力から軌道カメラの角度を更新します。 */
@@ -2015,6 +2024,7 @@ private:
         bool isTree = false;
         Model* model = nullptr;
         DirectX::XMFLOAT3 placementAnchor = {};
+        float horizontalSize = 1.0f;
     };
     std::vector<EnvironmentModelResource> m_environmentModels;
 
@@ -2047,6 +2057,13 @@ private:
     DirectX::XMFLOAT3 m_ropeSupportSize = { 1.0f, 1.0f, 1.0f };
     /** @brief 支柱モデルで長い水平軸です。0:X、2:Zです。 */
     int m_ropeSupportForwardAxis = 2;
+
+    /** @brief 全採掘ポイントへ使用する静的モデルです。 */
+    Model* m_miningPointModel = nullptr;
+    /** @brief 採掘ポイントモデル底面中央の配置基準です。 */
+    DirectX::XMFLOAT3 m_miningPointModelAnchor = {};
+    /** @brief 採掘ポイントモデルのX・Z方向の最大寸法です。 */
+    float m_miningPointModelHorizontalSize = 1.0f;
 
     /** @brief 敵攻撃命中後にカメラを揺らす残り時間です。 */
     float m_cameraShakeTimer = 0.0f;

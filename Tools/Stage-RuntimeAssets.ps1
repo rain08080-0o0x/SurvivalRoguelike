@@ -51,6 +51,7 @@ function Copy-AssetTree {
         [string]$Destination,
         [switch]$PreservePublishedMaps,
         [switch]$PreservePublishedPieces,
+        [switch]$PreservePublishedModels,
         [switch]$PreserveUserSettings,
         [switch]$PreserveEditorRegistries,
         [switch]$FillMissingOnly
@@ -71,6 +72,8 @@ function Copy-AssetTree {
             $parts[0] -eq 'Naraku' -and $parts[1] -eq 'Pieces' -and
             (Test-Path -LiteralPath (Join-Path $Destination 'Naraku\Pieces'))) { return }
         $target = Join-Path $Destination $relative
+        if ($PreservePublishedModels -and $parts[0] -in @('Model', 'Models') -and
+            (Test-Path -LiteralPath $target)) { return }
         if ($FillMissingOnly -and (Test-Path -LiteralPath $target)) { return }
         if (Test-FileContentEqual -First $_.FullName -Second $target) { return }
         New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
@@ -82,11 +85,19 @@ if ($Role -eq 'Legacy') {
     Copy-AssetTree -Source $legacyAssets -Destination $outputAssets -PreserveUserSettings
 }
 else {
+    if ($Role -eq 'Editor') {
+        $gameMiningAssets = Join-Path $repositoryRoot 'NarakuGame\Assets\Model\Mining'
+        if (Test-Path -LiteralPath $gameMiningAssets) {
+            Copy-AssetTree -Source $gameMiningAssets -Destination (Join-Path $projectAssets 'Model\Mining')
+        }
+    }
     $preservePublishedPieces = $Role -in @('Editor', 'Game')
+    $preservePublishedModels = $Role -in @('Editor', 'Game')
     $preserveProjectRegistries = $Role -in @('Editor', 'Game')
     $preserveOutputRegistries = $Role -eq 'Editor'
     Copy-AssetTree -Source $sourceAssets -Destination $projectAssets -PreservePublishedMaps -PreserveUserSettings `
-        -PreservePublishedPieces:$preservePublishedPieces -PreserveEditorRegistries:$preserveProjectRegistries
+        -PreservePublishedPieces:$preservePublishedPieces -PreservePublishedModels:$preservePublishedModels `
+        -PreserveEditorRegistries:$preserveProjectRegistries
     Copy-AssetTree -Source $legacyAssets -Destination $projectAssets -FillMissingOnly
     if ($Role -eq 'Game' -and (Test-Path -LiteralPath (Join-Path $projectAssets 'Naraku\Pieces'))) {
         Reset-AssetDirectory -Path (Join-Path $outputAssets 'Naraku\Pieces') -Root $outputAssets

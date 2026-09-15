@@ -290,6 +290,11 @@ void SceneNarakuPieceEditor::DrawPieceConnectionWindow()
             m_piece.surfaceFacility.modelPath = modelPath;
             MarkPieceDirty();
         }
+        if (ImGui::Button(u8"モデル再読込"))
+        {
+            ReleaseSurfaceFacilityPreviewModel();
+            SetMessage(u8"地上施設モデルを再読み込みします");
+        }
         float offset[3] = { m_piece.surfaceFacility.offsetX, m_piece.surfaceFacility.offsetY, m_piece.surfaceFacility.offsetZ };
         if (ImGui::DragFloat3(u8"施設位置補正", offset, 0.05f))
         {
