@@ -1479,7 +1479,10 @@ namespace NarakuMap
                 << ", \"layerId\": " << object.layerId
                 << ", \"scaleX\": " << object.scaleX
                 << ", \"scaleY\": " << object.scaleY
-                << ", \"scaleZ\": " << object.scaleZ << " }";
+                << ", \"scaleZ\": " << object.scaleZ
+                << ", \"offsetY\": " << object.offsetY
+                << ", \"rotationQuarterTurns\": " << object.rotationQuarterTurns
+                << ", \"footprintAnchored\": " << (object.footprintAnchored ? "true" : "false") << " }";
             out << (i + 1 < static_cast<int>(mapData.environmentObjects.size()) ? ",\n" : "\n");
         }
         AppendIndent(out, 1);
@@ -1773,6 +1776,9 @@ namespace NarakuMap
                 if (GetNumber(objectValue, "scaleX", number)) object.scaleX = static_cast<float>(number);
                 if (GetNumber(objectValue, "scaleY", number)) object.scaleY = static_cast<float>(number);
                 if (GetNumber(objectValue, "scaleZ", number)) object.scaleZ = static_cast<float>(number);
+                if (GetNumber(objectValue, "offsetY", number)) object.offsetY = static_cast<float>(number);
+                if (GetNumber(objectValue, "rotationQuarterTurns", number)) object.rotationQuarterTurns = static_cast<int>(number);
+                GetBool(objectValue, "footprintAnchored", object.footprintAnchored);
                 loadedMap.environmentObjects.push_back(object);
             }
         }

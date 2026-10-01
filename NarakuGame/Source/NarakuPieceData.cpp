@@ -1640,6 +1640,7 @@ namespace NarakuPiece
                 << "\"modelId\": \"" << EscapeJsonString(object.modelId) << "\", "
                 << "\"cell\": { \"x\": " << object.cell.x << ", \"z\": " << object.cell.z << " }, "
                 << "\"scale\": { \"x\": " << object.scaleX << ", \"y\": " << object.scaleY << ", \"z\": " << object.scaleZ << " }"
+                << ", \"rotationQuarterTurns\": " << object.rotationQuarterTurns
                 << " }";
             out << (i + 1 < data.environmentObjects.size() ? ",\n" : "\n");
         }
@@ -1997,6 +1998,8 @@ namespace NarakuPiece
                     if (GetNumber(*scaleValue, "y", number)) object.scaleY = static_cast<float>(number);
                     if (GetNumber(*scaleValue, "z", number)) object.scaleZ = static_cast<float>(number);
                 }
+                if (GetNumber(objectValue, "rotationQuarterTurns", number))
+                    object.rotationQuarterTurns = (static_cast<int>(number) % 4 + 4) % 4;
                 loadedData.environmentObjects.push_back(object);
             }
         }

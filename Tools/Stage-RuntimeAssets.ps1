@@ -90,6 +90,10 @@ else {
         if (Test-Path -LiteralPath $gameMiningAssets) {
             Copy-AssetTree -Source $gameMiningAssets -Destination (Join-Path $projectAssets 'Model\Mining')
         }
+        $gameWeaponAssets = Join-Path $repositoryRoot 'NarakuGame\Assets\Model\weapon'
+        if (Test-Path -LiteralPath $gameWeaponAssets) {
+            Copy-AssetTree -Source $gameWeaponAssets -Destination (Join-Path $projectAssets 'Model\weapon')
+        }
     }
     $preservePublishedPieces = $Role -in @('Editor', 'Game')
     $preservePublishedModels = $Role -in @('Editor', 'Game')

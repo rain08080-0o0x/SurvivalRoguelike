@@ -921,6 +921,8 @@ void SceneNarakuPieceEditor::DrawEnvironmentAssetsWindow()
         ImGui::TextUnformatted(asset.name.c_str());
         ImGui::TextWrapped("%s", asset.path.c_str());
         ImGui::Text("%s %.3f, %.3f, %.3f", u8"既定サイズ", asset.defaultScale.x, asset.defaultScale.y, asset.defaultScale.z);
+        ImGui::Text("%s %d x %d", u8"セル占有数", asset.footprintX, asset.footprintZ);
+        ImGui::TextUnformatted(asset.colliderEnabled ? u8"当たり判定: あり" : u8"当たり判定: なし");
     }
 
     ImGui::SeparatorText(u8"配置オブジェクト");
@@ -940,10 +942,40 @@ void SceneNarakuPieceEditor::DrawEnvironmentAssetsWindow()
         // 条件に該当する場合は、`object.scaleX` の状態を更新します。
         if (scaleChanged)
         {
-            object.scaleX = std::max(0.01f, scale[0]);
-            object.scaleY = std::max(0.01f, scale[1]);
-            object.scaleZ = std::max(0.01f, scale[2]);
-            MarkPieceDirty();
+            NarakuPiece::EnvironmentObjectData candidate = object;
+            candidate.scaleX = std::max(0.01f, scale[0]);
+            candidate.scaleY = std::max(0.01f, scale[1]);
+            candidate.scaleZ = std::max(0.01f, scale[2]);
+            std::string placeError;
+            if (CanPlaceEnvironmentObjectData(candidate, m_selectedEnvironmentObjectIndex, placeError))
+            {
+                object.scaleX = candidate.scaleX;
+                object.scaleY = candidate.scaleY;
+                object.scaleZ = candidate.scaleZ;
+                MarkPieceDirty();
+            }
+            else
+            {
+                SetMessage(placeError);
+            }
+        }
+        const char* rotations[] = { u8"0度", u8"90度", u8"180度", u8"270度" };
+        int rotation = (object.rotationQuarterTurns % 4 + 4) % 4;
+        if (ImGui::Combo(u8"回転", &rotation, rotations, IM_ARRAYSIZE(rotations)))
+        {
+            NarakuPiece::EnvironmentObjectData candidate = object;
+            candidate.rotationQuarterTurns = rotation;
+            std::string placeError;
+            if (CanPlaceEnvironmentObjectData(candidate, m_selectedEnvironmentObjectIndex, placeError))
+            {
+                PushUndoSnapshot();
+                object.rotationQuarterTurns = rotation;
+                MarkPieceDirty();
+            }
+            else
+            {
+                SetMessage(placeError);
+            }
         }
         // 条件に該当する場合は、`PushUndoSnapshot` の処理を実行します。
         if (ImGui::Button(u8"環境オブジェクトを削除"))
@@ -982,17 +1014,72 @@ void SceneNarakuPieceEditor::DrawEnvironmentModelPopup()
     ImGui::InputText(u8"モデル名", m_environmentModelNameInput.data(), m_environmentModelNameInput.size());
     ImGui::InputText(u8"モデルパス", m_environmentModelPathInput.data(), m_environmentModelPathInput.size(), ImGuiInputTextFlags_ReadOnly);
     ImGui::DragFloat3(u8"既定サイズ", &m_environmentModelScaleInput.x, 0.01f, 0.01f, 100.0f, "%.3f");
+    ImGui::InputInt2(u8"セル占有数 X/Z", m_environmentModelFootprintInput);
+    m_environmentModelFootprintInput[0] = std::max(1, m_environmentModelFootprintInput[0]);
+    m_environmentModelFootprintInput[1] = std::max(1, m_environmentModelFootprintInput[1]);
+    ImGui::Checkbox(u8"当たり判定を使用", &m_environmentModelColliderEnabledInput);
+    if (m_environmentModelColliderEnabledInput)
+    {
+        ImGui::DragFloat3(u8"当たり判定の中心", &m_environmentModelColliderCenterInput.x, 0.01f, -100.0f, 100.0f, "%.3f");
+        ImGui::DragFloat3(u8"当たり判定の大きさ", &m_environmentModelColliderSizeInput.x, 0.01f, 0.01f, 100.0f, "%.3f");
+    }
     ImGui::SeparatorText(u8"サイズプレビュー");
     constexpr unsigned int previewSize = 320U;
     // 条件に該当する場合は、`ImGui::Image` の処理を実行します。
     if (void* textureId = GetEnvironmentModelPopupPreviewTextureId(previewSize))
     {
         ImGui::Image(textureId, ImVec2(static_cast<float>(previewSize), static_cast<float>(previewSize)));
+        if (ImGui::IsItemHovered())
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f))
+            {
+                m_environmentModelPopupCameraYaw -= io.MouseDelta.x * 0.01f;
+                m_environmentModelPopupCameraPitch = std::max(
+                    XMConvertToRadians(-80.0f),
+                    std::min(
+                        XMConvertToRadians(80.0f),
+                        m_environmentModelPopupCameraPitch - io.MouseDelta.y * 0.01f));
+            }
+            if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f))
+            {
+                const float panSpeed = std::max(0.1f, m_piece.cellSize) *
+                    m_environmentModelPopupCameraZoom * 0.0025f;
+                const XMFLOAT3 radial = {
+                    std::sin(m_environmentModelPopupCameraYaw) * std::cos(m_environmentModelPopupCameraPitch),
+                    std::sin(m_environmentModelPopupCameraPitch),
+                    std::cos(m_environmentModelPopupCameraYaw) * std::cos(m_environmentModelPopupCameraPitch) };
+                const XMVECTOR forward = XMVector3Normalize(XMVectorNegate(XMLoadFloat3(&radial)));
+                const XMVECTOR right = XMVector3Normalize(XMVector3Cross(
+                    XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f), forward));
+                const XMVECTOR up = XMVector3Normalize(XMVector3Cross(forward, right));
+                XMVECTOR targetOffset = XMLoadFloat3(&m_environmentModelPopupCameraTargetOffset);
+                targetOffset = XMVectorAdd(
+                    targetOffset,
+                    XMVectorAdd(
+                        XMVectorScale(right, -io.MouseDelta.x * panSpeed),
+                        XMVectorScale(up, io.MouseDelta.y * panSpeed)));
+                XMStoreFloat3(&m_environmentModelPopupCameraTargetOffset, targetOffset);
+            }
+            if (io.MouseWheel != 0.0f)
+            {
+                m_environmentModelPopupCameraZoom = std::max(
+                    0.75f,
+                    std::min(
+                        8.0f,
+                        m_environmentModelPopupCameraZoom * std::pow(0.85f, io.MouseWheel)));
+            }
+        }
     }
     else
     {
         ImGui::Dummy(ImVec2(static_cast<float>(previewSize), 1.0f));
         ImGui::TextUnformatted(u8"モデルを表示できません");
+    }
+    ImGui::TextUnformatted(u8"左ドラッグ: 回転 / 中ドラッグ: 平行移動 / ホイール: ズーム");
+    if (ImGui::Button(u8"カメラをリセット"))
+    {
+        ResetEnvironmentModelPopupCamera();
     }
     // 条件に該当する場合は、`ApplyEnvironmentModelPopup` の処理を実行します。
     if (ImGui::Button(m_environmentModelPopupIsNew ? u8"追加" : u8"更新"))

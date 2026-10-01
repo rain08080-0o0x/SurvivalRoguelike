@@ -139,6 +139,11 @@ private:
         std::string name;
         std::string path;
         DirectX::XMFLOAT3 defaultScale = { 1.0f, 1.0f, 1.0f };
+        int footprintX = 1;
+        int footprintZ = 1;
+        bool colliderEnabled = false;
+        DirectX::XMFLOAT3 colliderCenter = {};
+        DirectX::XMFLOAT3 colliderSize = { 1.0f, 1.0f, 1.0f };
         Model* model = nullptr;
         DirectX::XMFLOAT3 boundsMin = { -0.5f, 0.0f, -0.5f };
         DirectX::XMFLOAT3 boundsMax = { 0.5f, 1.0f, 0.5f };
@@ -623,6 +628,9 @@ private:
     /** @brief モデル設定モーダルの内容を登録簿へ反映します。 */
     void ApplyEnvironmentModelPopup();
 
+    /** @brief ModelView専用カメラを既定の斜め視点へ戻します。 */
+    void ResetEnvironmentModelPopupCamera();
+
     /** @brief 環境モデル設定入力が登録可能か判定します。 */
     bool IsEnvironmentModelPopupInputValid(const std::string& name, const std::string& path) const;
 
@@ -634,6 +642,11 @@ private:
         const std::string& name,
         std::string& outPreviousName,
         DirectX::XMFLOAT3& outPreviousScale,
+        int& outPreviousFootprintX,
+        int& outPreviousFootprintZ,
+        bool& outPreviousColliderEnabled,
+        DirectX::XMFLOAT3& outPreviousColliderCenter,
+        DirectX::XMFLOAT3& outPreviousColliderSize,
         bool& outPreviousThumbnailDirty);
 
     /** @brief カタログ保存失敗時にポップアップ適用前の状態へ戻します。 */
@@ -641,6 +654,11 @@ private:
         int previousSelectedIndex,
         const std::string& previousName,
         const DirectX::XMFLOAT3& previousScale,
+        int previousFootprintX,
+        int previousFootprintZ,
+        bool previousColliderEnabled,
+        const DirectX::XMFLOAT3& previousColliderCenter,
+        const DirectX::XMFLOAT3& previousColliderSize,
         bool previousThumbnailDirty);
 
     /** @brief ポップアップのプレビュー用モデルを登録用として取得します。 */
@@ -681,6 +699,12 @@ private:
 
     /** @brief 環境オブジェクトを指定セルへ配置できるか確認します。 */
     bool CanPlaceEnvironmentObject(int cellX, int cellZ, std::string& outMessage) const;
+
+    /** @brief 登録情報を反映した占有セルとコライダーで配置可否を確認します。 */
+    bool CanPlaceEnvironmentObjectData(
+        const NarakuPiece::EnvironmentObjectData& object,
+        int ignoredObjectIndex,
+        std::string& outMessage) const;
 
     /** @brief 指定セルに環境オブジェクトがあるか返します。 */
     bool HasEnvironmentObjectAt(int cellX, int cellZ) const;
@@ -1247,6 +1271,14 @@ private:
 
     /** @brief モデル登録・設定モーダルで編集する既定サイズです。 */
     DirectX::XMFLOAT3 m_environmentModelScaleInput = { 1.0f, 1.0f, 1.0f };
+    int m_environmentModelFootprintInput[2] = { 1, 1 };
+    bool m_environmentModelColliderEnabledInput = false;
+    DirectX::XMFLOAT3 m_environmentModelColliderCenterInput = {};
+    DirectX::XMFLOAT3 m_environmentModelColliderSizeInput = { 1.0f, 1.0f, 1.0f };
+    float m_environmentModelPopupCameraYaw = DirectX::XMConvertToRadians(140.0f);
+    float m_environmentModelPopupCameraPitch = DirectX::XMConvertToRadians(25.0f);
+    float m_environmentModelPopupCameraZoom = 2.60f;
+    DirectX::XMFLOAT3 m_environmentModelPopupCameraTargetOffset = {};
 
     /** @brief 次回描画でモデル設定モーダルを開く要求です。 */
     bool m_requestOpenEnvironmentModelPopup = false;

@@ -223,6 +223,7 @@ namespace NarakuMap
         float scaleZ = 1.0f;
         float offsetY = 0.0f;
         int rotationQuarterTurns = 0;
+        bool footprintAnchored = false;
     };
 
     /**

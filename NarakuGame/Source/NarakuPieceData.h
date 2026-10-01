@@ -284,6 +284,9 @@ namespace NarakuPiece
 
         /** @brief モデルへ適用するZ方向の倍率です。 */
         float scaleZ = 1.0f;
+
+        /** @brief Y軸回りの90度単位の回転数です。 */
+        int rotationQuarterTurns = 0;
     };
 
     /** @brief 開始・帰還地点として使用できる候補です。 */

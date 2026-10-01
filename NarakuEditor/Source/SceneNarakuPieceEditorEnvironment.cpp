@@ -256,12 +256,31 @@ void SceneNarakuPieceEditor::RenderEnvironmentModelPopupPreview(unsigned int siz
         std::max(0.001f, (boundsMax.x - boundsMin.x) * scale.x),
         std::max(0.001f, (boundsMax.y - boundsMin.y) * scale.y),
         std::max(0.001f, (boundsMax.z - boundsMin.z) * scale.z) };
+    const XMFLOAT3 colliderSize = {
+        std::max(0.01f, m_environmentModelColliderSizeInput.x),
+        std::max(0.01f, m_environmentModelColliderSizeInput.y),
+        std::max(0.01f, m_environmentModelColliderSizeInput.z) };
+    const float colliderExtent = m_environmentModelColliderEnabledInput
+        ? std::max(
+            std::fabs(m_environmentModelColliderCenterInput.x) + colliderSize.x * 0.5f,
+            std::max(
+                std::fabs(m_environmentModelColliderCenterInput.y) + colliderSize.y * 0.5f,
+                std::fabs(m_environmentModelColliderCenterInput.z) + colliderSize.z * 0.5f))
+        : 0.0f;
     const float cellSize = std::max(0.1f, m_piece.cellSize);
     const float extent = std::max(
         cellSize * 2.25f,
-        std::max(modelSize.y, std::max(modelSize.x, modelSize.z)));
-    const XMFLOAT3 eye = { extent * 1.45f, extent * 1.10f, -extent * 1.80f };
-    const XMFLOAT3 look = { 0.0f, modelSize.y * 0.35f, 0.0f };
+        std::max(colliderExtent, std::max(modelSize.y, std::max(modelSize.x, modelSize.z))));
+    const XMFLOAT3 look = {
+        m_environmentModelPopupCameraTargetOffset.x,
+        modelSize.y * 0.35f + m_environmentModelPopupCameraTargetOffset.y,
+        m_environmentModelPopupCameraTargetOffset.z };
+    const float cameraDistance = extent * m_environmentModelPopupCameraZoom;
+    const float cosPitch = std::cos(m_environmentModelPopupCameraPitch);
+    const XMFLOAT3 eye = {
+        look.x + std::sin(m_environmentModelPopupCameraYaw) * cosPitch * cameraDistance,
+        look.y + std::sin(m_environmentModelPopupCameraPitch) * cameraDistance,
+        look.z + std::cos(m_environmentModelPopupCameraYaw) * cosPitch * cameraDistance };
     const XMMATRIX view = XMMatrixLookAtLH(
         XMLoadFloat3(&eye), XMLoadFloat3(&look), XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
     const XMMATRIX projection = XMMatrixPerspectiveFovLH(
@@ -307,6 +326,17 @@ void SceneNarakuPieceEditor::RenderEnvironmentModelPopupPreview(unsigned int siz
             ShaderList::SetMaterial(material);
         }
         model->Draw(static_cast<int>(meshIndex));
+    }
+
+    if (m_environmentModelColliderEnabledInput)
+    {
+        XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(XMMatrixIdentity()));
+        ShaderList::SetWVP(wvp);
+        DrawDebugWireBox3D(
+            m_environmentModelColliderCenterInput,
+            colliderSize,
+            { 0.25f, 1.0f, 0.35f, 1.0f });
+        Geometory::DrawLines();
     }
 
     RenderTarget* defaultTarget[1] = { GetDefaultRTV() };
@@ -361,6 +391,15 @@ void SceneNarakuPieceEditor::LoadEnvironmentModelCatalog()
         {
             continue;
         }
+        int colliderEnabled = 0;
+        if (row >> asset.footprintX >> asset.footprintZ >> colliderEnabled
+            >> asset.colliderCenter.x >> asset.colliderCenter.y >> asset.colliderCenter.z
+            >> asset.colliderSize.x >> asset.colliderSize.y >> asset.colliderSize.z)
+        {
+            asset.footprintX = std::max(1, asset.footprintX);
+            asset.footprintZ = std::max(1, asset.footprintZ);
+            asset.colliderEnabled = colliderEnabled != 0;
+        }
         const std::wstring modelPath = ResolvePieceHierarchyPath(Utf8ToWide(asset.path));
         const std::string modelPathUtf8 = WideToUtf8(modelPath);
         asset.model = new Model();
@@ -394,7 +433,7 @@ bool SceneNarakuPieceEditor::SaveEnvironmentModelCatalog()
         SetMessage(u8"環境モデル登録簿を保存できませんでした");
         return false;
     }
-    output << "# id name path scaleX scaleY scaleZ\n";
+    output << "# id name path scaleX scaleY scaleZ footprintX footprintZ colliderEnabled colliderCenterX colliderCenterY colliderCenterZ colliderSizeX colliderSizeY colliderSizeZ\n";
     // 対象コレクションの各要素を順に処理します。
     for (const EnvironmentModelAsset& asset : m_environmentModels)
     {
@@ -403,7 +442,16 @@ bool SceneNarakuPieceEditor::SaveEnvironmentModelCatalog()
             << std::quoted(asset.path) << ' '
             << asset.defaultScale.x << ' '
             << asset.defaultScale.y << ' '
-            << asset.defaultScale.z << '\n';
+            << asset.defaultScale.z << ' '
+            << asset.footprintX << ' '
+            << asset.footprintZ << ' '
+            << (asset.colliderEnabled ? 1 : 0) << ' '
+            << asset.colliderCenter.x << ' '
+            << asset.colliderCenter.y << ' '
+            << asset.colliderCenter.z << ' '
+            << asset.colliderSize.x << ' '
+            << asset.colliderSize.y << ' '
+            << asset.colliderSize.z << '\n';
     }
     // 条件に該当する場合は、`SetMessage` の処理を実行します。
     if (!output.good())
@@ -433,8 +481,18 @@ int SceneNarakuPieceEditor::FindEnvironmentObjectIndexByCell(int cellX, int cell
     for (size_t index = 0; index < m_piece.environmentObjects.size(); ++index)
     {
         const NarakuPiece::EnvironmentObjectData& object = m_piece.environmentObjects[index];
-        // 条件に該当する場合は、対応する編集処理を実行します。
-        if (object.cell.x == cellX && object.cell.z == cellZ) return static_cast<int>(index);
+        const int assetIndex = FindEnvironmentModelIndexById(object.modelId);
+        int footprintX = 1;
+        int footprintZ = 1;
+        if (assetIndex >= 0)
+        {
+            footprintX = m_environmentModels[assetIndex].footprintX;
+            footprintZ = m_environmentModels[assetIndex].footprintZ;
+            if ((object.rotationQuarterTurns & 1) != 0) std::swap(footprintX, footprintZ);
+        }
+        if (cellX >= object.cell.x && cellX < object.cell.x + footprintX &&
+            cellZ >= object.cell.z && cellZ < object.cell.z + footprintZ)
+            return static_cast<int>(index);
     }
     return -1;
 }
@@ -448,32 +506,126 @@ bool SceneNarakuPieceEditor::HasEnvironmentObjectAt(int cellX, int cellZ) const
 bool SceneNarakuPieceEditor::CanPlaceEnvironmentObject(int cellX, int cellZ, std::string& outMessage) const
 {
     EDITOR_PROFILE_FUNCTION();
-    const NarakuPiece::CellData* cell = GetCellData(cellX, cellZ);
-    // 条件に該当する場合は、`outMessage` の状態を更新します。
-    if (cell == nullptr || cell->deleted)
+    if (m_selectedEnvironmentModelIndex < 0 ||
+        m_selectedEnvironmentModelIndex >= static_cast<int>(m_environmentModels.size()))
     {
-        outMessage = u8"削除セルまたは範囲外には配置できません";
+        outMessage = u8"Assetsから配置するモデルを選択してください";
         return false;
     }
-    // 条件に該当する場合は、`outMessage` の状態を更新します。
-    if (HasEnvironmentObjectAt(cellX, cellZ))
+    const EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
+    NarakuPiece::EnvironmentObjectData object;
+    object.modelId = asset.id;
+    object.cell = { cellX, cellZ };
+    object.scaleX = asset.defaultScale.x;
+    object.scaleY = asset.defaultScale.y;
+    object.scaleZ = asset.defaultScale.z;
+    return CanPlaceEnvironmentObjectData(object, -1, outMessage);
+}
+
+bool SceneNarakuPieceEditor::CanPlaceEnvironmentObjectData(
+    const NarakuPiece::EnvironmentObjectData& object,
+    int ignoredObjectIndex,
+    std::string& outMessage) const
+{
+    const int assetIndex = FindEnvironmentModelIndexById(object.modelId);
+    if (assetIndex < 0)
     {
-        outMessage = u8"このセルには環境オブジェクトが配置済みです";
+        outMessage = u8"登録されていない環境モデルです";
         return false;
     }
-    if (FindFishingPointIndexByCell(cellX, cellZ) >= 0 ||
-        IsFishingPointWaterCell(cellX, cellZ))
+    const EnvironmentModelAsset& asset = m_environmentModels[assetIndex];
+    int footprintX = asset.footprintX;
+    int footprintZ = asset.footprintZ;
+    if ((object.rotationQuarterTurns & 1) != 0) std::swap(footprintX, footprintZ);
+
+    for (int z = object.cell.z; z < object.cell.z + footprintZ; ++z)
     {
-        outMessage = u8"釣り地点の岸または対象水面には環境オブジェクトを配置できません";
-        return false;
+        for (int x = object.cell.x; x < object.cell.x + footprintX; ++x)
+        {
+            const NarakuPiece::CellData* cell = GetCellData(x, z);
+            if (cell == nullptr || cell->deleted)
+            {
+                outMessage = u8"占有範囲に削除セルまたは範囲外セルがあります";
+                return false;
+            }
+            bool occupiedByOther = false;
+            for (size_t otherIndex = 0; otherIndex < m_piece.environmentObjects.size(); ++otherIndex)
+            {
+                if (static_cast<int>(otherIndex) == ignoredObjectIndex) continue;
+                const NarakuPiece::EnvironmentObjectData& other = m_piece.environmentObjects[otherIndex];
+                const int otherAssetIndex = FindEnvironmentModelIndexById(other.modelId);
+                int otherFootprintX = 1;
+                int otherFootprintZ = 1;
+                if (otherAssetIndex >= 0)
+                {
+                    otherFootprintX = m_environmentModels[otherAssetIndex].footprintX;
+                    otherFootprintZ = m_environmentModels[otherAssetIndex].footprintZ;
+                    if ((other.rotationQuarterTurns & 1) != 0) std::swap(otherFootprintX, otherFootprintZ);
+                }
+                if (x >= other.cell.x && x < other.cell.x + otherFootprintX &&
+                    z >= other.cell.z && z < other.cell.z + otherFootprintZ)
+                {
+                    occupiedByOther = true;
+                    break;
+                }
+            }
+            if (occupiedByOther)
+            {
+                outMessage = u8"占有セルが別の環境オブジェクトと重なります";
+                return false;
+            }
+            if (FindFishingPointIndexByCell(x, z) >= 0 || IsFishingPointWaterCell(x, z))
+            {
+                outMessage = u8"占有範囲が釣り地点と重なります";
+                return false;
+            }
+            if (FindMiningPointIndexByCell(x, z) >= 0 ||
+                (m_piece.startReturnCandidate.enabled && m_piece.startReturnCandidate.cell.x == x && m_piece.startReturnCandidate.cell.z == z) ||
+                (m_piece.layerTransition.loadPointEnabled && m_piece.layerTransition.loadPoint.x == x && m_piece.layerTransition.loadPoint.z == z))
+            {
+                outMessage = u8"占有範囲がロープ以外のゲームオブジェクトと重なります";
+                return false;
+            }
+        }
     }
-    // 条件に該当する場合は、対応する編集処理を実行します。
-    if (FindMiningPointIndexByCell(cellX, cellZ) >= 0 ||
-        (m_piece.startReturnCandidate.enabled && m_piece.startReturnCandidate.cell.x == cellX && m_piece.startReturnCandidate.cell.z == cellZ) ||
-        (m_piece.layerTransition.loadPointEnabled && m_piece.layerTransition.loadPoint.x == cellX && m_piece.layerTransition.loadPoint.z == cellZ))
+
+    if (!asset.colliderEnabled) return true;
+    const XMFLOAT3 anchor = GetCellWorldPosition(object.cell.x, object.cell.z);
+    const XMFLOAT3 center = {
+        anchor.x + static_cast<float>(footprintX - 1) * m_piece.cellSize * 0.5f + asset.colliderCenter.x * object.scaleX / asset.defaultScale.x,
+        anchor.y + asset.colliderCenter.y * object.scaleY / asset.defaultScale.y,
+        anchor.z + static_cast<float>(footprintZ - 1) * m_piece.cellSize * 0.5f + asset.colliderCenter.z * object.scaleZ / asset.defaultScale.z };
+    const XMFLOAT3 half = {
+        asset.colliderSize.x * object.scaleX / asset.defaultScale.x * 0.5f,
+        asset.colliderSize.y * object.scaleY / asset.defaultScale.y * 0.5f,
+        asset.colliderSize.z * object.scaleZ / asset.defaultScale.z * 0.5f };
+    for (size_t index = 0; index < m_piece.environmentObjects.size(); ++index)
     {
-        outMessage = u8"ロープ以外のゲームオブジェクトと同じセルには配置できません";
-        return false;
+        if (static_cast<int>(index) == ignoredObjectIndex) continue;
+        const NarakuPiece::EnvironmentObjectData& other = m_piece.environmentObjects[index];
+        const int otherAssetIndex = FindEnvironmentModelIndexById(other.modelId);
+        if (otherAssetIndex < 0) continue;
+        const EnvironmentModelAsset& otherAsset = m_environmentModels[otherAssetIndex];
+        if (!otherAsset.colliderEnabled) continue;
+        int otherFootprintX = otherAsset.footprintX;
+        int otherFootprintZ = otherAsset.footprintZ;
+        if ((other.rotationQuarterTurns & 1) != 0) std::swap(otherFootprintX, otherFootprintZ);
+        const XMFLOAT3 otherAnchor = GetCellWorldPosition(other.cell.x, other.cell.z);
+        const XMFLOAT3 otherCenter = {
+            otherAnchor.x + static_cast<float>(otherFootprintX - 1) * m_piece.cellSize * 0.5f + otherAsset.colliderCenter.x * other.scaleX / otherAsset.defaultScale.x,
+            otherAnchor.y + otherAsset.colliderCenter.y * other.scaleY / otherAsset.defaultScale.y,
+            otherAnchor.z + static_cast<float>(otherFootprintZ - 1) * m_piece.cellSize * 0.5f + otherAsset.colliderCenter.z * other.scaleZ / otherAsset.defaultScale.z };
+        const XMFLOAT3 otherHalf = {
+            otherAsset.colliderSize.x * other.scaleX / otherAsset.defaultScale.x * 0.5f,
+            otherAsset.colliderSize.y * other.scaleY / otherAsset.defaultScale.y * 0.5f,
+            otherAsset.colliderSize.z * other.scaleZ / otherAsset.defaultScale.z * 0.5f };
+        if (std::fabs(center.x - otherCenter.x) < half.x + otherHalf.x &&
+            std::fabs(center.y - otherCenter.y) < half.y + otherHalf.y &&
+            std::fabs(center.z - otherCenter.z) < half.z + otherHalf.z)
+        {
+            outMessage = u8"コライダーが別の環境オブジェクトと重なります";
+            return false;
+        }
     }
     return true;
 }
@@ -524,6 +676,12 @@ void SceneNarakuPieceEditor::OpenNewEnvironmentModelDialog()
     std::snprintf(m_environmentModelNameInput.data(), m_environmentModelNameInput.size(), "%s", name.c_str());
     std::snprintf(m_environmentModelPathInput.data(), m_environmentModelPathInput.size(), "%s", path.c_str());
     m_environmentModelScaleInput = { 1.0f, 1.0f, 1.0f };
+    m_environmentModelFootprintInput[0] = 1;
+    m_environmentModelFootprintInput[1] = 1;
+    m_environmentModelColliderEnabledInput = false;
+    m_environmentModelColliderCenterInput = {};
+    m_environmentModelColliderSizeInput = { 1.0f, 1.0f, 1.0f };
+    ResetEnvironmentModelPopupCamera();
     m_environmentModelPopupIsNew = true;
     m_requestOpenEnvironmentModelPopup = true;
 }
@@ -542,8 +700,22 @@ void SceneNarakuPieceEditor::OpenEnvironmentModelSetting()
     std::snprintf(m_environmentModelNameInput.data(), m_environmentModelNameInput.size(), "%s", asset.name.c_str());
     std::snprintf(m_environmentModelPathInput.data(), m_environmentModelPathInput.size(), "%s", asset.path.c_str());
     m_environmentModelScaleInput = asset.defaultScale;
+    m_environmentModelFootprintInput[0] = asset.footprintX;
+    m_environmentModelFootprintInput[1] = asset.footprintZ;
+    m_environmentModelColliderEnabledInput = asset.colliderEnabled;
+    m_environmentModelColliderCenterInput = asset.colliderCenter;
+    m_environmentModelColliderSizeInput = asset.colliderSize;
+    ResetEnvironmentModelPopupCamera();
     m_environmentModelPopupIsNew = false;
     m_requestOpenEnvironmentModelPopup = true;
+}
+
+void SceneNarakuPieceEditor::ResetEnvironmentModelPopupCamera()
+{
+    m_environmentModelPopupCameraYaw = XMConvertToRadians(140.0f);
+    m_environmentModelPopupCameraPitch = XMConvertToRadians(25.0f);
+    m_environmentModelPopupCameraZoom = 2.60f;
+    m_environmentModelPopupCameraTargetOffset = {};
 }
 
 void SceneNarakuPieceEditor::DeleteSelectedEnvironmentModel()
@@ -597,11 +769,19 @@ void SceneNarakuPieceEditor::ApplyEnvironmentModelPopup()
     const int previousSelectedIndex = m_selectedEnvironmentModelIndex;
     std::string previousName;
     XMFLOAT3 previousScale = {};
+    int previousFootprintX = 1;
+    int previousFootprintZ = 1;
+    bool previousColliderEnabled = false;
+    XMFLOAT3 previousColliderCenter = {};
+    XMFLOAT3 previousColliderSize = { 1.0f, 1.0f, 1.0f };
     bool previousThumbnailDirty = false;
     const bool applied = m_environmentModelPopupIsNew
         ? AddEnvironmentModelFromPopup(name, path)
         : UpdateEnvironmentModelFromPopup(
-            name, previousName, previousScale, previousThumbnailDirty);
+            name, previousName, previousScale,
+            previousFootprintX, previousFootprintZ,
+            previousColliderEnabled, previousColliderCenter, previousColliderSize,
+            previousThumbnailDirty);
     // モデル読込または選択状態が無効ならポップアップを開いたままにします。
     if (!applied)
     {
@@ -614,6 +794,11 @@ void SceneNarakuPieceEditor::ApplyEnvironmentModelPopup()
             previousSelectedIndex,
             previousName,
             previousScale,
+            previousFootprintX,
+            previousFootprintZ,
+            previousColliderEnabled,
+            previousColliderCenter,
+            previousColliderSize,
             previousThumbnailDirty);
         return;
     }
@@ -631,7 +816,13 @@ bool SceneNarakuPieceEditor::IsEnvironmentModelPopupInputValid(
         !path.empty() &&
         m_environmentModelScaleInput.x > 0.0f &&
         m_environmentModelScaleInput.y > 0.0f &&
-        m_environmentModelScaleInput.z > 0.0f;
+        m_environmentModelScaleInput.z > 0.0f &&
+        m_environmentModelFootprintInput[0] > 0 &&
+        m_environmentModelFootprintInput[1] > 0 &&
+        (!m_environmentModelColliderEnabledInput ||
+            (m_environmentModelColliderSizeInput.x > 0.0f &&
+             m_environmentModelColliderSizeInput.y > 0.0f &&
+             m_environmentModelColliderSizeInput.z > 0.0f));
 }
 
 bool SceneNarakuPieceEditor::AddEnvironmentModelFromPopup(
@@ -652,6 +843,11 @@ bool SceneNarakuPieceEditor::AddEnvironmentModelFromPopup(
     asset.name = name;
     asset.path = path;
     asset.defaultScale = m_environmentModelScaleInput;
+    asset.footprintX = m_environmentModelFootprintInput[0];
+    asset.footprintZ = m_environmentModelFootprintInput[1];
+    asset.colliderEnabled = m_environmentModelColliderEnabledInput;
+    asset.colliderCenter = m_environmentModelColliderCenterInput;
+    asset.colliderSize = m_environmentModelColliderSizeInput;
     asset.model = model;
     UpdateEnvironmentModelBounds(asset);
     m_environmentModels.push_back(asset);
@@ -664,6 +860,11 @@ bool SceneNarakuPieceEditor::UpdateEnvironmentModelFromPopup(
     const std::string& name,
     std::string& outPreviousName,
     XMFLOAT3& outPreviousScale,
+    int& outPreviousFootprintX,
+    int& outPreviousFootprintZ,
+    bool& outPreviousColliderEnabled,
+    XMFLOAT3& outPreviousColliderCenter,
+    XMFLOAT3& outPreviousColliderSize,
     bool& outPreviousThumbnailDirty)
 {
     EDITOR_PROFILE_FUNCTION();
@@ -679,9 +880,36 @@ bool SceneNarakuPieceEditor::UpdateEnvironmentModelFromPopup(
     EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
     outPreviousName = asset.name;
     outPreviousScale = asset.defaultScale;
+    outPreviousFootprintX = asset.footprintX;
+    outPreviousFootprintZ = asset.footprintZ;
+    outPreviousColliderEnabled = asset.colliderEnabled;
+    outPreviousColliderCenter = asset.colliderCenter;
+    outPreviousColliderSize = asset.colliderSize;
     outPreviousThumbnailDirty = asset.thumbnailDirty;
     asset.name = name;
     asset.defaultScale = m_environmentModelScaleInput;
+    asset.footprintX = m_environmentModelFootprintInput[0];
+    asset.footprintZ = m_environmentModelFootprintInput[1];
+    asset.colliderEnabled = m_environmentModelColliderEnabledInput;
+    asset.colliderCenter = m_environmentModelColliderCenterInput;
+    asset.colliderSize = m_environmentModelColliderSizeInput;
+    for (size_t objectIndex = 0; objectIndex < m_piece.environmentObjects.size(); ++objectIndex)
+    {
+        if (m_piece.environmentObjects[objectIndex].modelId != asset.id) continue;
+        std::string placementError;
+        if (!CanPlaceEnvironmentObjectData(m_piece.environmentObjects[objectIndex], static_cast<int>(objectIndex), placementError))
+        {
+            asset.name = outPreviousName;
+            asset.defaultScale = outPreviousScale;
+            asset.footprintX = outPreviousFootprintX;
+            asset.footprintZ = outPreviousFootprintZ;
+            asset.colliderEnabled = outPreviousColliderEnabled;
+            asset.colliderCenter = outPreviousColliderCenter;
+            asset.colliderSize = outPreviousColliderSize;
+            SetMessage(u8"登録変更後の配置が競合します: " + placementError);
+            return false;
+        }
+    }
     asset.thumbnailDirty = true;
     return true;
 }
@@ -690,6 +918,11 @@ void SceneNarakuPieceEditor::RollbackEnvironmentModelPopup(
     int previousSelectedIndex,
     const std::string& previousName,
     const XMFLOAT3& previousScale,
+    int previousFootprintX,
+    int previousFootprintZ,
+    bool previousColliderEnabled,
+    const XMFLOAT3& previousColliderCenter,
+    const XMFLOAT3& previousColliderSize,
     bool previousThumbnailDirty)
 {
     EDITOR_PROFILE_FUNCTION();
@@ -709,6 +942,11 @@ void SceneNarakuPieceEditor::RollbackEnvironmentModelPopup(
     EnvironmentModelAsset& asset = m_environmentModels[m_selectedEnvironmentModelIndex];
     asset.name = previousName;
     asset.defaultScale = previousScale;
+    asset.footprintX = previousFootprintX;
+    asset.footprintZ = previousFootprintZ;
+    asset.colliderEnabled = previousColliderEnabled;
+    asset.colliderCenter = previousColliderCenter;
+    asset.colliderSize = previousColliderSize;
     asset.thumbnailDirty = previousThumbnailDirty;
 }
 
@@ -774,11 +1012,17 @@ void SceneNarakuPieceEditor::DrawEnvironmentObjects3D() const
         // 条件に該当する場合は、後続処理に必要な値を準備します。
         if (asset.model == nullptr) continue;
 
-        const XMFLOAT3 center = GetCellWorldPosition(object.cell.x, object.cell.z);
+        int footprintX = asset.footprintX;
+        int footprintZ = asset.footprintZ;
+        if ((object.rotationQuarterTurns & 1) != 0) std::swap(footprintX, footprintZ);
+        XMFLOAT3 center = GetCellWorldPosition(object.cell.x, object.cell.z);
+        center.x += static_cast<float>(footprintX - 1) * m_piece.cellSize * 0.5f;
+        center.z += static_cast<float>(footprintZ - 1) * m_piece.cellSize * 0.5f;
         XMFLOAT4X4 wvp[3] = {};
         XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(
             XMMatrixTranslation(-asset.previewAnchor.x, -asset.previewAnchor.y, -asset.previewAnchor.z) *
             XMMatrixScaling(object.scaleX, object.scaleY, object.scaleZ) *
+            XMMatrixRotationY(-XM_PIDIV2 * static_cast<float>(object.rotationQuarterTurns)) *
             XMMatrixTranslation(center.x, center.y, center.z)));
         XMStoreFloat4x4(&wvp[1], XMMatrixTranspose(XMLoadFloat4x4(&m_viewMatrix)));
         XMStoreFloat4x4(&wvp[2], XMMatrixTranspose(XMLoadFloat4x4(&m_projectionMatrix)));
@@ -802,8 +1046,19 @@ void SceneNarakuPieceEditor::DrawEnvironmentObjects3D() const
             asset.model->Draw(static_cast<int>(meshIndex));
         }
 
-        // 条件に該当する場合は、`DrawDebugWireBox3D` の処理を実行します。
-        if (m_selectedEnvironmentObjectIndex == static_cast<int>(index))
+        if (asset.colliderEnabled)
+        {
+            const XMFLOAT3 colliderCenter = {
+                center.x + asset.colliderCenter.x * object.scaleX / asset.defaultScale.x,
+                center.y + asset.colliderCenter.y * object.scaleY / asset.defaultScale.y,
+                center.z + asset.colliderCenter.z * object.scaleZ / asset.defaultScale.z };
+            const XMFLOAT3 colliderSize = {
+                asset.colliderSize.x * object.scaleX / asset.defaultScale.x,
+                asset.colliderSize.y * object.scaleY / asset.defaultScale.y,
+                asset.colliderSize.z * object.scaleZ / asset.defaultScale.z };
+            DrawDebugWireBox3D(colliderCenter, colliderSize, { 0.25f, 1.0f, 0.35f, 1.0f });
+        }
+        else if (m_selectedEnvironmentObjectIndex == static_cast<int>(index))
         {
             DrawDebugWireBox3D(
                 { center.x, center.y + 0.5f * object.scaleY, center.z },
@@ -877,6 +1132,7 @@ void SceneNarakuPieceEditor::UpdateEnvironmentObjectEditing()
     object.scaleX = asset.defaultScale.x;
     object.scaleY = asset.defaultScale.y;
     object.scaleZ = asset.defaultScale.z;
+    object.rotationQuarterTurns = 0;
     m_piece.environmentObjects.push_back(object);
     m_selectedEnvironmentObjectIndex = static_cast<int>(m_piece.environmentObjects.size()) - 1;
     MarkPieceDirty();

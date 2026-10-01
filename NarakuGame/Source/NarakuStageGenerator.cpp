@@ -1094,6 +1094,8 @@ namespace
             mapObject.scaleX = pieceObject.scaleX;
             mapObject.scaleY = pieceObject.scaleY;
             mapObject.scaleZ = pieceObject.scaleZ;
+            mapObject.rotationQuarterTurns = pieceObject.rotationQuarterTurns;
+            mapObject.footprintAnchored = true;
             mapData.environmentObjects.push_back(mapObject);
         }
     }

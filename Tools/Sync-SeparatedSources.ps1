@@ -26,7 +26,11 @@ $commonFiles = @(
 )
 
 $gameFiles = @(
-    'SceneNarakuProto.cpp', 'SceneNarakuProto.h', 'SceneNarakuResultView.cpp'
+    'SceneNarakuProto.cpp', 'SceneNarakuProto.h', 'SceneNarakuProtoImplementation.h',
+    'SceneNarakuResultView.cpp', 'SceneNarakuProto.World.cpp',
+    'SceneNarakuProto.Exploration.cpp', 'SceneNarakuProto.Rendering.cpp',
+    'SceneNarakuProto.Town.cpp', 'SceneNarakuProto.Quests.cpp',
+    'SceneNarakuProto.Persistence.cpp', 'SceneNarakuProto.Rules.cpp'
 )
 
 function Sync-FileSet {
