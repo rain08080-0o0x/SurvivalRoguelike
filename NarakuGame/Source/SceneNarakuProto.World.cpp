@@ -6,7 +6,6 @@
  */
 
 #include "SceneNarakuProtoImplementation.h"
-
 using namespace SceneNarakuProtoImplementation;
 
 void SceneNarakuProto::ResetDiveRuntimeState(int preservedMoney)
@@ -1199,6 +1198,7 @@ bool SceneNarakuProto::BuildSurfaceRuntime(bool spawnAtAbyssEntrance)
                     groundTextureId = cell.groundTextureId;
                     if (cell.deleted) flags |= NarakuMap::CellAttributeRemoved;
                     if (!cell.walkable) flags |= NarakuMap::CellAttributeBlocked;
+                    if (!cell.enemySpawnAllowed) flags |= NarakuMap::CellAttributeEnemySpawnBlocked;
                     if (cell.waterDepth == NarakuPiece::WaterDepth::Puddle) flags |= NarakuMap::CellAttributeWaterPuddle;
                     if (cell.waterDepth == NarakuPiece::WaterDepth::Pond) flags |= NarakuMap::CellAttributeWaterPond;
                     if (cell.waterDepth == NarakuPiece::WaterDepth::Lake) flags |= NarakuMap::CellAttributeWaterLake | NarakuMap::CellAttributeBlocked;
@@ -1397,6 +1397,13 @@ void SceneNarakuProto::BeginLayerTransition(int sourceGateIndex, int destination
         CancelCooking(u8"層間移動を開始したため調理を中断しました。料理セットの使用回数は戻りません。");
     }
 
+    const int sourceDepth = GetCurrentDepth();
+    const int destinationDepth = m_areas[static_cast<std::size_t>(destinationAreaIndex)].depth;
+    if (sourceDepth != destinationDepth)
+    {
+        BeginDepthDirectionAnimation(destinationDepth);
+    }
+
     m_transitionSourceGateIndex = sourceGateIndex;
     m_transitionDestinationAreaIndex = destinationAreaIndex;
     m_transitionDestinationGateIndex = destinationGateIndex;
@@ -1417,6 +1424,59 @@ void SceneNarakuProto::BeginLayerTransition(int sourceGateIndex, int destination
     }
     SaveCurrentAreaState();
     m_mode = Mode::LayerTransition;
+}
+
+void SceneNarakuProto::BeginDepthDirectionAnimation(int destinationDepth)
+{
+    EndDepthDirectionAnimation();
+    if (destinationDepth < 1 || destinationDepth > 5) return;
+
+    for (std::size_t textureIndex = 0; textureIndex < m_depthDirectionTextures.size(); ++textureIndex)
+    {
+        std::ostringstream path;
+        path << "Assets/Texture/Direction/depth_" << destinationDepth
+            << "_ss_" << textureIndex << ".dds";
+        Texture* texture = new Texture();
+        if (FAILED(texture->Create(path.str().c_str())))
+        {
+            SAFE_DELETE(texture);
+            EndDepthDirectionAnimation();
+            return;
+        }
+        m_depthDirectionTextures[textureIndex] = texture;
+    }
+
+    m_depthDirectionElapsed = 0.0f;
+    m_depthDirectionAccelerated = false;
+    m_depthDirectionActive = true;
+}
+
+void SceneNarakuProto::EndDepthDirectionAnimation()
+{
+    for (Texture*& texture : m_depthDirectionTextures)
+    {
+        SAFE_DELETE(texture);
+    }
+    m_depthDirectionElapsed = 0.0f;
+    m_depthDirectionAccelerated = false;
+    m_depthDirectionActive = false;
+}
+
+void SceneNarakuProto::UpdateDepthDirectionAnimation(float dt)
+{
+    if (!m_depthDirectionActive) return;
+    if (IsActionUIConfirmTrigger()) m_depthDirectionAccelerated = true;
+
+    const float playbackScale = m_depthDirectionAccelerated
+        ? kDepthDirectionAcceleratedScale
+        : 1.0f;
+    m_depthDirectionElapsed += dt * playbackScale;
+    const float duration = static_cast<float>(kDepthDirectionFrameCount) /
+        kDepthDirectionFramesPerSecond;
+    if (m_depthDirectionElapsed >= duration)
+    {
+        EndDepthDirectionAnimation();
+    }
 }
 
 void SceneNarakuProto::ReportGenerationFailure(const std::string& summary, const std::string& detail)

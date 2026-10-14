@@ -120,6 +120,8 @@ void SceneNarakuProto::UpdatePortableLightForActiveMode()
 
 void SceneNarakuProto::Update()
 {
+    UpdateDepthDirectionAnimation(kDt);
+
     if (m_screenFadePhase != ScreenFadePhase::None)
     {
         if (m_screenFadeAction == ScreenFadeAction::LayerTransition && m_mode == Mode::LayerTransition)
@@ -695,8 +697,26 @@ void SceneNarakuProto::UpdateMovement(float dt)
     // 斜め移動が速くならないように正規化します。
     move = Normalize(move);
 
+    bool attackMovementAllowed = true;
+    bool attackTurnAllowed = true;
+    if (m_player.attackTimer > 0.0f)
+    {
+        const NarakuCombat::AttackDefinition* attack =
+            NarakuCombat::FindAttack(m_combatCatalog, m_player.activeAttackId);
+        if (attack != nullptr)
+        {
+            attackMovementAllowed = attack->movementStartFrame >= 0 &&
+                m_player.attackFrame >= attack->movementStartFrame &&
+                m_player.attackFrame <= attack->movementEndFrame;
+            attackTurnAllowed = attack->turnStartFrame >= 0 &&
+                m_player.attackFrame >= attack->turnStartFrame &&
+                m_player.attackFrame <= attack->turnEndFrame;
+        }
+    }
+
     // 入力がある時だけ向きを更新して、停止中の攻撃方向を維持します。
-    if (move.x != 0.0f || move.y != 0.0f) m_player.facing = move;
+    if (attackTurnAllowed && (move.x != 0.0f || move.y != 0.0f)) m_player.facing = move;
+    if (!attackMovementAllowed) move = {};
 
     // Spaceが押された瞬間にジャンプ開始を試します。
     if (!isMining && !inLandingRecovery && IsActionJumpTrigger()) TryStartJump();
@@ -857,64 +877,156 @@ void SceneNarakuProto::UpdateAttackEffects(float dt)
 
 }
 
+float SceneNarakuProto::GetAttackStartupForStep(int attackStep) const
+{
+    static const char* ids[] = {"player.pickaxe.1", "player.pickaxe.2", "player.pickaxe.3"};
+    const int step = std::max(0, std::min(2, attackStep));
+    const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, ids[step]);
+    return attack == nullptr ? 0.0f : static_cast<float>(attack->attackStartFrame) / attack->framesPerSecond;
+}
+
+float SceneNarakuProto::GetAttackActiveForStep(int attackStep) const
+{
+    static const char* ids[] = {"player.pickaxe.1", "player.pickaxe.2", "player.pickaxe.3"};
+    const int step = std::max(0, std::min(2, attackStep));
+    const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, ids[step]);
+    return attack == nullptr ? 0.0f : static_cast<float>(attack->attackEndFrame - attack->attackStartFrame + 1) / attack->framesPerSecond;
+}
+
+float SceneNarakuProto::GetAttackRecoveryForStep(int attackStep) const
+{
+    static const char* ids[] = {"player.pickaxe.1", "player.pickaxe.2", "player.pickaxe.3"};
+    const int step = std::max(0, std::min(2, attackStep));
+    const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, ids[step]);
+    return attack == nullptr ? 0.0f : static_cast<float>(attack->totalFrames - attack->attackEndFrame - 1) / attack->framesPerSecond;
+}
+
+float SceneNarakuProto::GetAttackTotalForStep(int attackStep) const
+{
+    return GetAttackStartupForStep(attackStep) + GetAttackActiveForStep(attackStep) +
+        GetAttackRecoveryForStep(attackStep);
+}
+
+void SceneNarakuProto::ResetAttackCombo()
+{
+    m_player.attackTimer = 0.0f;
+    m_player.activeAttackStep = 0;
+    m_player.nextAttackStep = 0;
+    m_player.attackComboWindowTimer = 0.0f;
+    m_player.attackInputBuffered = false;
+    m_player.activeAttackId.clear();
+    m_player.attackFrame = 0.0f;
+    m_player.attackConnected = false;
+    Vec2 facing = Normalize(m_player.facing);
+    if (Dot(facing, facing) <= 0.0001f) facing = { 0.0f, 1.0f };
+    m_player.attackFacing = facing;
+    m_player.bufferedAttackFacing = facing;
+}
+
 void SceneNarakuProto::UpdateMeleeAttack(float dt)
 {
     if (m_player.attackTimer <= 0.0f)
     {
-        return;
-    }
-
-    const float previous = m_player.attackTimer;
-    m_player.attackTimer = std::max(0.0f, m_player.attackTimer - dt);
-    const float elapsed = kAttackTotal - m_player.attackTimer;
-    const float previousElapsed = kAttackTotal - previous;
-    const bool activeThisFrame = previousElapsed < kAttackStartup + kAttackActive && elapsed >= kAttackStartup;
-    if (!activeThisFrame)
-    {
-        return;
-    }
-
-    Vec2 relicCenter = Add(m_player.pos, Mul(m_player.facing, kAttackRange));
-    float relicDepth = m_player.depth;
-    bool foundPrimaryHit = false;
-    for (EnemyState& enemy : m_enemies)
-    {
-        if (!enemy.alive || enemy.hitByPlayerAttack) continue;
-        const Vec2 toEnemy = Sub(enemy.pos, m_player.pos);
-        if (Distance(enemy.pos, m_player.pos) <= kAttackRange && Dot(Normalize(toEnemy), m_player.facing) >= 0.866025f)
+        if (m_player.attackComboWindowTimer > 0.0f)
         {
-            enemy.hitByPlayerAttack = true;
-            m_attackHitEffects.push_back({ enemy.pos, enemy.depth, kAttackHitEffectDuration });
-            enemy.hp -= GetAttackPower();
-            if (!foundPrimaryHit)
+            m_player.attackComboWindowTimer = std::max(
+                0.0f, m_player.attackComboWindowTimer - dt);
+            if (m_player.attackComboWindowTimer <= 0.0f)
             {
-                relicCenter = enemy.pos;
-                relicDepth = enemy.depth;
-                foundPrimaryHit = true;
+                m_player.nextAttackStep = 0;
             }
         }
+        return;
     }
 
-    if (m_attackRelicTriggered)
+    const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, m_player.activeAttackId);
+    if (attack == nullptr || attack->framesPerSecond <= 0 || attack->totalFrames <= 0)
     {
-        m_attackHitEffects.push_back({ relicCenter, relicDepth, kAttackHitEffectDuration });
+        ResetAttackCombo();
+        return;
+    }
+    const float previous = m_player.attackTimer;
+    m_player.attackTimer = std::max(0.0f, m_player.attackTimer - dt);
+    const float attackTotal = static_cast<float>(attack->totalFrames) / attack->framesPerSecond;
+    const float elapsed = attackTotal - m_player.attackTimer;
+    const float previousElapsed = attackTotal - previous;
+    const float previousFrame = previousElapsed * attack->framesPerSecond;
+    m_player.attackFrame = elapsed * attack->framesPerSecond;
+    const bool activeThisFrame = m_player.attackFrame >= attack->attackStartFrame &&
+        previousFrame <= attack->attackEndFrame;
+
+    if (activeThisFrame)
+    {
+        const Vec2 attackFacing = Normalize(m_player.attackFacing);
+        Vec2 relicCenter = Add(m_player.pos, Mul(attackFacing, m_debugPlayerParams.attackRange));
+        float relicDepth = m_player.depth;
+        bool foundPrimaryHit = false;
+        const NarakuCombat::HitboxKey hitbox = NarakuCombat::EvaluateHitbox(*attack, m_player.attackFrame);
+        const Vec2 right = {attackFacing.y, -attackFacing.x};
+        const Vec2 hitCenter = Add(m_player.pos,
+            Add(Mul(right, hitbox.center.x), Mul(attackFacing, hitbox.center.z)));
         for (EnemyState& enemy : m_enemies)
         {
-            if (!enemy.alive || enemy.hitByRelicAttack || std::fabs(enemy.depth - relicDepth) > 0.35f ||
-                Distance(enemy.pos, relicCenter) > kRelicAttackRadius) continue;
-            enemy.hitByRelicAttack = true;
-            enemy.hp -= GetAttackPower() * kRelicAttackDamageScale;
+            if (!enemy.alive || enemy.hitByPlayerAttack) continue;
+            if (std::fabs(enemy.pos.x - hitCenter.x) <= hitbox.size.x * 0.5f &&
+                std::fabs(enemy.pos.y - hitCenter.y) <= hitbox.size.z * 0.5f &&
+                std::fabs(enemy.depth - m_player.depth) <= std::max(0.35f, hitbox.size.y * 0.5f))
+            {
+                enemy.hitByPlayerAttack = true;
+                m_player.attackConnected = true;
+                m_attackHitEffects.push_back({ enemy.pos, enemy.depth, kAttackHitEffectDuration });
+                enemy.hp -= GetAttackPower() * attack->damageMultiplier;
+                if (!foundPrimaryHit)
+                {
+                    relicCenter = enemy.pos;
+                    relicDepth = enemy.depth;
+                    foundPrimaryHit = true;
+                }
+            }
+        }
+
+        if (m_attackRelicTriggered)
+        {
+            m_attackHitEffects.push_back({ relicCenter, relicDepth, kAttackHitEffectDuration });
+            for (EnemyState& enemy : m_enemies)
+            {
+                if (!enemy.alive || enemy.hitByRelicAttack || std::fabs(enemy.depth - relicDepth) > 0.35f ||
+                    Distance(enemy.pos, relicCenter) > kRelicAttackRadius) continue;
+                enemy.hitByRelicAttack = true;
+                enemy.hp -= GetAttackPower() * kRelicAttackDamageScale;
+            }
+        }
+
+        for (EnemyState& enemy : m_enemies)
+        {
+            if (!enemy.alive || enemy.hp > 0.0f) continue;
+            enemy.alive = false;
+            const DepthRules& rules = GetRulesForDepth(GetCurrentDepth());
+            enemy.respawnTimer = kEnemyRespawnTime * rules.enemyRespawn;
+            for (int drop = 0; drop < rules.enemyDropRolls; ++drop)
+                m_groundFoods.push_back({ enemy.pos, enemy.depth, true });
+            AwardEnemyDefeat(enemy);
+            AddMessage(u8"敵を倒しました。深度に応じた数の食料を落としました。");
         }
     }
 
-    for (EnemyState& enemy : m_enemies)
+    if (m_player.attackTimer <= 0.0f)
     {
-        if (!enemy.alive || enemy.hp > 0.0f) continue;
-        enemy.alive = false;
-        enemy.respawnTimer = kEnemyRespawnTime;
-        m_groundFoods.push_back({ enemy.pos, enemy.depth, true });
-        AwardEnemyDefeat(enemy);
-        AddMessage(u8"敵を倒しました。食料を落としました。");
+        if (m_player.attackInputBuffered && m_player.attackConnected)
+        {
+            const Vec2 bufferedFacing = m_player.bufferedAttackFacing;
+            m_player.attackInputBuffered = false;
+            if (!StartAttackStep(bufferedFacing))
+            {
+                m_player.attackComboWindowTimer = kAttackComboWindow;
+            }
+        }
+        else
+        {
+            m_player.nextAttackStep = 0;
+            m_player.attackComboWindowTimer = 0.0f;
+            m_player.activeAttackId.clear();
+        }
     }
 }
 
@@ -1107,9 +1219,17 @@ void SceneNarakuProto::UpdateEnemies(float dt)
                 enemy.hasHitThisCharge = false;
                 continue;
             }
+            const char* activeEnemyAttackId = enemy.type == EnemyType::Territory
+                ? "enemy.territory.charge" : "enemy.charger.charge";
+            const NarakuCombat::AttackDefinition* activeEnemyAttack =
+                NarakuCombat::FindAttack(m_combatCatalog, activeEnemyAttackId);
+            const float attackDuration = activeEnemyAttack != nullptr && activeEnemyAttack->framesPerSecond > 0
+                ? static_cast<float>(activeEnemyAttack->totalFrames - activeEnemyAttack->attackStartFrame) /
+                    activeEnemyAttack->framesPerSecond
+                : 0.01f;
             const float chargeProgress = std::max(
                 0.0f,
-                std::min(1.0f, 1.0f - enemy.chargeTimer / kEnemyChargeTime));
+                std::min(1.0f, 1.0f - enemy.chargeTimer / std::max(0.01f, attackDuration)));
             const float chargeSpeedScale = kEnemyChargeStartSpeedScale +
                 (kEnemyChargeEndSpeedScale - kEnemyChargeStartSpeedScale) * chargeProgress;
             const Vec2 chargeTarget = Add(
@@ -1134,10 +1254,26 @@ void SceneNarakuProto::UpdateEnemies(float dt)
             const bool sameDepthAsPlayer = std::fabs(enemy.depth - m_player.depth) <= 0.35f;
             if (sameDepthAsPlayer && !enemy.hasHitThisCharge && Distance(enemy.pos, m_player.pos) <= kEnemyHitRange)
             {
-                bool invincible = m_player.stepTimer > kStepRecoveryTime;
-                if (!invincible)
+                const NarakuCombat::AttackDefinition* playerAttack =
+                    NarakuCombat::FindAttack(m_combatCatalog, m_player.activeAttackId);
+                const bool parried = m_player.attackTimer > 0.0f && playerAttack != nullptr &&
+                    playerAttack->parryStartFrame >= 0 &&
+                    m_player.attackFrame >= playerAttack->parryStartFrame &&
+                    m_player.attackFrame <= playerAttack->parryEndFrame;
+                if (parried)
                 {
-                    ApplyPlayerDamage(enemy.attackDamage, DeathCause::Enemy, u8"敵の攻撃で死亡しました。");
+                    enemy.chargeTimer = 0.0f;
+                    enemy.attackCooldown = enemy.attackInterval;
+                    AddMessage(u8"敵の攻撃をパリィしました。");
+                }
+                else if (m_player.stepTimer <= kStepRecoveryTime)
+                {
+                    const char* enemyAttackId = enemy.type == EnemyType::Territory
+                        ? "enemy.territory.charge" : "enemy.charger.charge";
+                    const NarakuCombat::AttackDefinition* attack =
+                        NarakuCombat::FindAttack(m_combatCatalog, enemyAttackId);
+                    ApplyPlayerDamage(enemy.attackDamage * (attack == nullptr ? 1.0f : attack->damageMultiplier),
+                        DeathCause::Enemy, u8"敵の攻撃で死亡しました。");
                     m_cameraShakeTimer = kCameraShakeDuration;
                     m_player.knockbackTimer = kKnockbackTime;
                     Vec2 dir = Normalize(Sub(m_player.pos, enemy.pos));
@@ -1164,7 +1300,13 @@ void SceneNarakuProto::UpdateEnemies(float dt)
             if (enemy.telegraphTimer <= 0.0f)
             {
                 enemy.chargeDir = Normalize(Sub(m_player.pos, enemy.pos));
-                enemy.chargeTimer = kEnemyChargeTime;
+                const char* enemyAttackId = enemy.type == EnemyType::Territory
+                    ? "enemy.territory.charge" : "enemy.charger.charge";
+                const NarakuCombat::AttackDefinition* attack =
+                    NarakuCombat::FindAttack(m_combatCatalog, enemyAttackId);
+                enemy.chargeTimer = attack != nullptr && attack->framesPerSecond > 0
+                    ? static_cast<float>(attack->totalFrames - attack->attackStartFrame) / attack->framesPerSecond
+                    : 0.0f;
                 enemy.hasHitThisCharge = false;
             }
             continue;
@@ -1216,7 +1358,9 @@ void SceneNarakuProto::UpdateEnemies(float dt)
         }
 
         enemy.attackCooldown -= dt;
-        if (hostile && enemy.attackCooldown <= 0.0f && dist <= 3.0f)
+        if (hostile && enemy.attackCooldown <= 0.0f && dist <= 3.0f &&
+            NarakuCombat::FindAttack(m_combatCatalog,
+                enemy.type == EnemyType::Territory ? "enemy.territory.charge" : "enemy.charger.charge") != nullptr)
         {
             enemy.telegraphTimer = activity >= 100 ? enemy.telegraphDuration * 0.50f : enemy.telegraphDuration;
         }
@@ -1247,23 +1391,18 @@ void SceneNarakuProto::UpdateUpperLoad(float dt)
     const float currentWorldY = m_player.onRope && m_activeRope >= 0
         ? GetRopeWorldY(m_activeRope, m_ropeProgress)
         : m_player.feetWorldY;
-    const float ascent = (m_player.grounded || m_player.onRope)
-        ? currentWorldY - m_player.previousWorldY
-        : 0.0f;
+    const float ascent = currentWorldY - m_player.previousWorldY;
 
-    // 上昇している場合は上昇負荷ゲージを加算します。
+    m_upperLoadRecovering = ascent <= 0.0f;
     if (ascent > 0.0f)
     {
-        // 上昇量そのものを内部ゲージに加算します。
-        m_player.upperLoad += ascent;
-
-        // 発症目安20mに達したら現在層の上昇負荷を発症させます。
-        if (m_player.upperLoad >= kUpperLoadLimit)
+        m_upperLoadAscentRemainder += ascent;
+        while (m_upperLoadAscentRemainder >= 1.0f)
         {
+            m_upperLoadAscentRemainder -= 1.0f;
+            if (TryPreventUpperLoad()) continue;
+            m_player.upperLoad += 1.0f;
             TriggerUpperLoad();
-
-            // 発症後は内部ゲージを0へ戻します。
-            m_player.upperLoad = 0.0f;
         }
     }
 
@@ -1272,6 +1411,7 @@ void SceneNarakuProto::UpdateUpperLoad(float dt)
     {
         // 1秒あたり1mぶん内部ゲージを減らします。
         m_player.upperLoad = std::max(0.0f, m_player.upperLoad - kUpperLoadRecoveryPerSecond * dt);
+        m_upperLoadAscentRemainder = 0.0f;
     }
 }
 
@@ -1526,8 +1666,10 @@ void SceneNarakuProto::TryInteract()
 
         // 採掘開始時にスタミナを消費します。
         SpendStamina(m_debugPlayerParams.miningCost);
-        m_fullness = std::max(0.0f, m_fullness - GetDepthLevelFullnessConsumptionMultiplier());
-        m_hydration = std::max(0.0f, m_hydration - GetDepthLevelFullnessConsumptionMultiplier());
+        m_fullness = std::max(0.0f, m_fullness -
+            GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
+        m_hydration = std::max(0.0f, m_hydration -
+            GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
 
         // 採掘中のポイント番号を記録します。
         m_miningIndex = i;
@@ -1546,6 +1688,14 @@ void SceneNarakuProto::TryInteract()
 
 void SceneNarakuProto::TryStartStep()
 {
+    if (m_player.attackTimer > 0.0f)
+    {
+        const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, m_player.activeAttackId);
+        if (attack == nullptr || attack->dodgeCancelStartFrame < 0 ||
+            m_player.attackFrame < attack->dodgeCancelStartFrame || m_player.attackFrame > attack->dodgeCancelEndFrame)
+            return;
+        ResetAttackCombo();
+    }
     // 着地直後の硬直中はステップさせません。
     if (m_player.landingRecoveryTimer > 0.0f) return;
 
@@ -1562,8 +1712,10 @@ void SceneNarakuProto::TryStartStep()
 
     // ステップ1回ぶんのスタミナを消費します。
     SpendStamina(m_debugPlayerParams.stepCost);
-    m_fullness = std::max(0.0f, m_fullness - 0.5f * GetDepthLevelFullnessConsumptionMultiplier());
-    m_hydration = std::max(0.0f, m_hydration - 0.5f * GetDepthLevelFullnessConsumptionMultiplier());
+    m_fullness = std::max(0.0f, m_fullness -
+        0.5f * GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
+    m_hydration = std::max(0.0f, m_hydration -
+        0.5f * GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
 
     // 無敵時間と後硬直の合計時間を設定します。
     m_player.stepTimer = kStepInvincibleTime + kStepRecoveryTime;
@@ -1588,8 +1740,10 @@ void SceneNarakuProto::TryStartJump()
 
     // ジャンプ1回ぶんのスタミナを消費します。
     SpendStamina(m_debugPlayerParams.jumpCost);
-    m_fullness = std::max(0.0f, m_fullness - 0.5f * GetDepthLevelFullnessConsumptionMultiplier());
-    m_hydration = std::max(0.0f, m_hydration - 0.5f * GetDepthLevelFullnessConsumptionMultiplier());
+    m_fullness = std::max(0.0f, m_fullness -
+        0.5f * GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
+    m_hydration = std::max(0.0f, m_hydration -
+        0.5f * GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
 
     // 空中状態へ切り替えます。
     m_player.grounded = false;
@@ -1612,19 +1766,61 @@ void SceneNarakuProto::TryStartAttack()
     // 着地直後の硬直中は攻撃させません。
     if (m_player.landingRecoveryTimer > 0.0f) return;
 
-    // 攻撃中は次の攻撃を開始しません。
-    if (m_player.attackTimer > 0.0f) return;
-
     // 採掘中は攻撃させません。
     if (m_miningIndex >= 0) return;
 
-    // スタミナ不足なら攻撃不可です。
-    if (!CanSpendStamina(m_debugPlayerParams.attackCost)) { AddMessage(u8"スタミナが足りないため攻撃できません。"); return; }
+    Vec2 attackFacing = Normalize(m_player.facing);
+    if (Dot(attackFacing, attackFacing) <= 0.0001f) attackFacing = { 0.0f, 1.0f };
+
+    // 攻撃中の入力は一回だけ保存し、現在段の終了直後に次段として開始します。
+    if (m_player.attackTimer > 0.0f)
+    {
+        const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, m_player.activeAttackId);
+        if (attack != nullptr && m_player.attackConnected &&
+            m_player.attackFrame >= attack->comboInputStartFrame &&
+            m_player.attackFrame <= attack->comboInputEndFrame && !m_player.attackInputBuffered)
+        {
+            m_player.attackInputBuffered = true;
+            m_player.bufferedAttackFacing = attackFacing;
+        }
+        return;
+    }
+
+    if (m_player.attackComboWindowTimer <= 0.0f)
+    {
+        m_player.nextAttackStep = 0;
+    }
+    StartAttackStep(attackFacing);
+}
+
+bool SceneNarakuProto::StartAttackStep(const Vec2& requestedFacing)
+{
+    if (m_player.landingRecoveryTimer > 0.0f || m_player.attackTimer > 0.0f || m_miningIndex >= 0)
+        return false;
+
+    static const char* ids[] = {"player.pickaxe.1", "player.pickaxe.2", "player.pickaxe.3"};
+    const int requestedStep = std::max(0, std::min(2, m_player.nextAttackStep));
+    const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, ids[requestedStep]);
+    if (attack == nullptr || attack->framesPerSecond <= 0 || attack->totalFrames <= 0 ||
+        attack->attackStartFrame < 0 || attack->attackEndFrame < attack->attackStartFrame ||
+        attack->attackEndFrame >= attack->totalFrames || attack->hitboxKeys.empty())
+    {
+        AddMessage(std::string(u8"攻撃データが無効なため攻撃できません: ") + ids[requestedStep]);
+        return false;
+    }
+    const float staminaCost = attack->staminaCost > 0.0f ? attack->staminaCost : m_debugPlayerParams.attackCost;
+    if (!CanSpendStamina(staminaCost))
+    {
+        AddMessage(u8"スタミナが足りないため攻撃できません。");
+        return false;
+    }
 
     // 攻撃1回ぶんのスタミナを消費します。
-    SpendStamina(m_debugPlayerParams.attackCost);
-    m_fullness = std::max(0.0f, m_fullness - 0.75f * GetDepthLevelFullnessConsumptionMultiplier());
-    m_hydration = std::max(0.0f, m_hydration - 0.75f * GetDepthLevelFullnessConsumptionMultiplier());
+    SpendStamina(staminaCost);
+    m_fullness = std::max(0.0f, m_fullness -
+        0.75f * GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
+    m_hydration = std::max(0.0f, m_hydration -
+        0.75f * GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
 
     m_attackRelicTriggered = false;
     int relicIndex = -1;
@@ -1640,9 +1836,9 @@ void SceneNarakuProto::TryStartAttack()
         }
     }
     const float relicStaminaCost = GetMaxStamina() * 0.10f;
-    if (relicIndex >= 0 && CanSpendStamina(relicStaminaCost))
+    if (relicIndex >= 0 && CanSpendStamina(relicStaminaCost, false))
     {
-        SpendStamina(relicStaminaCost);
+        SpendStamina(relicStaminaCost, false);
         RelicItem& item = m_inventory[relicIndex];
         --item.remainingUses;
         if (item.remainingUses <= 0)
@@ -1654,16 +1850,25 @@ void SceneNarakuProto::TryStartAttack()
         m_attackRelicTriggered = true;
     }
 
-    // 攻撃全体時間を設定します。
-    m_player.attackTimer = kAttackTotal;
+    Vec2 attackFacing = Normalize(requestedFacing);
+    if (Dot(attackFacing, attackFacing) <= 0.0001f) attackFacing = { 0.0f, 1.0f };
+    m_player.attackFacing = attackFacing;
+    m_player.activeAttackStep = requestedStep;
+    m_player.activeAttackId = attack->id;
+    m_player.attackFrame = 0.0f;
+    m_player.attackConnected = false;
+    m_player.nextAttackStep = attack->nextAttackId == "player.pickaxe.2" ? 1 :
+        (attack->nextAttackId == "player.pickaxe.3" ? 2 : 0);
+    m_player.attackComboWindowTimer = 0.0f;
+    m_player.attackInputBuffered = false;
+    m_player.attackTimer = static_cast<float>(attack->totalFrames) / attack->framesPerSecond;
 
-    // 連続攻撃が左右の往復に見えるよう、攻撃開始ごとに振り方向を反転します。
-    m_player.attackSwingReverse = !m_player.attackSwingReverse;
     for (EnemyState& enemy : m_enemies)
     {
         enemy.hitByPlayerAttack = false;
         enemy.hitByRelicAttack = false;
     }
+    return true;
 }
 
 void SceneNarakuProto::UpdateUnknownWeaponAttack(float dt)
@@ -1699,9 +1904,12 @@ void SceneNarakuProto::FireUnknownWeapon()
         return;
     }
     SpendStamina(staminaCost);
-    m_fullness = std::max(0.0f, m_fullness - 0.75f * GetDepthLevelFullnessConsumptionMultiplier());
-    m_hydration = std::max(0.0f, m_hydration - 0.75f * GetDepthLevelFullnessConsumptionMultiplier());
-    m_player.attackTimer = kAttackTotal;
+    m_fullness = std::max(0.0f, m_fullness -
+        0.75f * GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
+    m_hydration = std::max(0.0f, m_hydration -
+        0.75f * GetDepthLevelFullnessConsumptionMultiplier() * kSurvivalConsumptionScale);
+    m_player.attackTimer = m_debugPlayerParams.attackStartup +
+        m_debugPlayerParams.attackActive + m_debugPlayerParams.attackRecovery;
     m_attackRelicTriggered = false;
     m_unknownWeaponCooldownTimer = kUnknownWeaponCooldownDuration;
 
@@ -1715,9 +1923,11 @@ void SceneNarakuProto::FireUnknownWeapon()
         if (forward <= 0.0f || side > kUnknownWeaponHalfWidth) continue;
         enemy.hp = 0.0f;
         enemy.alive = false;
-        enemy.respawnTimer = kEnemyRespawnTime;
+        const DepthRules& rules = GetRulesForDepth(GetCurrentDepth());
+        enemy.respawnTimer = kEnemyRespawnTime * rules.enemyRespawn;
         m_attackHitEffects.push_back({ enemy.pos, enemy.depth, kAttackHitEffectDuration });
-        m_groundFoods.push_back({ enemy.pos, enemy.depth, true });
+        for (int drop = 0; drop < rules.enemyDropRolls; ++drop)
+            m_groundFoods.push_back({ enemy.pos, enemy.depth, true });
         AwardEnemyDefeat(enemy);
         ++defeated;
     }
@@ -1728,17 +1938,16 @@ void SceneNarakuProto::FireUnknownWeapon()
 
 void SceneNarakuProto::TriggerUpperLoad()
 {
-    if (TryPreventUpperLoad()) return;
-
     const int depth = GetCurrentDepth();
     const auto applyMentalAndVision = [this](float mentalLoss, float visionOcclusion)
     {
         if (mentalLoss > 0.0f)
         {
-            ApplyMentalDamage(mentalLoss, DeathCause::UpperLoad, u8"上昇負荷で精神力が0になりました。");
+            ApplyMentalDamage(mentalLoss / kUpperLoadLimit, DeathCause::UpperLoad, u8"上昇負荷で精神力が0になりました。");
         }
-        m_upperLoadVisionTimer = mentalLoss;
-        m_upperLoadVisionOcclusion = visionOcclusion;
+        m_upperLoadVisionTimer += mentalLoss / kUpperLoadLimit;
+        m_upperLoadVisionOcclusion = std::min(1.0f,
+            m_upperLoadVisionOcclusion + visionOcclusion / kUpperLoadLimit);
 
         if (mentalLoss <= 0.0f)
         {
@@ -1748,7 +1957,7 @@ void SceneNarakuProto::TriggerUpperLoad()
 
         std::ostringstream message;
         message << u8"上昇負荷が発症しました。精神力-"
-            << static_cast<int>(std::round(mentalLoss)) << u8"。";
+            << std::fixed << std::setprecision(2) << mentalLoss / kUpperLoadLimit << u8"。";
         AddMessage(message.str());
     };
 
@@ -1772,7 +1981,7 @@ void SceneNarakuProto::TriggerUpperLoad()
     case 4:
     {
         const float damageRatio = GetLevelInterpolatedValue(kUpperLoadFourthDamageRatios, m_level);
-        const float damage = GetMaxHp() * damageRatio;
+        const float damage = GetMaxHp() * damageRatio / kUpperLoadLimit;
         if (m_player.hp - damage <= 0.0f && TryConsumeSurvivalRelic(true, false))
         {
             return;
@@ -1789,7 +1998,7 @@ void SceneNarakuProto::TriggerUpperLoad()
     case 5:
     {
         const bool wasActive = m_upperLoadFifthTimer > 0.0f;
-        m_upperLoadFifthTimer += GetLevelInterpolatedValue(kUpperLoadFifthDurations, m_level);
+        m_upperLoadFifthTimer += GetLevelInterpolatedValue(kUpperLoadFifthDurations, m_level) / kUpperLoadLimit;
         m_upperLoadFifthDamageRatio = GetLevelInterpolatedValue(kUpperLoadFifthDamageRatios, m_level);
         if (!wasActive) m_upperLoadFifthDamageCooldown = 0.0f;
         AddMessage(u8"上昇負荷が発症し、盲目と移動負荷が発生しました。");
@@ -1804,7 +2013,8 @@ void SceneNarakuProto::UpdateUpperLoadEffects(float dt)
 {
     if (m_upperLoadVisionTimer > 0.0f)
     {
-        m_upperLoadVisionTimer = std::max(0.0f, m_upperLoadVisionTimer - dt);
+        if (m_upperLoadRecovering)
+            m_upperLoadVisionTimer = std::max(0.0f, m_upperLoadVisionTimer - dt);
         if (m_upperLoadVisionTimer <= 0.0f) m_upperLoadVisionOcclusion = 0.0f;
     }
 
@@ -1816,7 +2026,7 @@ void SceneNarakuProto::UpdateUpperLoadEffects(float dt)
     const bool movementInput = moveX != 0.0f || moveY != 0.0f;
     if (movementInput && m_upperLoadFifthDamageCooldown <= 0.0f)
     {
-        const float damage = GetMaxHp() * m_upperLoadFifthDamageRatio;
+        const float damage = GetMaxHp() * m_upperLoadFifthDamageRatio * (m_player.upperLoad / kUpperLoadLimit);
         if (!(m_player.hp - damage <= 0.0f && TryConsumeSurvivalRelic(true, false)))
         {
             m_player.hp = std::max(0.0f, m_player.hp - damage);
@@ -1829,7 +2039,8 @@ void SceneNarakuProto::UpdateUpperLoadEffects(float dt)
         m_upperLoadFifthDamageCooldown = kUpperLoadFifthDamageInterval;
     }
 
-    m_upperLoadFifthTimer = std::max(0.0f, m_upperLoadFifthTimer - dt);
+    if (m_upperLoadRecovering)
+        m_upperLoadFifthTimer = std::max(0.0f, m_upperLoadFifthTimer - dt);
     if (m_upperLoadFifthTimer <= 0.0f)
     {
         m_upperLoadFifthDamageRatio = 0.0f;
@@ -1848,7 +2059,8 @@ void SceneNarakuProto::UpdateHunger(float dt)
     if (m_rationFullnessWardTimer <= 0.0f)
     {
         m_fullness = std::max(0.0f,
-            m_fullness - perMinute / 60.0f * GetDepthLevelFullnessConsumptionMultiplier() * dt);
+            m_fullness - perMinute / 60.0f * GetDepthLevelFullnessConsumptionMultiplier() *
+            kSurvivalConsumptionScale * dt);
     }
     m_player.stamina = std::min(m_player.stamina, GetMaxStamina());
 
@@ -1878,7 +2090,8 @@ void SceneNarakuProto::UpdateHydration(float dt)
     const float rationPenalty = m_rationHydrationPenaltyTimer > 0.0f
         ? kRationHydrationPenaltyMultiplier : 1.0f;
     m_hydration = std::max(0.0f, m_hydration -
-        perMinute / 60.0f * GetDepthLevelFullnessConsumptionMultiplier() * rationPenalty * dt);
+        perMinute / 60.0f * GetDepthLevelFullnessConsumptionMultiplier() *
+        kSurvivalConsumptionScale * rationPenalty * dt);
 
     if (m_hydration <= 0.0f)
     {
@@ -2154,7 +2367,7 @@ SceneNarakuProto::EnemyState SceneNarakuProto::CreateEnemy(EnemyType type, int d
     {
         enemy.maxHp = 30.0f * rules.enemyHp;
         enemy.attackDamage = 10.0f * rules.enemyAttack;
-        enemy.searchRange = 8.0f;
+        enemy.searchRange = 8.0f * rules.enemySearch;
         enemy.moveSpeed = kEnemyWalkSpeed * rules.enemyMove;
         enemy.attackInterval = kEnemyAttackInterval * rules.enemyInterval;
     }
@@ -2175,7 +2388,7 @@ SceneNarakuProto::EnemyState SceneNarakuProto::CreateEnemy(EnemyType type, int d
         }
         enemy.maxHp = 120.0f * rules.enemyHp;
         enemy.attackDamage = RandomFloat(minimumAttack[rank], maximumAttack[rank]) * rules.enemyAttack;
-        enemy.searchRange = search[rank];
+        enemy.searchRange = search[rank] * rules.enemySearch;
         enemy.territoryRadius = stageSide / divisor[rank];
         const float level40Growth = (1.0f - std::exp(-0.5f * (39.0f / 99.0f))) / (1.0f - std::exp(-0.5f));
         enemy.moveSpeed = (1.5f * (1.0f + 1.5f * level40Growth) * 0.75f) * rules.enemyMove;
@@ -2198,8 +2411,20 @@ SceneNarakuProto::EnemyState SceneNarakuProto::CreateEnemy(EnemyType type, int d
         }
     }
     enemy.hp = enemy.maxHp;
+    const char* enemyAttackId = type == EnemyType::Territory
+        ? "enemy.territory.charge" : "enemy.charger.charge";
+    const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, enemyAttackId);
+    if (attack != nullptr && attack->framesPerSecond > 0 && attack->totalFrames > attack->attackStartFrame &&
+        attack->attackStartFrame >= 0)
+    {
+        enemy.telegraphDuration = static_cast<float>(attack->attackStartFrame) / attack->framesPerSecond;
+        enemy.attackInterval = attack->cooldownSeconds * rules.enemyInterval;
+    }
+    else
+    {
+        enemy.telegraphDuration = 0.0f;
+    }
     enemy.attackCooldown = RandomFloat(0.0f, enemy.attackInterval);
-    enemy.telegraphDuration = kEnemyTelegraphTime;
     return enemy;
 }
 
@@ -2216,7 +2441,8 @@ bool SceneNarakuProto::HasTerritoryTreeDensity(const Vec2& position) const
     return false;
 }
 
-SceneNarakuProto::Vec2 SceneNarakuProto::FindEnemySpawnPoint(float minimumPlayerDistance, bool requireTerritory, bool* found) const
+SceneNarakuProto::Vec2 SceneNarakuProto::FindEnemySpawnPoint(
+    float minimumPlayerDistance, bool requireTerritory, bool allowSpawnBlocked, bool* found) const
 {
     if (found) *found = false;
     if (m_floorRegions.empty()) return m_startPoint;
@@ -2227,6 +2453,17 @@ SceneNarakuProto::Vec2 SceneNarakuProto::FindEnemySpawnPoint(float minimumPlayer
             RandomFloat(floor.center.x - floor.halfSize.x * 0.85f, floor.center.x + floor.halfSize.x * 0.85f),
             RandomFloat(floor.center.y - floor.halfSize.y * 0.85f, floor.center.y + floor.halfSize.y * 0.85f) };
         if (!HasFloorAt(point, floor.depth) || Distance(point, m_player.pos) < minimumPlayerDistance) continue;
+        const std::uint32_t flags = GetCellAttributeFlagsAt(point, floor.depth);
+        if ((flags & (NarakuMap::CellAttributeBlocked | NarakuMap::CellAttributeRemoved |
+            NarakuMap::CellAttributeWaterLake)) != 0u) continue;
+        if (!allowSpawnBlocked && (flags & NarakuMap::CellAttributeEnemySpawnBlocked) != 0u) continue;
+        if (IntersectsEnvironmentCollider(point, GetGroundWorldY(point, floor.depth), 0.3f, 1.0f)) continue;
+        bool tooClose = false;
+        for (const EnemyState& enemy : m_enemies)
+        {
+            if (Distance(point, enemy.pos) < 2.0f) { tooClose = true; break; }
+        }
+        if (tooClose) continue;
         if (requireTerritory && !HasTerritoryTreeDensity(point)) continue;
         if (found) *found = true;
         return point;
@@ -2239,26 +2476,44 @@ void SceneNarakuProto::SpawnEnemiesForCurrentArea()
     m_enemies.clear();
     const int depth = GetCurrentDepth();
     const DepthRules& rules = GetRulesForDepth(depth);
-    const int chargerCount = RandomInt(0, rules.chargerMax);
-    const int territoryCount = RandomInt(0, rules.territoryMax);
-    for (int i = 0; i < chargerCount; ++i)
-    {
-        bool found = false;
-        const Vec2 point = FindEnemySpawnPoint(3.0f, false, &found);
-        if (found) m_enemies.push_back(CreateEnemy(EnemyType::Charger, depth, point));
-    }
+    int chargerCount = RandomInt(rules.chargerMin, rules.chargerMax);
+    const int territoryCount = RandomInt(rules.territoryMin, rules.territoryMax);
+    int placedTerritory = 0;
     for (int i = 0; i < territoryCount; ++i)
     {
         bool found = false;
-        const Vec2 point = FindEnemySpawnPoint(3.0f, true, &found);
-        if (found) m_enemies.push_back(CreateEnemy(EnemyType::Territory, depth, point));
+        const Vec2 point = FindEnemySpawnPoint(3.0f, true, false, &found);
+        if (found)
+        {
+            m_enemies.push_back(CreateEnemy(EnemyType::Territory, depth, point));
+            ++placedTerritory;
+        }
+        else ++chargerCount;
+    }
+    while (placedTerritory < rules.territoryMin)
+    {
+        bool found = false;
+        const Vec2 point = FindEnemySpawnPoint(0.0f, false, true, &found);
+        if (!found) break;
+        m_enemies.push_back(CreateEnemy(EnemyType::Territory, depth, point));
+        ++placedTerritory;
+        if (chargerCount > rules.chargerMin) --chargerCount;
+    }
+    for (int i = 0; i < chargerCount; ++i)
+    {
+        bool found = false;
+        const Vec2 point = FindEnemySpawnPoint(3.0f, false, false, &found);
+        if (found) m_enemies.push_back(CreateEnemy(EnemyType::Charger, depth, point));
     }
 }
 
 bool SceneNarakuProto::RespawnEnemy(EnemyState& enemy)
 {
     bool found = false;
-    const Vec2 point = FindEnemySpawnPoint(kEnemyRespawnMinPlayerDistance, enemy.type == EnemyType::Territory, &found);
+    Vec2 point = FindEnemySpawnPoint(
+        kEnemyRespawnMinPlayerDistance, enemy.type == EnemyType::Territory, false, &found);
+    if (!found && enemy.type == EnemyType::Territory)
+        point = FindEnemySpawnPoint(kEnemyRespawnMinPlayerDistance, false, true, &found);
     if (!found)
     {
         enemy.respawnTimer = kEnemyRespawnRetry;
@@ -2683,7 +2938,7 @@ void SceneNarakuProto::StartDive(int targetDepth)
     if (targetDepth > 1)
     {
         const int directIndex = targetDepth - 2;
-        const AdventurerRank requiredRank = targetDepth == 2 ? AdventurerRank::Black : AdventurerRank::Purple;
+        const AdventurerRank requiredRank = targetDepth == 2 ? AdventurerRank::Purple : AdventurerRank::Black;
         const int fee = (targetDepth == 2 ? 500 : 2000) +
             250 * m_directGateWeeklyUses[static_cast<std::size_t>(directIndex)];
         if (static_cast<int>(m_adventurerRank) < static_cast<int>(requiredRank))
@@ -2934,6 +3189,7 @@ void SceneNarakuProto::CompleteStartDive()
     }
     if (CommitModeAfterSave(Mode::Explore, sourceScene))
     {
+        BeginDepthDirectionAnimation(m_pendingDiveDepth);
         UpdateImportantQuestArrival();
         SaveProgress();
     }

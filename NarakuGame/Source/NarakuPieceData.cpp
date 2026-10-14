@@ -10,13 +10,15 @@
 #include <cstdlib>
 #include <ctime>
 #include <map>
+#include <numeric>
+#include <cmath>
 #include <sstream>
 #include <string>
 #include <utility>
 
 namespace
 {
-    constexpr int kCurrentPieceVersion = 1;
+    constexpr int kCurrentPieceVersion = 2;
     const wchar_t* kPieceRootDirectoryRelativePath = L"Assets\\Naraku\\Pieces";
     const wchar_t* kDraftDirectoryName = L"Drafts";
     const wchar_t* kCompletedDirectoryName = L"Completed";
@@ -1111,6 +1113,94 @@ namespace NarakuPiece
         return data;
     }
 
+    namespace
+    {
+        std::vector<float> GetEdgeHeights(const PieceData& data, Direction edge)
+        {
+            std::vector<float> result;
+            if (data.gridWidth <= 0 || data.gridDepth <= 0 ||
+                data.heights.size() != static_cast<std::size_t>(data.gridWidth * data.gridDepth)) return result;
+            if (edge == Direction::North || edge == Direction::South)
+            {
+                const int z = edge == Direction::North ? 0 : data.gridDepth - 1;
+                for (int x = 0; x < data.gridWidth; ++x)
+                    result.push_back(data.heights[static_cast<std::size_t>(z * data.gridWidth + x)]);
+            }
+            else
+            {
+                const int x = edge == Direction::West ? 0 : data.gridWidth - 1;
+                for (int z = 0; z < data.gridDepth; ++z)
+                    result.push_back(data.heights[static_cast<std::size_t>(z * data.gridWidth + x)]);
+            }
+            return result;
+        }
+
+        StageCategory CalculateEdgeCategory(const PieceData& data, Direction edge)
+        {
+            const int cellWidth = std::max(0, data.gridWidth - 1);
+            const int cellDepth = std::max(0, data.gridDepth - 1);
+            int total = 0, water = 0, nonWalkable = 0;
+            auto countCell = [&](int x, int z)
+            {
+                const std::size_t index = static_cast<std::size_t>(z * cellWidth + x);
+                if (index >= data.cells.size()) return;
+                const CellData& cell = data.cells[index];
+                ++total;
+                if (cell.waterDepth != WaterDepth::None) ++water;
+                if (cell.deleted || !cell.walkable) ++nonWalkable;
+            };
+            if (edge == Direction::North || edge == Direction::South)
+            {
+                const int z = edge == Direction::North ? 0 : cellDepth - 1;
+                for (int x = 0; x < cellWidth; ++x) countCell(x, z);
+            }
+            else
+            {
+                const int x = edge == Direction::West ? 0 : cellWidth - 1;
+                for (int z = 0; z < cellDepth; ++z) countCell(x, z);
+            }
+            if (total > 0 && static_cast<float>(water) / static_cast<float>(total) >= 0.8f)
+                return StageCategory::Water;
+            if (total > 0 && nonWalkable == total) return StageCategory::Blocked;
+            const std::vector<float> heights = GetEdgeHeights(data, edge);
+            if (heights.empty()) return StageCategory::PlainLow;
+            const float average = std::accumulate(heights.begin(), heights.end(), 0.0f) /
+                static_cast<float>(heights.size());
+            if (average <= -6.0f || average >= 6.0f) return StageCategory::Cliff;
+            if (average >= 2.5f) return StageCategory::HeightHigh;
+            if (average <= -2.5f) return StageCategory::HeightLow;
+            if (average <= 0.0f) return StageCategory::PlainLow;
+            return StageCategory::PlainHigh;
+        }
+    }
+
+    EdgeCategories CalculateEdgeCategories(const PieceData& data)
+    {
+        return {CalculateEdgeCategory(data, Direction::North), CalculateEdgeCategory(data, Direction::South),
+            CalculateEdgeCategory(data, Direction::East), CalculateEdgeCategory(data, Direction::West)};
+    }
+
+    float GetEdgeHeightRange(const PieceData& data, Direction edge)
+    {
+        const std::vector<float> heights = GetEdgeHeights(data, edge);
+        if (heights.empty()) return 0.0f;
+        const auto limits = std::minmax_element(heights.begin(), heights.end());
+        return *limits.second - *limits.first;
+    }
+
+    bool AreOpposingEdgeHeightsCompatible(
+        const PieceData& first, Direction firstEdge,
+        const PieceData& second, Direction secondEdge)
+    {
+        const std::vector<float> firstHeights = GetEdgeHeights(first, firstEdge);
+        const std::vector<float> secondHeights = GetEdgeHeights(second, secondEdge);
+        if (firstHeights.size() != secondHeights.size() || firstHeights.empty()) return false;
+        for (std::size_t index = 0; index < firstHeights.size(); ++index)
+            if (std::fabs(firstHeights[index] - secondHeights[secondHeights.size() - 1 - index]) >= 3.0f)
+                return false;
+        return true;
+    }
+
     std::vector<ValidationIssue> ValidatePieceData(const PieceData& data)
     {
         std::vector<ValidationIssue> issues;
@@ -1150,6 +1240,20 @@ namespace NarakuPiece
         {
             AddIssue(issues, ValidationIssue::Severity::Error, "cells の要素数が (gridWidth - 1) * (gridDepth - 1) と一致していません。");
         }
+        const EdgeCategories calculatedEdges = CalculateEdgeCategories(data);
+        const bool edgeMismatch = calculatedEdges.north != data.edgeCategories.north ||
+            calculatedEdges.south != data.edgeCategories.south || calculatedEdges.east != data.edgeCategories.east ||
+            calculatedEdges.west != data.edgeCategories.west;
+        if (edgeMismatch)
+            AddIssue(issues, ValidationIssue::Severity::Warning, "保存済みの辺カテゴリが地形からの自動算出値と一致しません。");
+        for (Direction edge : {Direction::North, Direction::South, Direction::East, Direction::West})
+            if (GetEdgeHeightRange(data, edge) >= 3.0f)
+            {
+                const std::string message = std::string(ToString(edge)) +
+                    " 辺の頂点高低差が3以上のため接続候補が制限されます。";
+                AddIssue(issues, ValidationIssue::Severity::Warning,
+                    message.c_str());
+            }
         for (const CellData& cell : data.cells)
         {
             if (cell.groundTextureId < 0)
@@ -1492,7 +1596,7 @@ namespace NarakuPiece
         std::ostringstream out;
         out << "{\n";
         AppendIndent(out, 1);
-        out << "\"version\": " << data.version << ",\n";
+        out << "\"version\": " << kCurrentPieceVersion << ",\n";
         AppendIndent(out, 1);
         out << "\"id\": \"" << EscapeJsonString(data.id) << "\",\n";
         AppendIndent(out, 1);

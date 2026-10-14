@@ -11,6 +11,10 @@ using namespace SceneNarakuProtoImplementation;
 
 SceneNarakuProto::SceneNarakuProto()
 {
+    if (!NarakuCombat::LoadCatalog("Assets/Data/Combat", m_combatCatalog, &m_combatDataError))
+    {
+        m_combatCatalog = {};
+    }
     InitializeTerrainFloorBatch();
     InitializeEnemyBillboardBatch();
 
@@ -126,6 +130,10 @@ SceneNarakuProto::~SceneNarakuProto()
     SAFE_DELETE(m_attackHitTexture);
     SAFE_DELETE(m_jumpEffectTexture);
     SAFE_DELETE(m_playerTexture);
+    for (Texture*& texture : m_depthDirectionTextures)
+    {
+        SAFE_DELETE(texture);
+    }
 }
 
 #if defined(NARAKU_EDITOR_BUILD)

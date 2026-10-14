@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PROJECT_ARCHITECTURE_DESIGN.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> or <div class="page"></div> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="奈落塔narakuproto-プロジェクト全体設計構造仕様書">奈落塔（NarakuProto） プロジェクト全体設計・構造仕様書</h1>
+<p>本書は、リポジトリ <code>NarakuProto</code> の全体構造、マルチプロジェクト設計、インゲーム・エディタ双方のアーキテクチャ、データパイプライン、プロシージャル生成、およびレンダリング基盤を網羅的に整理・解説した設計ドキュメントです。</p>
+<hr>
+<h2 id="1-プロジェクト概要とリポジトリ構成">1. プロジェクト概要とリポジトリ構成</h2>
+<h3 id="11-プロジェクトの目標と背景">1.1 プロジェクトの目標と背景</h3>
+<p>「奈落塔」は、「<strong>帰ってくるまでが遠足</strong>」をコンセプトにした、2.5D探索サバイバルローグライトです。
+プレイヤーは地上拠点（街）で準備を整え、奈落（地下階層）へ潜行し、資源採掘・旧器探索・クエスト達成を行いながら生還を目指します。
+本作の最大の特徴は、深く潜るほど得られる利益が増大する反面、地上への帰還時に発生する「<strong>上昇負荷（精神力低下・視界不良・割合ダメージ等）</strong>」や「<strong>重量ペナルティ</strong>」「<strong>飢え・水分管理</strong>」によって帰還難度が跳ね上がる点です。</p>
+<h3 id="12-ソリューションとプロジェクト分離構造">1.2 ソリューションとプロジェクト分離構造</h3>
+<p>本リポジトリは、開発効率化・バイナリ軽量化・責務分離を目的として、1つのソリューション <code>DX22_Project.sln</code> のもとに3つの独立したプロジェクトを保持しています。</p>
+<pre><code class="language-mermaid"><div class="mermaid">graph TD
+    subgraph Solution ["DX22_Project.sln"]
+        subgraph GameProj ["奈落塔 (NarakuGame.vcxproj)"]
+            GameExe["NarakuGame.exe<br/>(ゲーム本編)"]
+        end
+
+        subgraph EditorProj ["NarakuEditor (NarakuEditor.vcxproj)"]
+            EditorExe["NarakuEditor.exe<br/>(小ステージ & マップEditor)"]
+        end
+
+        subgraph LegacyProj ["DX22_Project (DX22_Project.vcxproj)"]
+            LegacyExe["DX22_Project.exe<br/>(城/ボス/演出 開発用残存基盤)"]
+        end
+    end
+
+    subgraph SharedAssets ["Assets (共通アセット・データ)"]
+        Pieces["Assets/Naraku/Pieces<br/>(小ステージJSON)"]
+        Maps["Assets/Maps<br/>(統合マップJSON)"]
+        Models["Assets/Model<br/>(3Dモデル FBX/OBJ)"]
+        Saves["Assets/Save<br/>(進行セーブ・WeeklyWorld)"]
+    end
+
+    subgraph ToolsDir ["Tools/ (運用・同期スクリプト)"]
+        SyncTool["Sync-SeparatedSources.ps1<br/>(ソース同期: Game -> Editor)"]
+        PublishPieces["Publish-NarakuPieces.ps1<br/>(ピース発行・検証)"]
+        PublishMaps["Publish-NarakuMaps.ps1<br/>(マップ発行・5世代バックアップ)"]
+    end
+
+    GameProj -->|実行時読み込み| SharedAssets
+    EditorProj -->|編集・プレビュー| SharedAssets
+    EditorProj -->|発行・同期| GameProj
+    SyncTool -.->|正本ソース同期| EditorProj
+</div></code></pre>
+<table>
+<thead>
+<tr>
+<th>プロジェクト名</th>
+<th>実行ファイル</th>
+<th>主な責務・役割</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>奈落塔</strong> (<code>NarakuGame</code>)</td>
+<td><code>NarakuGame.exe</code></td>
+<td>ゲーム本編。地上街（自宅/商店/武具屋/レストラン/奈落門）、奈落探索、リザルト画面、ゲーム内ルール計算、セーブ管理。</td>
+</tr>
+<tr>
+<td><strong>NarakuEditor</strong> (<code>NarakuEditor</code>)</td>
+<td><code>NarakuEditor.exe</code></td>
+<td>制作支援。16x16等の小ステージ（ピース）編集、四辺接続整合性の検証、4x4統合ステージ自動生成プレビュー、歩行プレビュー、ゲーム側への発行・バックアップ。</td>
+</tr>
+<tr>
+<td><strong>DX22_Project</strong> (<code>DX22_Project</code>)</td>
+<td><code>DX22_Project.exe</code></td>
+<td>派生元のゲーム基盤・残存機能。過去に制作された城エディタ、ボスエディタ、エフェクト検証画面などを単独動作させる環境。</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="2-全体アーキテクチャデータフロー">2. 全体アーキテクチャ・データフロー</h2>
+<h3 id="21-システム全体のアーキテクチャ図">2.1 システム全体のアーキテクチャ図</h3>
+<p>ゲーム実行系、エディタ系、および共通基盤（DirectX 11、ImGui、Assimp、数学ライブラリ）の連携構造を示します。</p>
+<pre><code class="language-mermaid"><div class="mermaid">flowchart TB
+    subgraph PlatformLayer ["プラットフォーム・基盤レイヤー"]
+        WinMain["WinMain / CommonAppMain.cpp"]
+        DX11["DirectX 11 デバイス & コンテキスト (DirectX.cpp)"]
+        InputSys["Input / InputConfig (キーボード・マウス・パッド)"]
+        ImguiWrap["Dear ImGui (Win32 + DX11)"]
+        Renderer["Shader / MeshBuffer / Model / Texture / Sprite"]
+    end
+
+    subgraph SceneManagement ["シーン制御レイヤー"]
+        SM["SceneManager"]
+        BaseScene["Scene (基底クラス)"]
+    end
+
+    subgraph GameDomain ["NarakuGame (ゲーム本編ドメイン)"]
+        Session["NarakuGameSession (Singleton)"]
+        ProtoMain["SceneNarakuProto (進行統括)"]
+        
+        subgraph ProtoModules ["SceneNarakuProto 分割モジュール"]
+            Exploration["Exploration (移動/採掘/攻撃/ロープ/物理)"]
+            Rules["Rules (HP/スタミナ/水分/精神力/上昇負荷)"]
+            Town["Town (自宅/商店/武具屋/レストラン/門)"]
+            Quests["Quests (依頼生成/受注/進行/報告)"]
+            Rendering["Rendering (3D描画/ライト/ImGui HUD)"]
+            World["World (週・時間進行/エリア管理)"]
+            Persistence["Persistence (セーブ/ロード/マイグレーション)"]
+            ResultView["SceneNarakuResultView (リザルトUI)"]
+        end
+
+        VirtualTown["SceneNarakuTown"]
+        VirtualDive["SceneNarakuDive"]
+        VirtualResult["SceneNarakuResult"]
+    end
+
+    subgraph EditorDomain ["NarakuEditor (エディタドメイン)"]
+        PieceEditor["SceneNarakuPieceEditor (小ステージ作成)"]
+        MapEditor["SceneNarakuEditor (マップ編集 & 生成Preview)"]
+        WalkPreview["SceneNarakuProto (歩行確認モード)"]
+        
+        subgraph EditorModules ["エディタ内部モジュール"]
+            DocMgr["Document / Editing / Windows / Environment"]
+            GenTester["Determinism & Tag Rule Verifiers"]
+            Profiler["EditorPerformanceProfiler"]
+        end
+    end
+
+    subgraph GenerationDomain ["プロシージャル生成 & データモデル"]
+        PieceData["NarakuPieceData (PieceData / 接続 / 属性)"]
+        Generator["NarakuStageGenerator (4x4 ピース選定・接続・統合)"]
+        MapData["NarakuMapData (MapData / 到達可能性検証)"]
+        WeeklyWorld["WeeklyWorld (週替わりワールド生成)"]
+    end
+
+    %% 接続関係
+    WinMain --> DX11 & InputSys & ImguiWrap
+    WinMain --> SM
+    SM --> BaseScene
+    BaseScene --> VirtualTown & VirtualDive & VirtualResult & PieceEditor & MapEditor & WalkPreview
+
+    VirtualTown & VirtualDive & VirtualResult --> Session
+    Session --> ProtoMain
+    ProtoMain --> ProtoModules
+
+    PieceEditor --> PieceData & DocMgr
+    MapEditor --> Generator & MapData & GenTester
+    ProtoModules --> Generator & MapData & WeeklyWorld
+    Generator --> PieceData & MapData
+    Renderer --> DX11
+    ProtoModules --> Renderer
+    PieceEditor --> Renderer
+</div></code></pre>
+<hr>
+<h2 id="3-シーン管理とプレゼンテーション層設計">3. シーン管理とプレゼンテーション層設計</h2>
+<h3 id="31-仮想シーンとセッション管理-narakugamesession">3.1 仮想シーンとセッション管理 (<code>NarakuGameSession</code>)</h3>
+<p><code>NarakuGame</code> では、<code>SceneManager</code> 上のシーン切り替え（<code>SCENE_GAME</code>, <code>SCENE_NARAKU_PROTO</code>, <code>SCENE_RESULT</code>）に対して、内部で実体である <code>SceneNarakuProto</code> のインスタンスを破棄せず、<code>NarakuGameSession</code> シングルトンで永続保持する設計を採用しています。</p>
+<p>これによって、以下のメリットが得られます：</p>
+<ol>
+<li><strong>探索状態の安全な維持</strong>: 街から奈落へ潜行、あるいはリザルト画面へ遷移する際、プレイヤーの装備、インベントリ、一時ステータスが安全に保持される。</li>
+<li><strong>正規離脱の保証</strong>: 死亡または生還時のデータ保存（永続化）が完了してから次のシーンへ移行し、予期せぬ終了時は「探窟放棄」として安全に回収する。</li>
+</ol>
+<pre><code class="language-mermaid"><div class="mermaid">stateDiagram-v2
+    [*] --> Town : 起動 (SCENE_GAME)
+
+    state Town {
+        [*] --> SurfaceWalk : 街中移動
+        SurfaceWalk --> HouseUI : 自宅 (保管・就寝)
+        SurfaceWalk --> ShopUI : 商店 (売買)
+        SurfaceWalk --> ArmoryUI : 武具屋 (装備)
+        SurfaceWalk --> RestaurantUI : レストラン (食事・クエスト)
+        SurfaceWalk --> GatePrompt : 奈落門 (潜行確認)
+    }
+
+    Town --> Dive : 奈落へ潜行 (SCENE_NARAKU_PROTO)
+
+    state Dive {
+        [*] --> Exploring : 奈落探索 (4x4エリア)
+        Exploring --> Mining : 採掘
+        Exploring --> Combat : 敵との交戦
+        Exploring --> RopeAction : ロープ昇降
+        Exploring --> Transition : 層間移動 (下層へ)
+        Exploring --> Returning : 帰還地点へ到達
+    }
+
+    Dive --> Result_Win : 帰還地点で脱出
+    Dive --> Result_Death : HP枯渇 / 致命的落下
+
+    state Result_Win {
+        [*] --> RewardCalculation : 旧器鑑定・売却・報酬清算
+        RewardCalculation --> SaveProgress : 永続セーブ保存
+    }
+
+    state Result_Death {
+        [*] --> LossCalculation : 所持遺物・一時ピン全喪失
+        LossCalculation --> SaveDeathState : 死亡セーブ保存
+    }
+
+    Result_Win --> Town : 街へ帰還
+    Result_Death --> Town : 自宅で復活
+</div></code></pre>
+<hr>
+<h2 id="4-ゲームプレイコアループとサバイバルルール">4. ゲームプレイ・コアループとサバイバルルール</h2>
+<h3 id="41-ゲームプレイループフロー">4.1 ゲームプレイループフロー</h3>
+<p>探索サバイバルの循環構造とリスク/リワードの判断分岐です。</p>
+<pre><code class="language-mermaid"><div class="mermaid">flowchart LR
+    Prepare["地上準備<br/>(持ち込み・食事・クエスト)"]
+    DiveIn["奈落潜行<br/>(第一層〜第五層)"]
+    Action["採掘・戦闘・遺物収集"]
+    CheckResources{"リソース残量<br/>(HP・満腹・水分・精神力)"}
+    WeightCheck{"重量状態<br/>(スタミナ消費・移動低下)"}
+    Decide{"判断<br/>さらに潜るか？帰るか？"}
+    Deeper["下層へ進む<br/>(高リスク・高リターン)"]
+    Ascend["地上へ戻る<br/>(上昇負荷発生！)"]
+    ResultWin["生還<br/>(全報酬確定・街発展)"]
+    ResultLose["死亡<br/>(遺物喪失・探索ピン消失)"]
+
+    Prepare --> DiveIn --> Action --> CheckResources
+    CheckResources --> WeightCheck --> Decide
+    Decide -->|"欲張って潜る"| Deeper --> Action
+    Decide -->|"安全第一で帰還"| Ascend
+    Ascend -->|"無事脱出"| ResultWin --> Prepare
+    Ascend -->|"負荷・敵・落下で力尽きる"| ResultLose --> Prepare
+</div></code></pre>
+<h3 id="42-サバイバルパラメータと相互作用">4.2 サバイバルパラメータと相互作用</h3>
+<p>プレイヤーは単なるHPだけでなく、相互に影響を及ぼし合う5つの基本パラメータを管理します。</p>
+<pre><code class="language-mermaid"><div class="mermaid">graph TD
+    Weight["所持重量<br/>(遺物・装備・つるはし)"]
+    Stamina["スタミナ<br/>(ダッシュ・ステップ・ジャンプ・採掘)"]
+    Hunger["満腹度<br/>(時間経過・運動で減少)"]
+    Thirst["水分<br/>(時間・ダッシュで減少)"]
+    Mental["精神力 (SAN値)<br/>(暗闇・恐怖・上昇負荷で減少)"]
+    HP["体力 (HP)"]
+
+    Weight -->|高重量ペナルティ| Stamina
+    Weight -->|速度低下| ActionSpeed["移動速度"]
+    Hunger -->|0で餓死スリップダメージ| HP
+    Thirst -->|脱水症状| VisionDebuff["視界不良 (暗転・歪み)"]
+    Thirst -->|脱水スリップダメージ| HP
+    Ascent["上昇移動 (物理上昇量)"] -->|上昇負荷| Mental
+    Ascent -->|深層上昇負荷| HP
+    Mental -->|精神崩壊| Hallucination["幻覚・幻聴・視界悪化"]
+</div></code></pre>
+<h4 id="各パラメータの仕様詳細">各パラメータの仕様詳細</h4>
+<ol>
+<li><strong>体力 (HP)</strong>:
+<ul>
+<li>敵の攻撃、高所からの落下、餓死、脱水、深層上昇負荷によって減少。0になると即座に死亡リザルトへ移行。</li>
+</ul>
+</li>
+<li><strong>スタミナ</strong>:
+<ul>
+<li>最大100。通常歩行・静止中は即座に高速回復。</li>
+<li>ダッシュ、ステップ、ジャンプ、つるはし通常攻撃、採掘で消費。</li>
+<li>重量率（70% / 90% / 100% / 最大150%）に応じて消費量が増加し、150%超過時は新規アイテム拾得不可。</li>
+</ul>
+</li>
+<li><strong>満腹度</strong>:
+<ul>
+<li>時間経過および激しい行動で減少。レストランでの食事や携帯食料で回復。0でHPスリップダメージ。</li>
+</ul>
+</li>
+<li><strong>水分</strong>:
+<ul>
+<li>走り続けることで加速減少。地上給水所の水筒、または奈落内の水場から回収して摂取。</li>
+<li>奈落の水は煮沸しないと食中毒リスク。枯渇すると脱水症状（視界不良）およびHP減少。</li>
+</ul>
+</li>
+<li><strong>精神力 (SAN値)</strong>:
+<ul>
+<li>上昇負荷の主対象。層ごとに設定された上昇量（第一層では累積10m上昇で-10など）により急激に低下。</li>
+<li>低下すると視界狭窄、幻覚、幻聴が発生。安全地帯やキャンプ、地上休養で回復。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="5-プロシージャルステージ生成pcgアーキテクチャ">5. プロシージャルステージ生成（PCG）アーキテクチャ</h2>
+<p>奈落塔のマップは、完全ランダムなグリッド生成ではなく、<strong>「手作業で作られた小ステージ（ピース）」を自動アルゴリズムで連結・統合する方式</strong>を採用しています。これにより、手作業による緻密なレベルデザインと、ローグライト特有のランダム性の両立を実現しています。</p>
+<h3 id="51-生成パイプライン">5.1 生成パイプライン</h3>
+<p>ステージ生成（<code>NarakuStageGenerator</code>）の流れを以下に示します。</p>
+<pre><code class="language-mermaid"><div class="mermaid">flowchart TD
+    StartGen["ステージ生成要求<br/>(深度・エリア番号・シード値)"]
+    
+    subgraph ScanPhase ["1. ピース走査 & 分類"]
+        ScanDir["Assets/Naraku/Pieces/LayerX/Completed<br/>ディレクトリ走査"]
+        Classify["役割・接続カテゴリ・上中下層タグで分類<br/>(Normal, StartReturn, Entry, Exit)"]
+    end
+
+    subgraph PlacementPhase ["2. 4x4 グリッド配置 (16ピース)"]
+        InitGrid["4x4配置スロット初期化"]
+        PlaceMandatory["必須ピース配置<br/>(開始/帰還, 層入口, 層出口)"]
+        MatchEdges["四辺接続カテゴリの整合性マッチング<br/>(North/South/East/West の高さ・属性一致)"]
+        Fallback["不整合時のバックトラック & 代替ピース選定"]
+    end
+
+    subgraph IntegrationPhase ["3. 統合マップ構築 (MapData)"]
+        MergeHeights["頂点高さ (Heights) の合成 & 境界補間"]
+        MergeAttributes["セル属性 (CellAttributeFlags) の統合"]
+        MergeObjects["採掘点・水場・ロープ・環境モデル配置の統合"]
+        AssignTex["セル別地面テクスチャIDの展開"]
+    end
+
+    subgraph VerificationPhase ["4. マップ到達可能性 & 整合性検証"]
+        FloodFill["BFS / ダイクストラ探索による到達可能性判定<br/>(開始地点 -> 全採掘点 / 出口)"]
+        SlopeCheck["歩行最大斜度 (35度) 検証"]
+        ValidationResult{"全検証合格？"}
+    end
+
+    SaveOutput["MapData 完成<br/>(インメモリ展開 or Assets/Maps 保存)"]
+    FailFallback["シード再抽選 / エラー報告"]
+
+    StartGen --> ScanPhase --> PlacementPhase --> IntegrationPhase --> VerificationPhase
+    VerificationPhase -->|合格| SaveOutput
+    VerificationPhase -->|不合格| FailFallback
+</div></code></pre>
+<h3 id="52-ピースデータ構造-piecedata-と-マップ構造-mapdata">5.2 ピースデータ構造 (<code>PieceData</code>) と マップ構造 (<code>MapData</code>)</h3>
+<pre><code class="language-mermaid"><div class="mermaid">classDiagram
+    class PieceData {
+        +string name
+        +SizePreset sizePreset (16x16 / 8x8)
+        +StageRole role (Normal / StartReturn / Base / Relay)
+        +EdgeCategories edgeCategories (North, South, East, West)
+        +LockedEdges lockedEdges
+        +vector~float~ heights
+        +vector~CellData~ cells
+        +RopeData rope
+        +LayerTransitionData layerTransition (Entry / Exit)
+        +vector~MiningPointData~ miningPoints
+        +vector~FishingPointData~ fishingPoints
+        +vector~EnvironmentModelData~ environmentModels
+    }
+
+    class CellData {
+        +bool deleted
+        +bool walkable
+        +bool ropeAllowed
+        +bool miningAllowed
+        +bool enemySpawnAllowed
+        +int groundTextureId
+        +WaterDepth waterDepth (None / Puddle / Pond / Lake)
+    }
+
+    class MapData {
+        +string version
+        +vector~TerrainLayer~ layers
+        +vector~LayerConnection~ connections
+        +vector~MiningPoint~ miningPoints
+        +vector~FishingPoint~ fishingPoints
+        +LayerPoint startPoint
+        +LayerPoint returnPoint
+        +vector~EnvironmentModelPlacement~ environmentModels
+    }
+
+    class TerrainLayer {
+        +int id
+        +float layerDepth
+        +int gridWidth
+        +int gridHeight
+        +float cellSize
+        +vector~float~ heights
+        +vector~uint32_t~ cellAttributeFlags
+        +vector~int~ cellGroundTextureIds
+    }
+
+    PieceData *-- CellData
+    MapData *-- TerrainLayer
+</div></code></pre>
+<hr>
+<h2 id="6-エディタシステム-narakueditor-と発行パイプライン">6. エディタシステム (<code>NarakuEditor</code>) と発行パイプライン</h2>
+<h3 id="61-小ステージエディタ-scenenarakupieceeditor">6.1 小ステージエディタ (<code>SceneNarakuPieceEditor</code>)</h3>
+<p>小ステージエディタは、デザイナーが16x16（地上用8x8等）の独立した地形ピースを作成するための高機能ツールです。</p>
+<ul>
+<li><strong>3Dビュー操作</strong>: マウスドラッグによる旋回、パン、ズーム、頂点ブラシ選択、高さ昇降。</li>
+<li><strong>属性ペイント</strong>: 通行不可、崖境界、水場（水溜り/池/湖）、ロープ端点、採掘許可、敵出現許可。</li>
+<li><strong>環境モデル配置 &amp; AABB当たり判定</strong>:
+<ul>
+<li>FBX/OBJモデルの配置、Y軸90度刻み回転（0/90/180/270度）。</li>
+<li>X/Z方向のセル占有矩形設定（モデルの足元専有範囲）。</li>
+<li>プレイヤー・敵との衝突を防ぐ有限高AABBコライダーの設定、ModelView上での緑色ワイヤーフレーム可視化。</li>
+</ul>
+</li>
+<li><strong>検証と保存</strong>: <code>Drafts</code>（下書き）と <code>Completed</code>（完成）のステータス管理。四辺接続条件の自己検証。</li>
+</ul>
+<h3 id="62-マップエディタ--生成プレビュー-scenenarakueditor">6.2 マップエディタ &amp; 生成プレビュー (<code>SceneNarakuEditor</code>)</h3>
+<p>完成した小ステージを組み合わせて構築される統合ステージの動作検証を行います。</p>
+<ul>
+<li><strong>15段階生成プレビュー</strong>: 第1層〜第5層の各エリア（計15段階）を一括メモリ生成。</li>
+<li><strong>シード制御</strong>: 64bitシードの手動指定・固定・再生成。</li>
+<li><strong>俯瞰視点 / 歩行確認視点</strong>:
+<ul>
+<li><code>View</code> メニューからワンクリックで切り替え。</li>
+<li>歩行確認モードでは敵AIを静止させ、ダメージや能力値消費を無効化して安全に地形の歩き心地、ロープ昇降、つるはし通常攻撃の判定範囲を確認可能。</li>
+</ul>
+</li>
+</ul>
+<h3 id="63-ゲーム側への発行publishとバックアップ機構">6.3 ゲーム側への発行（Publish）とバックアップ機構</h3>
+<p>エディタで作成・検証した小ステージやマップを、ワンクリックでゲーム本編へ反映するデータ同期パイプラインです。</p>
+<pre><code class="language-mermaid"><div class="mermaid">sequenceDiagram
+    autonumber
+    actor Designer as 開発者 / デザイナー
+    participant Editor as NarakuEditor
+    participant Script as Publish-NarakuPieces.ps1
+    participant Backup as Assets/Backup/MapPublish/
+    participant GameAssets as NarakuGame/Assets
+
+    Designer->>Editor: メニューから「ゲーム側へ発行」を実行
+    Editor->>Script: 発行スクリプトを呼び出し
+    Script->>Script: 小ステージ整合性検証 (地上5種必須ピース・接続条件)
+    Script->>Backup: 現在のゲーム側 Assets/Maps, Models を退避 (最新5世代保持)
+    Script->>GameAssets: 最新の Pieces / Maps / Model をコピー・置換
+    Script->>GameAssets: Mapバージョン番号を更新 (次回起動時の生成キャッシュ破棄)
+    Script-->>Editor: 発行成功レスポンス
+    Editor-->>Designer: 完了通知ダイアログ表示
+</div></code></pre>
+<hr>
+<h2 id="7-レンダリング--グラフィックス基盤">7. レンダリング &amp; グラフィックス基盤</h2>
+<p>本プロジェクトは DirectX 11 を用いた独自グラフィックスパイプラインを構築しています。</p>
+<h3 id="71-レンダリングフロー">7.1 レンダリングフロー</h3>
+<p>1フレームの描画処理は、以下の多層レイヤー構造で実行されます。</p>
+<pre><code class="language-mermaid"><div class="mermaid">flowchart TD
+    BeginFrame["BeginDraw (レンダーターゲット・深度ステンシルクリア)"]
+    
+    subgraph Pass1_Terrain ["1. 地形描画パス (Terrain Shaders)"]
+        SetTerrainShader["地形用 頂点/ピクセルシェーダーバインド"]
+        SetLightCB["ライト定数バッファ (携帯スポットライト・環境光)"]
+        DrawTerrainMesh["セル別地面テクスチャ配列 & 地形メッシュ描画"]
+    end
+
+    subgraph Pass2_Models ["2. 3Dモデル描画パス (Model Shaders)"]
+        SetModelShader["モデル用シェーダーバインド (Assimpマテリアル)"]
+        DrawEnvironment["環境モデル (建物・木・岩・奈落門) 描画"]
+        DrawMining["採掘瓦礫モデル (garakuta.fbx) 描画"]
+        DrawRope["ロープ・支柱モデル描画"]
+        DrawCharacter["プレイヤー & つるはし (振りに連動) & 敵生物"]
+    end
+
+    subgraph Pass3_Effects ["3. デバッグ線 & 衝突可視化"]
+        GeometoryLine["Geometory: コライダー円柱 (黄緑) & 攻撃扇形 (赤)"]
+        DepthDirection["深度エフェクト & 上昇負荷画面ポストエフェクト"]
+    end
+
+    subgraph Pass4_UI ["4. HUD & デバッグUIパス"]
+        ImguiNewFrame["Dear ImGui フレーム"]
+        DrawHUD["ステータスゲージ (HP/スタミナ/水分/満腹/SAN)"]
+        DrawInventory["インベントリ & クエスト受注ウィンドウ"]
+        DrawDebugWindow["デバッグパラメータ調整ウィンドウ (Debugビルド時のみ)"]
+        ImguiRender["ImGui DirectX11 レンダリング"]
+    end
+
+    EndFrame["EndDraw (スワップチェイン Present)"]
+
+    BeginFrame --> Pass1_Terrain --> Pass2_Models --> Pass3_Effects --> Pass4_UI --> EndFrame
+</div></code></pre>
+<h3 id="72-携帯スポットライトの光響計算">7.2 携帯スポットライトの光響計算</h3>
+<p>地下探索の臨場感を高めるため、プレイヤーの前方を照らす携帯スポットライトが実装されています。</p>
+<ul>
+<li>頂点シェーダーからワールド座標と法線をピクセルシェーダーへ渡し、光源位置・照射方向ベクトル・円錐角（コーンアングル）および距離減衰をピクセル単位で計算。</li>
+<li>地形メッシュおよびFBXモデルの双方が同一の照明構造体を参照し、均質な陰影を形成。</li>
+</ul>
+<hr>
+<h2 id="8-データ永続化セーブデータシステム">8. データ永続化・セーブデータシステム</h2>
+<h3 id="81-進行データと週間世界データの二重管理">8.1 進行データと週間世界データの二重管理</h3>
+<p>セーブデータは以下の2系統に分離して保存されます。</p>
+<table>
+<thead>
+<tr>
+<th>保存ファイル</th>
+<th>フォーマット</th>
+<th>保持データ内容</th>
+<th>リセットタイミング</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Assets/Save/naraku_proto_save.dat</code></td>
+<td>バイナリ (Version 11)</td>
+<td>プレイヤー所持金、レベル、倉庫保管アイテム、装備品、恒久進行度、通常クエスト受注状態</td>
+<td>プレイヤーの意図的なリセット、または死亡時の携行品ロストのみ</td>
+</tr>
+<tr>
+<td><code>Assets/Save/WeeklyWorld/world.dat</code></td>
+<td>バイナリ</td>
+<td>1週間単位のプロシージャル世界シード、マップ生成キャッシュ、探索済みピン情報</td>
+<td>ゲーム内時間で1週間経過、またはエディタからの新マップ発行時</td>
+</tr>
+</tbody>
+</table>
+<h3 id="82-レガシーセーブマイグレーション">8.2 レガシーセーブマイグレーション</h3>
+<p>初回起動時、旧プロジェクト（<code>DX22_Project</code>）のセーブデータパスを探索し、存在すれば <code>NarakuGame/Assets/Save</code> へ非破壊コピーを行う自動マイグレーション機構が組み込まれています。</p>
+<hr>
+<h2 id="9-開発運用ツール群-tools">9. 開発・運用ツール群 (<code>Tools/</code>)</h2>
+<p>リポジトリ直下の <code>Tools</code> フォルダには、プロジェクトの健全性を維持するための自動化スクリプト群が整備されています。</p>
+<ol>
+<li><strong><code>Sync-SeparatedSources.ps1</code></strong>:
+<ul>
+<li><code>NarakuGame/Source</code>（正本）から <code>NarakuEditor/Source</code> への共通基盤コードおよび <code>SceneNarakuProto</code> 分割ソースの一括同期。</li>
+<li><code>-CheckOnly</code> オプションにより、CIやビルド前の差分検証が可能。</li>
+</ul>
+</li>
+<li><strong><code>Publish-NarakuPieces.ps1</code></strong>:
+<ul>
+<li>完成済み小ステージを検証し、ゲーム側へ発行。</li>
+</ul>
+</li>
+<li><strong><code>Publish-NarakuMaps.ps1</code></strong>:
+<ul>
+<li>生成済みマップデータをゲーム側へ置換し、最新5世代の自動バックアップを作成。</li>
+</ul>
+</li>
+<li><strong><code>Test-SeparatedGenerationParity.ps1</code></strong>:
+<ul>
+<li>同一シードにおいて、ゲーム側とエディタ側で全く同一のエリア数、接続構成、ピース配置が行われるか（決定論的生成の担保）を自動検証。</li>
+</ul>
+</li>
+<li><strong><code>Stage-RuntimeAssets.ps1</code></strong>:
+<ul>
+<li>ビルド出力先（x64 Debug / Release）への必要アセットおよび Assimp DLL の自動配置。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="10-設計上の強みと将来の展望">10. 設計上の強みと将来の展望</h2>
+<h3 id="101-現在の設計上の強み">10.1 現在の設計上の強み</h3>
+<ul>
+<li><strong>完全な責務分離</strong>: ゲーム本編、小ステージEditor、旧残存コードが別プロジェクト・別exeへ分離され、ゲーム実行バイナリに不要な編集コードや重いデータが含まれない。</li>
+<li><strong>正本同期と自動バックアップ</strong>: ゲーム側を正本とするソース同期スクリプトと、発行時の5世代バックアップ機構により、データ破壊や不整合を防止。</li>
+<li><strong>決定論的プロシージャル生成</strong>: 64bitシードに基づく生成結果の完全一致テストにより、バグ再現やバランス検証が容易。</li>
+<li><strong>仮想シーン方式による状態保護</strong>: <code>NarakuGameSession</code> により、潜行・帰還・リザルト間の遷移でメモリリークや未保存のデータ欠損を防止。</li>
+</ul>
+<h3 id="102-将来の課題と拡張性">10.2 将来の課題と拡張性</h3>
+<ul>
+<li><strong>第2層以降の固有環境ギミック</strong>: 幻覚・幻聴の実装、暗闇以外の環境効果（胞子、毒霧、水没エリア）。</li>
+<li><strong>ゲームパッド（XInput/DirectInput）の本格対応</strong>: 現在キーボード・マウス優先の実装をコントローラーナビゲーションへ全面拡張。</li>
+<li><strong>タイトル画面・リザルト画面の完全独立</strong>: 現在 <code>SceneNarakuProto</code> の仮想シーンとして実装されているリザルト・街・タイトルを、段階的に完全独立クラスへ移行可能にする下地を維持。</li>
+</ul>
+
+</body>
+</html>

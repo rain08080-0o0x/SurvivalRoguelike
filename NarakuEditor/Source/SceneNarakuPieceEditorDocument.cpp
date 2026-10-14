@@ -133,6 +133,29 @@ bool SceneNarakuPieceEditor::SavePiece(bool saveAsDraft, bool allowUnreachableWa
         return false;
     }
 
+    const NarakuPiece::EdgeCategories calculatedEdges = NarakuPiece::CalculateEdgeCategories(m_piece);
+    const bool edgeCategoriesChanged = calculatedEdges.north != m_piece.edgeCategories.north ||
+        calculatedEdges.south != m_piece.edgeCategories.south || calculatedEdges.east != m_piece.edgeCategories.east ||
+        calculatedEdges.west != m_piece.edgeCategories.west;
+    if (edgeCategoriesChanged)
+    {
+        std::ostringstream text;
+        text << u8"地形から辺カテゴリを再計算しました。\n\n"
+            << "North: " << NarakuPiece::ToString(m_piece.edgeCategories.north) << " -> " << NarakuPiece::ToString(calculatedEdges.north) << '\n'
+            << "South: " << NarakuPiece::ToString(m_piece.edgeCategories.south) << " -> " << NarakuPiece::ToString(calculatedEdges.south) << '\n'
+            << "East: " << NarakuPiece::ToString(m_piece.edgeCategories.east) << " -> " << NarakuPiece::ToString(calculatedEdges.east) << '\n'
+            << "West: " << NarakuPiece::ToString(m_piece.edgeCategories.west) << " -> " << NarakuPiece::ToString(calculatedEdges.west) << u8"\n\n変更を適用して保存しますか？";
+        const int answer = ::MessageBoxW(::GetActiveWindow(), Utf8ToWide(text.str()).c_str(),
+            L"PieceEditor - Edge Categories", MB_ICONQUESTION | MB_YESNO | MB_DEFBUTTON1);
+        if (answer != IDYES)
+        {
+            SetMessage(u8"辺カテゴリの自動補正が拒否されたため保存を中止しました");
+            return false;
+        }
+        m_piece.edgeCategories = calculatedEdges;
+        MarkPieceDirty();
+    }
+
     // 条件に該当する場合は、`RefreshValidationIssues` の処理を実行します。
     if (!saveAsDraft)
     {

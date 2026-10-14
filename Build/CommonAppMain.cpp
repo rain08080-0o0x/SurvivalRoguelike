@@ -106,7 +106,7 @@ namespace
 
     void DrawPerformanceOverlay()
     {
-        const bool f2Pressed = ImGui::IsKeyPressed(ImGuiKey_F2, false) || IsKeyTrigger(VK_F2);
+        const bool f2Pressed = IsKeyTrigger(VK_F2);
         if (f2Pressed)
         {
             g_showPerfOverlay = !g_showPerfOverlay;

@@ -3,6 +3,8 @@
 #include "SceneNarakuEditor.h"
 #include "SceneNarakuPieceEditor.h"
 #include "SceneNarakuProto.h"
+#include "SceneAttackEditor.h"
+#include "EditorPerformanceProfiler.h"
 
 Scene* SceneManager::m_pScene = nullptr;
 SceneManager::SceneType SceneManager::m_current = SceneManager::SCENE_NARAKU_PIECE_EDITOR;
@@ -49,6 +51,9 @@ void SceneManager::CreateScene(SceneType type)
     case SCENE_NARAKU_PROTO:
         m_pScene = new SceneNarakuProto();
         break;
+    case SCENE_ATTACK_EDITOR:
+        m_pScene = new SceneAttackEditor();
+        break;
     default:
         m_pScene = new SceneNarakuPieceEditor();
         m_current = SCENE_NARAKU_PIECE_EDITOR;
@@ -66,7 +71,7 @@ void SceneManager::ChangeToNarakuEditorGeneratedPreview()
 void SceneManager::ChangeScene(SceneType next)
 {
     if (next != SCENE_NARAKU_EDITOR && next != SCENE_NARAKU_PIECE_EDITOR &&
-        next != SCENE_NARAKU_PROTO)
+        next != SCENE_NARAKU_PROTO && next != SCENE_ATTACK_EDITOR)
     {
         return;
     }
@@ -95,6 +100,27 @@ void SceneManager::Update()
         CreateScene(m_current);
         m_isChanging = false;
     }
+
+    EditorPerformanceProfiler::Target profilerTarget = EditorPerformanceProfiler::Target::None;
+    switch (m_current)
+    {
+    case SCENE_NARAKU_EDITOR:
+        profilerTarget = EditorPerformanceProfiler::Target::StageEditor;
+        break;
+    case SCENE_NARAKU_PIECE_EDITOR:
+        profilerTarget = EditorPerformanceProfiler::Target::PieceEditor;
+        break;
+    case SCENE_ATTACK_EDITOR:
+        profilerTarget = EditorPerformanceProfiler::Target::AttackEditor;
+        break;
+    case SCENE_NARAKU_PROTO:
+        profilerTarget = EditorPerformanceProfiler::Target::GeneratedPreview;
+        break;
+    default:
+        break;
+    }
+    EditorPerformanceProfiler::SetTarget(profilerTarget);
+
     if (m_pScene != nullptr)
     {
         m_pScene->RootUpdate();

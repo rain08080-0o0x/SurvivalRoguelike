@@ -398,6 +398,78 @@ bool SceneNarakuProto::TryUseRestaurant()
     return true;
 }
 
+int SceneNarakuProto::GetTownDevelopmentStage() const
+{
+    const int rank = static_cast<int>(m_adventurerRank);
+    if (m_elapsedGameDays >= 42 && rank >= static_cast<int>(AdventurerRank::Black)) return 3;
+    if (m_elapsedGameDays >= 28 && rank >= static_cast<int>(AdventurerRank::Purple)) return 2;
+    if (m_elapsedGameDays >= 14 && rank >= static_cast<int>(AdventurerRank::Blue)) return 1;
+    return 0;
+}
+
+const char* SceneNarakuProto::GetMealName(MealId id) const
+{
+    switch (id)
+    {
+    case MealId::FillingMeal: return u8"まんぷく飯";
+    case MealId::SpicyCurry: return u8"激辛カレー";
+    case MealId::DeepMushroom: return u8"深層キノコの和え物";
+    case MealId::MountainSalad: return u8"山菜サラダ";
+    case MealId::ChefChoice: return u8"おまかせセット";
+    case MealId::FreshFish: return u8"フレッシュフィッシュ";
+    case MealId::BaseSalad: return u8"サラダ";
+    case MealId::HeartySet: return u8"がっつり定食";
+    case MealId::FieldPaste: return u8"行動食とペースト食";
+    default: return u8"なし";
+    }
+}
+
+float SceneNarakuProto::GetMealAttackMultiplier() const
+{
+    switch (m_activeMeal)
+    {
+    case MealId::SpicyCurry: case MealId::FreshFish: return 1.10f;
+    case MealId::ChefChoice: return 1.08f;
+    case MealId::HeartySet: return 1.25f;
+    case MealId::FieldPaste: return 1.50f;
+    default: return 1.0f;
+    }
+}
+
+float SceneNarakuProto::GetMealDefenseMultiplier() const
+{
+    switch (m_activeMeal)
+    {
+    case MealId::DeepMushroom: case MealId::FreshFish: return 1.10f;
+    case MealId::ChefChoice: return 1.08f;
+    case MealId::HeartySet: return 1.25f;
+    case MealId::FieldPaste: return 1.50f;
+    default: return 1.0f;
+    }
+}
+
+float SceneNarakuProto::GetMealMovementMultiplier() const
+{
+    switch (m_activeMeal)
+    {
+    case MealId::MountainSalad: return 1.20f;
+    case MealId::BaseSalad: return 1.30f;
+    case MealId::HeartySet: return 1.25f;
+    case MealId::FieldPaste: return 1.50f;
+    default: return 1.0f;
+    }
+}
+
+float SceneNarakuProto::GetMealMiningMultiplier() const
+{
+    return m_activeMeal == MealId::MountainSalad ? 1.20f : 1.0f;
+}
+
+float SceneNarakuProto::GetMealStaminaCostMultiplier() const
+{
+    return m_activeMeal == MealId::FieldPaste ? 0.50f : 1.0f;
+}
+
 const char* SceneNarakuProto::GetArmorName(ArmorTier tier) const
 {
     switch (tier)
@@ -581,12 +653,13 @@ float SceneNarakuProto::GetMoveSpeed() const
     if (GetWeightRate() >= 0.70f) speed *= 0.75f;
 
     // 重量補正済みの歩行速度を返します。
-    return RoundToHundredth(speed);
+    return RoundToHundredth(speed * GetMealMovementMultiplier());
 }
 
-float SceneNarakuProto::GetStaminaCost(float baseCost) const
+float SceneNarakuProto::GetStaminaCost(float baseCost, bool applyStandardReduction) const
 {
-    float cost = baseCost * GetDepthLevelStaminaConsumptionMultiplier();
+    const float reduction = applyStandardReduction ? kStandardStaminaConsumptionScale : 1.0f;
+    float cost = baseCost * reduction * GetDepthLevelStaminaConsumptionMultiplier() * GetMealStaminaCostMultiplier();
     if ((GetCellAttributeFlagsAt(m_player.pos, m_player.depth) & NarakuMap::CellAttributeWaterPuddle) != 0u)
         cost *= 1.20f;
     if (GetWeightRate() >= 0.90f) cost *= 2.0f;
@@ -615,16 +688,17 @@ float SceneNarakuProto::GetDepthLevelFullnessConsumptionMultiplier() const
     return GetDepthLevelMultiplier(kFullnessConsumptionMultipliers, GetCurrentDepth(), m_level);
 }
 
-bool SceneNarakuProto::CanSpendStamina(float baseCost) const
+bool SceneNarakuProto::CanSpendStamina(float baseCost, bool applyStandardReduction) const
 {
     // 深度・レベル、重量、飢餓の補正後の消費量を支払えるか返します。
-    return m_player.stamina >= GetStaminaCost(baseCost) && m_player.stamina > 0.0f;
+    return m_player.stamina >= GetStaminaCost(baseCost, applyStandardReduction) && m_player.stamina > 0.0f;
 }
 
-void SceneNarakuProto::SpendStamina(float baseCost)
+void SceneNarakuProto::SpendStamina(float baseCost, bool applyStandardReduction)
 {
     // 各補正後の消費量を差し引き、0未満にならないようにします。
-    m_player.stamina = std::max(0.0f, m_player.stamina - GetStaminaCost(baseCost));
+    m_player.stamina = std::max(
+        0.0f, m_player.stamina - GetStaminaCost(baseCost, applyStandardReduction));
 }
 
 int SceneNarakuProto::GetCurrentDepth() const
@@ -748,19 +822,20 @@ float SceneNarakuProto::GetMentalRecoveryMultiplier() const
 float SceneNarakuProto::GetAttackPower() const
 {
     const float levelValue = kPlayerBaseAttack * (1.0f + (3.0f - 1.0f) * GetLevelGrowth());
-    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().attack));
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().attack) * GetMealAttackMultiplier());
 }
 
 float SceneNarakuProto::GetDefenseMultiplier() const
 {
     const float levelValue = kPlayerBaseDefense * (1.0f + (4.50f - 1.0f) * GetLevelGrowth());
-    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().defense));
+    return RoundToHundredth(levelValue * (1.0f + GetEquipmentBonus().defense) * GetMealDefenseMultiplier());
 }
 
 float SceneNarakuProto::GetRunSpeed() const
 {
     const float levelMove = 1.0f + (2.50f - 1.0f) * GetLevelGrowth();
-    return RoundToHundredth(m_debugPlayerParams.runSpeed * levelMove * (1.0f + GetEquipmentBonus().runSpeed));
+    return RoundToHundredth(m_debugPlayerParams.runSpeed * levelMove * (1.0f + GetEquipmentBonus().runSpeed) *
+        GetMealMovementMultiplier());
 }
 
 float SceneNarakuProto::GetRopeSpeed(bool ascending) const
@@ -769,13 +844,13 @@ float SceneNarakuProto::GetRopeSpeed(bool ascending) const
     const float levelSpeed = 1.0f + (maximum - 1.0f) * GetLevelGrowth();
     const EquipmentBonus bonus = GetEquipmentBonus();
     return RoundToHundredth(m_debugPlayerParams.ropeSpeed * levelSpeed *
-        (1.0f + (ascending ? bonus.ropeAscentSpeed : bonus.ropeDescentSpeed)));
+        (1.0f + (ascending ? bonus.ropeAscentSpeed : bonus.ropeDescentSpeed)) * GetMealMovementMultiplier());
 }
 
 float SceneNarakuProto::GetMiningSpeedMultiplier() const
 {
     const float levelSpeed = 1.0f + (10.0f - 1.0f) * GetLevelGrowth();
-    return RoundToHundredth(levelSpeed * (1.0f + GetEquipmentBonus().miningSpeed));
+    return RoundToHundredth(levelSpeed * (1.0f + GetEquipmentBonus().miningSpeed) * GetMealMiningMultiplier());
 }
 
 void SceneNarakuProto::PreserveResourceRatios(float oldMaxHp, float oldMaxStamina, float oldMaxMental)
@@ -2453,7 +2528,7 @@ SceneNarakuProto::Vec2 SceneNarakuProto::GetMouseAimGroundPosition()
     const Vec2 camRight = GetCameraRight();
 
     // 画面中心（プレイヤー位置）からマウスカーソル方向へのオフセット
-    const float aimRange = kAttackRange * 2.5f;
+    const float aimRange = m_debugPlayerParams.attackRange * 2.5f;
     return Add(m_player.pos, Add(Mul(camRight, ndcX * aimRange), Mul(camForward, ndcY * aimRange)));
 }
 

@@ -28,6 +28,7 @@ namespace
     ProfileEntries g_classEntries;
     ProfileEntries g_functionEntries;
     std::unordered_map<std::string, unsigned int> g_classCallDepths;
+    EditorPerformanceProfiler::Target g_target = EditorPerformanceProfiler::Target::None;
     bool g_showProfilerWindow = false;
     bool g_showOnlyActiveEntries = true;
 
@@ -83,6 +84,24 @@ namespace
         g_classEntries.clear();
         g_functionEntries.clear();
         g_classCallDepths.clear();
+    }
+
+    const char* GetTargetName(EditorPerformanceProfiler::Target target)
+    {
+        switch (target)
+        {
+        case EditorPerformanceProfiler::Target::StageEditor:
+            return u8"Stage Editor";
+        case EditorPerformanceProfiler::Target::PieceEditor:
+            return u8"Piece Editor";
+        case EditorPerformanceProfiler::Target::AttackEditor:
+            return u8"Attack Editor";
+        case EditorPerformanceProfiler::Target::GeneratedPreview:
+            return u8"生成プレビュー";
+        case EditorPerformanceProfiler::Target::None:
+        default:
+            return u8"なし";
+        }
     }
 
     void DrawEntryTable(ProfileEntries& entries, const char* tableId, ImGuiTextFilter& filter)
@@ -182,6 +201,17 @@ void EditorPerformanceProfiler::BeginFrame()
     FinalizeEntries(g_functionEntries);
 }
 
+void EditorPerformanceProfiler::SetTarget(Target target)
+{
+    if (g_target == target)
+    {
+        return;
+    }
+
+    g_target = target;
+    ClearEntries();
+}
+
 bool EditorPerformanceProfiler::IsRecordingEnabled()
 {
     return g_showProfilerWindow;
@@ -254,6 +284,8 @@ void EditorPerformanceProfiler::DrawWindow()
         ImGui::End();
         return;
     }
+
+    ImGui::Text(u8"計測対象: %s", GetTargetName(g_target));
 
     static ImGuiTextFilter filter;
     filter.Draw(u8"絞り込み", 260.0f);

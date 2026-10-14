@@ -27,7 +27,9 @@ HRESULT Texture::Create(const char* fileName)
 	// ファイル別読み込み
 	DirectX::TexMetadata mdata;
 	DirectX::ScratchImage image;
-	if (strstr(fileName, ".tga"))
+	if (strstr(fileName, ".dds"))
+		hr = DirectX::LoadFromDDSFile(wPath, DirectX::DDS_FLAGS_NONE, &mdata, image);
+	else if (strstr(fileName, ".tga"))
 		hr = DirectX::LoadFromTGAFile(wPath, &mdata, image);
 	else
 		hr = DirectX::LoadFromWICFile(wPath, DirectX::WIC_FLAGS::WIC_FLAGS_IGNORE_SRGB, &mdata, image);

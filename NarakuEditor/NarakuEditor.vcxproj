@@ -21,6 +21,7 @@
     <ClCompile Include="$(RepositoryRoot)NarakuGame\Source\NarakuMapData.cpp" />
     <ClCompile Include="$(RepositoryRoot)NarakuGame\Source\NarakuPieceData.cpp" />
     <ClCompile Include="$(RepositoryRoot)NarakuGame\Source\NarakuStageGenerator.cpp" />
+    <ClCompile Include="$(RepositoryRoot)NarakuGame\Source\NarakuCombatData.cpp" />
     <ClCompile Include="$(RepositoryRoot)Build\CommonAppMain.cpp" />
     <ClCompile Include="SceneManager.cpp" />
   </ItemGroup>

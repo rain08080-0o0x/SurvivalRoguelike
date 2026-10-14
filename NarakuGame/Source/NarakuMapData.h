@@ -72,6 +72,9 @@ namespace NarakuMap
 
         /** @brief 進入できない湖として扱います。 */
         CellAttributeWaterLake = 1u << 8,
+
+        /** @brief 通行は可能ですが通常の敵生成候補から除外します。 */
+        CellAttributeEnemySpawnBlocked = 1u << 9,
     };
 
     /**

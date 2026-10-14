@@ -9,6 +9,16 @@
 class EditorPerformanceProfiler
 {
 public:
+    /** @brief 現在計測しているEditorの種類です。 */
+    enum class Target
+    {
+        None,
+        StageEditor,
+        PieceEditor,
+        AttackEditor,
+        GeneratedPreview,
+    };
+
     /** @brief 計測対象の分類です。 */
     enum class Category
     {
@@ -19,6 +29,9 @@ public:
 
     /** @brief 現在フレームの集計を開始し、直前フレームの値を確定します。 */
     static void BeginFrame();
+
+    /** @brief 計測対象を切り替え、以前の対象の統計を破棄します。 */
+    static void SetTarget(Target target);
 
     /** @brief 計測結果ウィンドウが開いており、計測処理が有効かを返します。 */
     static bool IsRecordingEnabled();

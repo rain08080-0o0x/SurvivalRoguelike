@@ -476,6 +476,13 @@ namespace
                           std::string(NarakuPiece::ToString(northPlacement->piece->data.edgeCategories.south)) + ")");
                 return false;
             }
+            if (northPlacement != nullptr && !NarakuPiece::AreOpposingEdgeHeightsCompatible(
+                northPlacement->piece->data, NarakuPiece::Direction::South,
+                candidate.data, NarakuPiece::Direction::North))
+            {
+                setReason("North edge vertex height delta is 3 or greater");
+                return false;
+            }
         }
 
         // 2. 南側の判定
@@ -518,6 +525,13 @@ namespace
                 setReason("West edge category (" + std::string(NarakuPiece::ToString(candidate.data.edgeCategories.west)) +
                           ") does not match West neighbor's East edge category (" +
                           std::string(NarakuPiece::ToString(westPlacement->piece->data.edgeCategories.east)) + ")");
+                return false;
+            }
+            if (westPlacement != nullptr && !NarakuPiece::AreOpposingEdgeHeightsCompatible(
+                westPlacement->piece->data, NarakuPiece::Direction::East,
+                candidate.data, NarakuPiece::Direction::West))
+            {
+                setReason("West edge vertex height delta is 3 or greater");
                 return false;
             }
         }
@@ -573,6 +587,13 @@ namespace
                 setReason("North inner edge category does not match");
                 return false;
             }
+            if (northPlacement != nullptr && !NarakuPiece::AreOpposingEdgeHeightsCompatible(
+                northPlacement->piece->data, NarakuPiece::Direction::South,
+                candidate.data, NarakuPiece::Direction::North))
+            {
+                setReason("North inner edge vertex height delta is 3 or greater");
+                return false;
+            }
         }
 
         if (gridZ < gridSize - 1 && candidate.data.edgeCategories.south == NarakuPiece::StageCategory::Blocked)
@@ -591,6 +612,13 @@ namespace
                 westPlacement->piece->data.edgeCategories.east != candidate.data.edgeCategories.west)
             {
                 setReason("West inner edge category does not match");
+                return false;
+            }
+            if (westPlacement != nullptr && !NarakuPiece::AreOpposingEdgeHeightsCompatible(
+                westPlacement->piece->data, NarakuPiece::Direction::East,
+                candidate.data, NarakuPiece::Direction::West))
+            {
+                setReason("West inner edge vertex height delta is 3 or greater");
                 return false;
             }
         }
@@ -1006,6 +1034,10 @@ namespace
                 if (!cell.walkable)
                 {
                     flags |= NarakuMap::CellAttributeBlocked;
+                }
+                if (!cell.enemySpawnAllowed)
+                {
+                    flags |= NarakuMap::CellAttributeEnemySpawnBlocked;
                 }
                 if (cell.ropeAllowed)
                 {

@@ -44,7 +44,13 @@ namespace SceneNarakuProtoImplementation
     constexpr const wchar_t* kRopeSupportTextureRelativePath = L"Assets/Base/texture/tree_bark1.jpg";
     constexpr const wchar_t* kMiningPointModelRelativePath = L"Assets/Model/Mining/garakuta.fbx";
     constexpr const wchar_t* kPickaxeModelRelativePath = L"Assets/Model/weapon/pickaxe.fbx";
-    constexpr float kPickaxeVisualLength = 1.8f;
+    constexpr int kDepthDirectionColumns = 11;
+    constexpr int kDepthDirectionFirstTextureColumns = 6;
+    constexpr int kDepthDirectionRows = 9;
+    constexpr int kDepthDirectionFrameCount = kDepthDirectionColumns * kDepthDirectionRows;
+    constexpr float kDepthDirectionFramesPerSecond = 30.0f;
+    constexpr float kDepthDirectionAcceleratedScale = 2.0f;
+    constexpr float kPickaxeVisualLength = 0.6f;
     constexpr float kRopeVisualDiameter = 0.08f;
     constexpr float kRopeSupportHeight = 1.6f;
     constexpr float kRopeAnchorHeight = 1.5f;
@@ -56,8 +62,8 @@ namespace SceneNarakuProtoImplementation
     constexpr const wchar_t* kWeeklyWorldDirectory = L"Assets/Save/WeeklyWorld";
     constexpr const wchar_t* kWeeklyWorldPath = L"Assets/Save/WeeklyWorld/world.dat";
     constexpr const wchar_t* kWeeklyWorldTempPath = L"Assets/Save/WeeklyWorld/world.tmp";
-    constexpr int kSaveVersion = 11;
-    constexpr int kPreviousSaveVersion = 10;
+    constexpr int kSaveVersion = 13;
+    constexpr int kPreviousSaveVersion = 12;
     constexpr std::array<NarakuPiece::SurfaceFacilityType, 5> kSurfaceFacilityOrder = {
         NarakuPiece::SurfaceFacilityType::Home,
         NarakuPiece::SurfaceFacilityType::Shop,
@@ -167,15 +173,20 @@ namespace SceneNarakuProtoImplementation
         float stayReward;
         int chargerMax;
         int territoryMax;
+        int chargerMin;
+        int territoryMin;
+        float enemySearch;
+        int enemyDropRolls;
+        float enemyRespawn;
     };
 
     constexpr DepthRules kDepthRules[] =
     {
-        { { 70, 15, 15, 0, 0 }, 1.00f, 1.00f, 1.00f, 1.000f, 1.0f,   1.0f, 100, 1.0f, 0.8f, 2, 1 },
-        { { 40, 20, 30, 10, 0 }, 1.75f, 1.25f, 1.10f, 0.875f, 5.0f,   2.0f, 200, 1.5f, 1.2f, 2, 1 },
-        { { 20, 30, 32, 17, 1 }, 4.50f, 1.50f, 1.25f, 0.750f, 17.5f,  3.0f, 300, 2.0f, 1.6f, 3, 1 },
-        { { 10, 29, 35, 25, 1 }, 15.0f, 2.00f, 1.50f, 0.625f, 40.0f,  4.0f, 400, 3.5f, 2.0f, 4, 2 },
-        { { 0, 27, 35, 35, 3 }, 25.0f, 2.50f, 2.00f, 0.500f, 100.0f, 5.0f, 500, 6.0f, 2.4f, 5, 3 }
+        { { 70, 15, 15, 0, 0 }, 1.0f,  1.0f, 1.0f, 1.000f, 1.0f, 1.0f, 100, 1.0f, 0.8f, 4, 2, 2, 1, 1.0f, 1, 1.0f },
+        { { 40, 20, 30, 10, 0 }, 5.0f,  2.0f, 2.0f, 0.875f, 5.0f, 2.0f, 200, 1.5f, 1.2f, 6, 2, 3, 1, 1.5f, 3, 0.8f },
+        { { 20, 30, 32, 17, 1 }, 12.5f, 5.5f, 3.0f, 0.750f, 25.0f,3.0f, 300, 2.0f, 1.6f, 8, 5, 4, 1, 2.0f, 5, 0.65f },
+        { { 10, 29, 35, 25, 1 }, 27.5f, 8.0f, 4.0f, 0.625f, 65.0f,4.0f, 400, 3.5f, 2.0f,10, 7, 6, 3, 3.5f, 8, 0.5f },
+        { { 0, 27, 35, 35, 3 }, 50.0f,10.0f, 5.0f, 0.500f,100.0f,5.0f,500, 6.0f, 2.4f,12,10, 8, 5, 4.0f,10, 0.3f }
     };
 
     using LevelMultiplierRow = std::array<float, 10>;
@@ -541,13 +552,19 @@ namespace SceneNarakuProtoImplementation
     // ステップ後に操作を戻すまでの硬直時間です。
     constexpr float kStepRecoveryTime = 0.5f;
     // 攻撃ボタンを押してから攻撃判定が出るまでの時間です。
-    constexpr float kAttackStartup = 0.25f;
+    constexpr float kAttackStartup = 0.10f;
     // 攻撃判定が有効な時間です。
-    constexpr float kAttackActive = 0.15f;
+    constexpr float kAttackActive = 0.08f;
     // 攻撃判定後の硬直時間です。
-    constexpr float kAttackRecovery = 0.40f;
-    // 攻撃全体の長さです。
-    constexpr float kAttackTotal = kAttackStartup + kAttackActive + kAttackRecovery;
+    constexpr float kAttackRecovery = 0.16f;
+    constexpr float kStandardStaminaConsumptionScale = 0.25f;
+    constexpr float kSurvivalConsumptionScale = 1.0f / 6.0f;
+    constexpr int kAttackComboStepCount = 3;
+    constexpr float kAttackComboWindow = 0.45f;
+    constexpr float kAttackStartupScales[kAttackComboStepCount] = { 1.0f, 0.8f, 1.4f };
+    constexpr float kAttackActiveScales[kAttackComboStepCount] = { 1.0f, 1.0f, 1.25f };
+    constexpr float kAttackRecoveryScales[kAttackComboStepCount] = { 1.0f, 1.125f, 1.625f };
+    constexpr float kAttackHitMomentRatios[kAttackComboStepCount] = { 0.55f, 0.55f, 0.75f };
     // 採掘モーション完了までの時間です。
     constexpr float kMiningTime = 2.0f;
     // 現在層の上昇負荷が発症する累計上昇量です。

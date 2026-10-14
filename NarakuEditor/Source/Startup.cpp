@@ -11,6 +11,7 @@
 #include "SceneNarakuEditor.h"
 #include "SceneNarakuPieceEditor.h"
 #include "SceneNarakuProto.h"
+#include "SceneAttackEditor.h"
 #include <cstring>
 #include <fstream>
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
@@ -28,10 +29,12 @@ namespace
 	constexpr UINT MenuShowNarakuPieceEditor = 49002;
 	constexpr UINT MenuRestartNarakuPreview = 49003;
 	constexpr UINT MenuShowGeneratedPreviewFromPieceEditor = 49004;
+	constexpr UINT MenuShowAttackEditor = 49005;
 	bool g_isFullscreen = false;
 	HWND g_mainWindow = nullptr;
 	HMENU g_editorMenuBar = nullptr;
 	HMENU g_pieceEditorMenuBar = nullptr;
+	HMENU g_attackEditorMenuBar = nullptr;
 	WINDOWPLACEMENT g_windowPlacement = { sizeof(WINDOWPLACEMENT) };
 	DWORD g_windowStyle = 0;
 	DWORD g_windowExStyle = 0;
@@ -102,6 +105,7 @@ namespace
 		AppendMenuW(viewMenu, MF_STRING, MenuRestartNarakuPreview, L"Return to Start");
 		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, MenuShowNarakuPieceEditor, L"Piece Editor");
+		AppendMenuW(viewMenu, MF_STRING, MenuShowAttackEditor, L"Attack Editor");
 		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuSnapTopView, L"\x771F\x4E0A\x30D3\x30E5\x30FC");
 		AppendMenuW(viewMenu, MF_STRING, SceneNarakuEditor::MenuFocusSelection, L"\x9078\x629E\x5BFE\x8C61\x3078\x30D5\x30A9\x30FC\x30AB\x30B9");
@@ -147,6 +151,7 @@ namespace
 		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, MenuShowNarakuOverview, L"Stage Editor");
 		AppendMenuW(viewMenu, MF_STRING, MenuShowGeneratedPreviewFromPieceEditor, L"Generated Preview");
+		AppendMenuW(viewMenu, MF_STRING, MenuShowAttackEditor, L"Attack Editor");
 
 		AppendMenuW(modelsMenu, MF_STRING, SceneNarakuPieceEditor::MenuNewEnvironmentModel, L"New Model...");
 		AppendMenuW(modelsMenu, MF_STRING, SceneNarakuPieceEditor::MenuDeleteEnvironmentModel, L"Delete...");
@@ -157,6 +162,34 @@ namespace
 		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(modelsMenu), L"Models");
 		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(viewMenu), L"View");
 		AppendMenuW(menuBar, MF_STRING | MF_GRAYED, SceneNarakuPieceEditor::MenuFileStatus, L"\x7DE8\x96C6\x4E2D: piece_0001.json [\x4E0B\x66F8\x304D]");
+		return menuBar;
+	}
+
+	HMENU CreateAttackEditorNativeMenu()
+	{
+		HMENU menuBar = CreateMenu();
+		HMENU fileMenu = CreatePopupMenu();
+		HMENU viewMenu = CreatePopupMenu();
+
+		AppendMenuW(fileMenu, MF_STRING, SceneAttackEditor::MenuNewAttack, L"\x65B0\x898F\x4F5C\x6210");
+		AppendMenuW(fileMenu, MF_STRING, SceneAttackEditor::MenuReload, L"\x518D\x8AAD\x307F\x8FBC\x307F");
+		AppendMenuW(fileMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(fileMenu, MF_STRING, SceneAttackEditor::MenuSave, L"\x9078\x629E\x4E2D\x3092\x4FDD\x5B58");
+		AppendMenuW(fileMenu, MF_STRING, SceneAttackEditor::MenuPublish, L"\x3059\x3079\x3066\x30B2\x30FC\x30E0\x3078\x767A\x884C");
+
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleDataWindow, L"\x653B\x6483\x30C7\x30FC\x30BF\x7BA1\x7406");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleBasicWindow, L"\x57FA\x672C\x60C5\x5831");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleTimelineWindow, L"\x30BF\x30A4\x30E0\x30E9\x30A4\x30F3");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleCombatWindow, L"\x6226\x95D8\x8A2D\x5B9A");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleHitboxWindow, L"\x653B\x6483\x5224\x5B9A");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleTransformWindow, L"\x6B66\x5668\x5909\x5F62");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuTogglePreviewWindow, L"\x653B\x6483\x30D7\x30EC\x30D3\x30E5\x30FC");
+		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuShowStageEditor, L"\x30B9\x30C6\x30FC\x30B8\x30A8\x30C7\x30A3\x30BF");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuShowPieceEditor, L"\x5C0F\x30B9\x30C6\x30FC\x30B8\x30A8\x30C7\x30A3\x30BF");
+
+		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(fileMenu), L"\x30D5\x30A1\x30A4\x30EB");
+		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(viewMenu), L"View");
 		return menuBar;
 	}
 
@@ -180,6 +213,16 @@ namespace
 		return dynamic_cast<SceneNarakuPieceEditor*>(SceneManager::GetScene());
 	}
 
+	SceneAttackEditor* GetAttackEditorScene()
+	{
+		if (SceneManager::GetCurrent() != SceneManager::SCENE_ATTACK_EDITOR)
+		{
+			return nullptr;
+		}
+
+		return dynamic_cast<SceneAttackEditor*>(SceneManager::GetScene());
+	}
+
 	void UpdateNativeEditorMenu(HWND hWnd)
 	{
 		if (hWnd == nullptr)
@@ -189,6 +232,7 @@ namespace
 
 		SceneNarakuEditor* editor = GetNarakuEditorScene();
 		SceneNarakuPieceEditor* pieceEditor = GetNarakuPieceEditorScene();
+		SceneAttackEditor* attackEditor = GetAttackEditorScene();
 		HMENU targetMenu = nullptr;
 		if (editor != nullptr)
 		{
@@ -197,6 +241,10 @@ namespace
 		else if (pieceEditor != nullptr)
 		{
 			targetMenu = g_pieceEditorMenuBar;
+		}
+		else if (attackEditor != nullptr)
+		{
+			targetMenu = g_attackEditorMenuBar;
 		}
 		else if (SceneManager::GetCurrent() == SceneManager::SCENE_NARAKU_PROTO)
 		{
@@ -217,10 +265,28 @@ namespace
 		{
 			pieceEditor->SyncNativeMenuState(g_pieceEditorMenuBar);
 		}
+		else if (attackEditor != nullptr && g_attackEditorMenuBar != nullptr)
+		{
+			attackEditor->SyncNativeMenuState(g_attackEditorMenuBar);
+		}
 	}
 
 	bool DispatchNativeEditorMenu(HWND hWnd, UINT commandId)
 	{
+		if (commandId == MenuShowAttackEditor)
+		{
+			SceneManager::ChangeScene(SceneManager::SCENE_ATTACK_EDITOR);
+			return true;
+		}
+		if (SceneAttackEditor* attackEditor = GetAttackEditorScene())
+		{
+			if (!attackEditor->HandleNativeMenuCommand(commandId))
+			{
+				return false;
+			}
+			UpdateNativeEditorMenu(hWnd);
+			return true;
+		}
 		if (commandId == MenuShowGeneratedPreviewFromPieceEditor)
 		{
 			SceneNarakuPieceEditor* pieceEditor = GetNarakuPieceEditorScene();
@@ -443,6 +509,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	g_editorMenuBar = CreateNarakuEditorNativeMenu();
 	g_pieceEditorMenuBar = CreateNarakuPieceEditorNativeMenu();
+	g_attackEditorMenuBar = CreateAttackEditorNativeMenu();
 	UpdateNativeEditorMenu(hWnd);
 
 	// フレームレートを制御する。
@@ -492,6 +559,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	{
 		DestroyMenu(g_pieceEditorMenuBar);
 		g_pieceEditorMenuBar = nullptr;
+	}
+	if (g_attackEditorMenuBar != nullptr)
+	{
+		DestroyMenu(g_attackEditorMenuBar);
+		g_attackEditorMenuBar = nullptr;
 	}
 	Uninit();
 	DeleteFileW(L"Assets/Config/naraku_editor_preview.cfg");

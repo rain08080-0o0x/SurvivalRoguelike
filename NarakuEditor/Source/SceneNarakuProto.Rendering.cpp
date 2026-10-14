@@ -31,6 +31,7 @@ void SceneNarakuProto::Draw()
     {
         DrawLoadingScreen();
         DrawScreenFade();
+        DrawDepthDirectionAnimation();
         return;
     }
 
@@ -151,6 +152,53 @@ void SceneNarakuProto::Draw()
     DrawFishingProgress();
     if (fadeActive) ImGui::EndDisabled();
     DrawScreenFade();
+    DrawDepthDirectionAnimation();
+}
+
+void SceneNarakuProto::DrawDepthDirectionAnimation() const
+{
+    if (!m_depthDirectionActive ||
+        m_depthDirectionTextures[0] == nullptr ||
+        m_depthDirectionTextures[1] == nullptr) return;
+
+    const int frame = std::max(0, std::min(
+        kDepthDirectionFrameCount - 1,
+        static_cast<int>(m_depthDirectionElapsed * kDepthDirectionFramesPerSecond)));
+    const int column = frame % kDepthDirectionColumns;
+    const int row = frame / kDepthDirectionColumns;
+    const bool useSecondTexture = column >= kDepthDirectionFirstTextureColumns;
+    const int textureIndex = useSecondTexture ? 1 : 0;
+    const int textureColumns = useSecondTexture
+        ? kDepthDirectionColumns - kDepthDirectionFirstTextureColumns
+        : kDepthDirectionFirstTextureColumns;
+    const int localColumn = useSecondTexture
+        ? column - kDepthDirectionFirstTextureColumns
+        : column;
+    const Texture* texture = m_depthDirectionTextures[textureIndex];
+    const float halfTexelU = 0.5f / static_cast<float>(texture->GetWidth());
+    const float halfTexelV = 0.5f / static_cast<float>(texture->GetHeight());
+    const ImVec2 uvMinimum(
+        static_cast<float>(localColumn) / static_cast<float>(textureColumns) + halfTexelU,
+        static_cast<float>(row) / static_cast<float>(kDepthDirectionRows) + halfTexelV);
+    const ImVec2 uvMaximum(
+        static_cast<float>(localColumn + 1) / static_cast<float>(textureColumns) - halfTexelU,
+        static_cast<float>(row + 1) / static_cast<float>(kDepthDirectionRows) - halfTexelV);
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const float frameWidth = static_cast<float>(texture->GetWidth()) /
+        static_cast<float>(textureColumns);
+    const float frameHeight = static_cast<float>(texture->GetHeight()) /
+        static_cast<float>(kDepthDirectionRows);
+    const float frameAspect = frameWidth / frameHeight;
+    const float drawWidth = viewport->Size.x;
+    const float drawHeight = drawWidth / frameAspect;
+    const ImVec2 minimum(
+        viewport->Pos.x,
+        viewport->Pos.y + (viewport->Size.y - drawHeight) * 0.5f);
+    const ImVec2 maximum(minimum.x + drawWidth, minimum.y + drawHeight);
+    const ImTextureRef imageTexture(
+        static_cast<ImTextureID>(reinterpret_cast<std::intptr_t>(texture->GetResource())));
+    ImGui::GetForegroundDrawList(viewport)->AddImage(imageTexture, minimum, maximum, uvMinimum, uvMaximum);
 }
 
 void SceneNarakuProto::DrawUninsuredDescentConfirm()
@@ -909,9 +957,13 @@ void SceneNarakuProto::LoadPickaxeModel()
     using namespace DirectX;
     ReleasePickaxeModel();
 
-    const std::string modelPath = WideToUtf8(ResolveRuntimeAssetPath(kPickaxeModelRelativePath));
+    const NarakuCombat::ModelDefinition* modelDefinition =
+        NarakuCombat::FindModel(m_combatCatalog, "model.weapon.pickaxe");
+    if (modelDefinition == nullptr) return;
+    const std::string modelPath = WideToUtf8(ResolveRuntimeAssetPath(Utf8ToWide(modelDefinition->filePath)));
     m_pickaxeModel = new Model();
-    if (!m_pickaxeModel->LoadStatic(modelPath.c_str(), 1.0f, Model::ZFlip))
+    if (!m_pickaxeModel->LoadStatic(modelPath.c_str(), 1.0f,
+        modelDefinition->zFlip ? Model::ZFlip : Model::None))
     {
         SAFE_DELETE(m_pickaxeModel);
         return;
@@ -975,25 +1027,30 @@ void SceneNarakuProto::DrawPickaxeModel(
         return;
     }
 
-    const float attackProgress = std::max(
-        0.0f,
-        std::min(1.0f, (kAttackTotal - m_player.attackTimer) / kAttackTotal));
-    const float easedProgress = attackProgress * attackProgress * (3.0f - 2.0f * attackProgress);
-    float swingAngle = XMConvertToRadians(-75.0f + 150.0f * easedProgress);
-    if (m_player.attackSwingReverse) swingAngle = -swingAngle;
+    const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, m_player.activeAttackId);
+    if (attack == nullptr || attack->presentation != NarakuCombat::PresentationKind::WeaponTransform ||
+        attack->transformKeys.empty()) return;
+    const NarakuCombat::TransformKey transform = NarakuCombat::EvaluateTransform(*attack, m_player.attackFrame);
 
-    const Vec2 facing = Normalize(m_player.facing);
+    Vec2 facing = Normalize(m_player.attackFacing);
+    if (Dot(facing, facing) <= 0.0001f) facing = { 0.0f, 1.0f };
     const float facingYaw = std::atan2(facing.x, facing.y);
-    const float modelScale = kPickaxeVisualLength / m_pickaxeModelLongestSize;
-    const XMMATRIX world =
+    const NarakuCombat::ModelDefinition* modelDefinition = NarakuCombat::FindModel(m_combatCatalog, attack->modelId);
+    if (modelDefinition == nullptr) return;
+    const float modelScale = kPickaxeVisualLength / m_pickaxeModelLongestSize * modelDefinition->scale;
+    const XMMATRIX modelBase =
         XMMatrixTranslation(
             -m_pickaxeModelCenter.x,
             -m_pickaxeModelCenter.y,
             -m_pickaxeModelCenter.z) *
-        XMMatrixScaling(modelScale, modelScale, modelScale) *
-        XMMatrixRotationZ(XMConvertToRadians(-35.0f)) *
-        XMMatrixTranslation(0.55f, 0.30f, 0.65f) *
-        XMMatrixRotationY(facingYaw + swingAngle) *
+        XMMatrixScaling(modelScale * transform.scale.x, modelScale * transform.scale.y,
+            modelScale * transform.scale.z);
+    const XMMATRIX world =
+        modelBase *
+        XMMatrixRotationRollPitchYaw(XMConvertToRadians(transform.rotationDegrees.x),
+            XMConvertToRadians(transform.rotationDegrees.y), XMConvertToRadians(transform.rotationDegrees.z)) *
+        XMMatrixTranslation(transform.position.x, transform.position.y, transform.position.z) *
+        XMMatrixRotationY(facingYaw) *
         XMMatrixTranslation(playerCenter.x, playerCenter.y, playerCenter.z);
 
     XMFLOAT4X4 wvp[3] = {};
@@ -1018,6 +1075,92 @@ void SceneNarakuProto::DrawPickaxeModel(
         }
         m_pickaxeModel->Draw(static_cast<int>(meshIndex));
     }
+}
+
+void SceneNarakuProto::DrawCombatDebugGeometry3D(const DirectX::XMFLOAT3& playerCenter) const
+{
+#if defined(_DEBUG) || defined(NARAKU_EDITOR_BUILD)
+    using namespace DirectX;
+    const bool drawCharacters = m_debugPlayerParams.showCharacterCollision >= 0.5f;
+    const bool drawAttack = m_debugPlayerParams.showAttackCollision >= 0.5f;
+    if (!drawCharacters && !drawAttack) return;
+
+    XMFLOAT4X4 identity = {};
+    XMStoreFloat4x4(&identity, XMMatrixIdentity());
+    Geometory::SetWorld(identity);
+    SetBlendMode(BLEND_ALPHA);
+    SetCullingMode(D3D11_CULL_NONE);
+
+    constexpr int circleSegments = 24;
+    const auto addCylinder = [](const Vec2& position, float bottomY, float radius, float height,
+        const XMFLOAT4& color)
+    {
+        for (int segment = 0; segment < circleSegments; ++segment)
+        {
+            const float angle0 = XM_2PI * static_cast<float>(segment) / static_cast<float>(circleSegments);
+            const float angle1 = XM_2PI * static_cast<float>(segment + 1) / static_cast<float>(circleSegments);
+            const XMFLOAT3 bottom0 = { position.x + std::cos(angle0) * radius, bottomY,
+                position.y + std::sin(angle0) * radius };
+            const XMFLOAT3 bottom1 = { position.x + std::cos(angle1) * radius, bottomY,
+                position.y + std::sin(angle1) * radius };
+            const XMFLOAT3 top0 = { bottom0.x, bottomY + height, bottom0.z };
+            const XMFLOAT3 top1 = { bottom1.x, bottomY + height, bottom1.z };
+            Geometory::AddLine(bottom0, bottom1, color);
+            Geometory::AddLine(top0, top1, color);
+            if ((segment % 6) == 0) Geometory::AddLine(bottom0, top0, color);
+        }
+    };
+
+    if (drawCharacters)
+    {
+        const float playerFeetY = playerCenter.y - 0.70f;
+        addCylinder(m_player.pos, playerFeetY, 0.30f, 1.40f,
+            m_debugPlayerParams.characterCollisionColor);
+        for (const EnemyState& enemy : m_enemies)
+        {
+            if (!enemy.alive) continue;
+            const float radius = enemy.type == EnemyType::Charger ? 0.40f : 0.50f;
+            const float height = enemy.type == EnemyType::Charger ? 1.20f : 1.40f;
+            const float feetY = enemy.grounded
+                ? GetGroundWorldY(enemy.pos, enemy.depth)
+                : enemy.feetWorldY;
+            addCylinder(enemy.pos, feetY, radius, height,
+                m_debugPlayerParams.characterCollisionColor);
+        }
+    }
+
+    if (drawAttack)
+    {
+        constexpr int arcSegments = 24;
+        const Vec2 facing = Normalize(m_player.attackTimer > 0.0f
+            ? m_player.attackFacing
+            : m_player.facing);
+        const float centerAngle = std::atan2(facing.y, facing.x);
+        const float halfAngle = XMConvertToRadians(m_debugPlayerParams.attackHalfAngleDegrees);
+        const float y = playerCenter.y;
+        const XMFLOAT3 origin = { m_player.pos.x, y, m_player.pos.y };
+        XMFLOAT3 previous = {
+            m_player.pos.x + std::cos(centerAngle - halfAngle) * m_debugPlayerParams.attackRange,
+            y,
+            m_player.pos.y + std::sin(centerAngle - halfAngle) * m_debugPlayerParams.attackRange };
+        Geometory::AddLine(origin, previous, m_debugPlayerParams.attackCollisionColor);
+        for (int segment = 1; segment <= arcSegments; ++segment)
+        {
+            const float rate = static_cast<float>(segment) / static_cast<float>(arcSegments);
+            const float angle = centerAngle - halfAngle + halfAngle * 2.0f * rate;
+            const XMFLOAT3 current = {
+                m_player.pos.x + std::cos(angle) * m_debugPlayerParams.attackRange,
+                y,
+                m_player.pos.y + std::sin(angle) * m_debugPlayerParams.attackRange };
+            Geometory::AddLine(previous, current, m_debugPlayerParams.attackCollisionColor);
+            previous = current;
+        }
+        Geometory::AddLine(previous, origin, m_debugPlayerParams.attackCollisionColor);
+    }
+    Geometory::DrawLines();
+#else
+    (void)playerCenter;
+#endif
 }
 
 void SceneNarakuProto::DrawMiningPointModels(
@@ -1855,6 +1998,7 @@ void SceneNarakuProto::DrawFieldActors3D(
     DrawPickaxeModel(view, projection, playerCenter);
 
 #if defined(_DEBUG) || defined(NARAKU_EDITOR_BUILD)
+    DrawCombatDebugGeometry3D(playerCenter);
     if (m_showCollisionDebug)
     {
         // 帰還範囲のデバッグ表示を追加
@@ -1954,7 +2098,10 @@ void SceneNarakuProto::DrawUpperLoadVisionEffect() const
 
     if (m_upperLoadFifthTimer > 0.0f)
     {
-        draw->AddRectFilled(minimum, maximum, IM_COL32(0, 0, 0, 255));
+        const float fullDuration = std::max(0.01f,
+            GetLevelInterpolatedValue(kUpperLoadFifthDurations, m_level));
+        const int alpha = static_cast<int>(255.0f * std::min(1.0f, m_upperLoadFifthTimer / fullDuration));
+        draw->AddRectFilled(minimum, maximum, IM_COL32(0, 0, 0, alpha));
         return;
     }
 
@@ -2390,6 +2537,17 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
         ImGui::Text(u8"現在: %s %02d:%02d",
             weekdayNames[currentDebugSecond / static_cast<int>(kGameDaySeconds)],
             currentDebugDaySecond / 3600, (currentDebugDaySecond % 3600) / 60);
+        int requestedTotalDay = m_totalGameDay;
+        if (ImGui::InputInt(u8"通算日数", &requestedTotalDay, 1, 7))
+        {
+            requestedTotalDay = std::max(1, std::min(9999, requestedTotalDay));
+            m_totalGameDay = requestedTotalDay;
+            m_elapsedGameDays = static_cast<std::uint64_t>(requestedTotalDay - 1);
+            const double timeOfDay = std::fmod(std::max(0.0, m_gameWeekSeconds), kGameDaySeconds);
+            m_gameWeekSeconds = static_cast<double>((requestedTotalDay - 1) % 7) * kGameDaySeconds + timeOfDay;
+            dateControlInitialized = false;
+            SaveProgress();
+        }
         ImGui::Combo(u8"変更先の曜日", &debugWeekday, weekdayNames, 7);
         ImGui::SliderInt(u8"変更先の時", &debugHour, 0, 23);
         ImGui::SliderInt(u8"変更先の分", &debugMinute, 0, 59);
@@ -2450,6 +2608,18 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
         // 攻撃1回あたりのダメージと消費スタミナを調整します。
         ImGui::Text(u8"基礎攻撃力: %.0f  実効攻撃力: %.0f", kPlayerBaseAttack, GetAttackPower());
         ImGui::SliderFloat(u8"攻撃スタミナ消費", &m_debugPlayerParams.attackCost, 0.0f, 100.0f, "%.2f");
+        ImGui::SliderFloat(u8"攻撃発生前", &m_debugPlayerParams.attackStartup, 0.0f, 2.0f, "%.2f秒");
+        ImGui::SliderFloat(u8"攻撃判定時間", &m_debugPlayerParams.attackActive, 0.01f, 2.0f, "%.2f秒");
+        ImGui::SliderFloat(u8"攻撃後硬直", &m_debugPlayerParams.attackRecovery, 0.0f, 2.0f, "%.2f秒");
+        ImGui::SliderFloat(u8"攻撃範囲", &m_debugPlayerParams.attackRange, 0.05f, 10.0f, "%.2fm");
+        ImGui::SliderFloat(u8"攻撃判定半角", &m_debugPlayerParams.attackHalfAngleDegrees, 1.0f, 180.0f, "%.1f度");
+        ImGui::SliderFloat(u8"つるはし振り角度", &m_debugPlayerParams.attackSwingAngleDegrees, 0.0f, 180.0f, "%.1f度");
+        ImGui::Text(u8"1段目 %.2f秒 / 2段目 %.2f秒 / 3段目 %.2f秒",
+            GetAttackTotalForStep(0), GetAttackTotalForStep(1), GetAttackTotalForStep(2));
+        ImGui::Text(u8"攻撃段階: %d / 次段: %d / 入力予約: %s",
+            m_player.activeAttackStep + 1,
+            m_player.nextAttackStep + 1,
+            m_player.attackInputBuffered ? u8"あり" : u8"なし");
     }
 
     if (ImGui::CollapsingHeader(u8"スタミナ", ImGuiTreeNodeFlags_DefaultOpen))
@@ -2467,6 +2637,16 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
     {
         // 現在深度より上にあるレイヤーの透明度を調整します。0に近いほど見えなくなります。
         ImGui::SliderFloat(u8"上層レイヤー透明度", &m_debugPlayerParams.upperLayerAlpha, 0.0f, 0.30f, "%.2f");
+        bool showCharacterCollision = m_debugPlayerParams.showCharacterCollision >= 0.5f;
+        if (ImGui::Checkbox(u8"プレイヤー・敵の当たり判定", &showCharacterCollision))
+            m_debugPlayerParams.showCharacterCollision = showCharacterCollision ? 1.0f : 0.0f;
+        ImGui::ColorEdit4(u8"当たり判定色", &m_debugPlayerParams.characterCollisionColor.x,
+            ImGuiColorEditFlags_AlphaBar);
+        bool showAttackCollision = m_debugPlayerParams.showAttackCollision >= 0.5f;
+        if (ImGui::Checkbox(u8"攻撃判定", &showAttackCollision))
+            m_debugPlayerParams.showAttackCollision = showAttackCollision ? 1.0f : 0.0f;
+        ImGui::ColorEdit4(u8"攻撃判定色", &m_debugPlayerParams.attackCollisionColor.x,
+            ImGuiColorEditFlags_AlphaBar);
     }
 
     if (ImGui::CollapsingHeader(u8"カメラ", ImGuiTreeNodeFlags_DefaultOpen))
@@ -2556,7 +2736,7 @@ bool SceneNarakuProto::DebugWarpToArea(int depth, int sublayer, int areaNumber)
     m_player.grounded = true;
     m_player.verticalSpeed = 0.0f;
     m_player.airTime = 0.0f;
-    m_player.attackTimer = 0.0f;
+    ResetAttackCombo();
     m_player.stepTimer = 0.0f;
     m_player.knockbackTimer = 0.0f;
     m_player.knockbackVelocity = {};

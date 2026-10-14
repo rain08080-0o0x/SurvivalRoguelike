@@ -19,6 +19,16 @@ void SceneNarakuProto::ResetDebugPlayerParams()
     m_debugPlayerParams.runCostPerSecond = 1.5f;
     m_debugPlayerParams.ropeCostPerSecond = 3.0f;
     m_debugPlayerParams.attackCost = 10.0f;
+    m_debugPlayerParams.attackStartup = kAttackStartup;
+    m_debugPlayerParams.attackActive = kAttackActive;
+    m_debugPlayerParams.attackRecovery = kAttackRecovery;
+    m_debugPlayerParams.attackRange = kAttackRange;
+    m_debugPlayerParams.attackHalfAngleDegrees = 30.0f;
+    m_debugPlayerParams.attackSwingAngleDegrees = 75.0f;
+    m_debugPlayerParams.showCharacterCollision = 1.0f;
+    m_debugPlayerParams.showAttackCollision = 1.0f;
+    m_debugPlayerParams.characterCollisionColor = { 0.55f, 1.0f, 0.10f, 1.0f };
+    m_debugPlayerParams.attackCollisionColor = { 1.0f, 0.05f, 0.05f, 1.0f };
     m_debugPlayerParams.miningCost = 7.0f;
     m_debugPlayerParams.stepCost = 5.0f;
     m_debugPlayerParams.jumpCost = 5.0f;
@@ -47,6 +57,22 @@ bool SceneNarakuProto::LoadDebugPlayerParams()
     TryReadJsonFloat(json, "runCostPerSecond", m_debugPlayerParams.runCostPerSecond);
     TryReadJsonFloat(json, "ropeCostPerSecond", m_debugPlayerParams.ropeCostPerSecond);
     TryReadJsonFloat(json, "attackCost", m_debugPlayerParams.attackCost);
+    TryReadJsonFloat(json, "attackStartup", m_debugPlayerParams.attackStartup);
+    TryReadJsonFloat(json, "attackActive", m_debugPlayerParams.attackActive);
+    TryReadJsonFloat(json, "attackRecovery", m_debugPlayerParams.attackRecovery);
+    TryReadJsonFloat(json, "attackRange", m_debugPlayerParams.attackRange);
+    TryReadJsonFloat(json, "attackHalfAngleDegrees", m_debugPlayerParams.attackHalfAngleDegrees);
+    TryReadJsonFloat(json, "attackSwingAngleDegrees", m_debugPlayerParams.attackSwingAngleDegrees);
+    TryReadJsonFloat(json, "showCharacterCollision", m_debugPlayerParams.showCharacterCollision);
+    TryReadJsonFloat(json, "showAttackCollision", m_debugPlayerParams.showAttackCollision);
+    TryReadJsonFloat(json, "characterCollisionColorR", m_debugPlayerParams.characterCollisionColor.x);
+    TryReadJsonFloat(json, "characterCollisionColorG", m_debugPlayerParams.characterCollisionColor.y);
+    TryReadJsonFloat(json, "characterCollisionColorB", m_debugPlayerParams.characterCollisionColor.z);
+    TryReadJsonFloat(json, "characterCollisionColorA", m_debugPlayerParams.characterCollisionColor.w);
+    TryReadJsonFloat(json, "attackCollisionColorR", m_debugPlayerParams.attackCollisionColor.x);
+    TryReadJsonFloat(json, "attackCollisionColorG", m_debugPlayerParams.attackCollisionColor.y);
+    TryReadJsonFloat(json, "attackCollisionColorB", m_debugPlayerParams.attackCollisionColor.z);
+    TryReadJsonFloat(json, "attackCollisionColorA", m_debugPlayerParams.attackCollisionColor.w);
     TryReadJsonFloat(json, "miningCost", m_debugPlayerParams.miningCost);
     TryReadJsonFloat(json, "stepCost", m_debugPlayerParams.stepCost);
     TryReadJsonFloat(json, "jumpCost", m_debugPlayerParams.jumpCost);
@@ -79,6 +105,22 @@ bool SceneNarakuProto::SaveDebugPlayerParams() const
         << "  \"runCostPerSecond\": " << m_debugPlayerParams.runCostPerSecond << ",\n"
         << "  \"ropeCostPerSecond\": " << m_debugPlayerParams.ropeCostPerSecond << ",\n"
         << "  \"attackCost\": " << m_debugPlayerParams.attackCost << ",\n"
+        << "  \"attackStartup\": " << m_debugPlayerParams.attackStartup << ",\n"
+        << "  \"attackActive\": " << m_debugPlayerParams.attackActive << ",\n"
+        << "  \"attackRecovery\": " << m_debugPlayerParams.attackRecovery << ",\n"
+        << "  \"attackRange\": " << m_debugPlayerParams.attackRange << ",\n"
+        << "  \"attackHalfAngleDegrees\": " << m_debugPlayerParams.attackHalfAngleDegrees << ",\n"
+        << "  \"attackSwingAngleDegrees\": " << m_debugPlayerParams.attackSwingAngleDegrees << ",\n"
+        << "  \"showCharacterCollision\": " << m_debugPlayerParams.showCharacterCollision << ",\n"
+        << "  \"showAttackCollision\": " << m_debugPlayerParams.showAttackCollision << ",\n"
+        << "  \"characterCollisionColorR\": " << m_debugPlayerParams.characterCollisionColor.x << ",\n"
+        << "  \"characterCollisionColorG\": " << m_debugPlayerParams.characterCollisionColor.y << ",\n"
+        << "  \"characterCollisionColorB\": " << m_debugPlayerParams.characterCollisionColor.z << ",\n"
+        << "  \"characterCollisionColorA\": " << m_debugPlayerParams.characterCollisionColor.w << ",\n"
+        << "  \"attackCollisionColorR\": " << m_debugPlayerParams.attackCollisionColor.x << ",\n"
+        << "  \"attackCollisionColorG\": " << m_debugPlayerParams.attackCollisionColor.y << ",\n"
+        << "  \"attackCollisionColorB\": " << m_debugPlayerParams.attackCollisionColor.z << ",\n"
+        << "  \"attackCollisionColorA\": " << m_debugPlayerParams.attackCollisionColor.w << ",\n"
         << "  \"miningCost\": " << m_debugPlayerParams.miningCost << ",\n"
         << "  \"stepCost\": " << m_debugPlayerParams.stepCost << ",\n"
         << "  \"jumpCost\": " << m_debugPlayerParams.jumpCost << ",\n"
@@ -128,6 +170,10 @@ void SceneNarakuProto::InitializeNewProgress()
     m_unknownWeaponChargeTimer = 0.0f;
     m_unknownWeaponCooldownTimer = 0.0f;
     m_unknownWeaponFiredThisHold = false;
+    m_activeMeal = MealId::None;
+    m_mealBuffRemainingSeconds = 0.0f;
+    m_elapsedGameDays = 0;
+    m_totalGameDay = 1;
     m_storedWaterBottles.clear();
     m_storedCookingKits.clear();
     m_portableLights.clear();
@@ -145,6 +191,11 @@ void SceneNarakuProto::InitializeNewProgress()
     m_equippedHeadArmor = ArmorTier::Leather;
     m_equippedBodyArmor = ArmorTier::Leather;
     m_equippedWeapon = WeaponTier::RustyPickaxe;
+    m_itemCountsById.clear();
+    m_ownedEquipmentIds = {"armor.leather.head", "armor.leather.body", "weapon.pickaxe.rusty"};
+    m_equippedHeadId = "armor.leather.head";
+    m_equippedBodyId = "armor.leather.body";
+    m_equippedWeaponId = "weapon.pickaxe.rusty";
     m_nextRelicAcquisitionOrder = 1;
     m_uniqueRelicReturned = false;
     m_uniqueRelicCodexUnlocked = false;
@@ -253,9 +304,46 @@ bool SceneNarakuProto::SaveProgress()
     stream << "rationFullnessWard=" << m_rationFullnessWardTimer << '\n';
     stream << "rationHydrationPenalty=" << m_rationHydrationPenaltyTimer << '\n';
     stream << "unknownWeaponCooldown=" << m_unknownWeaponCooldownTimer << '\n';
+    stream << "totalGameDay=" << m_totalGameDay << '\n';
+    stream << "elapsedGameDays=" << m_elapsedGameDays << '\n';
+    stream << "activeMeal=" << static_cast<int>(m_activeMeal) << '\n';
+    stream << "mealBuffRemaining=" << m_mealBuffRemainingSeconds << '\n';
     stream << "equippedHead=" << static_cast<int>(m_equippedHeadArmor) << '\n';
     stream << "equippedBody=" << static_cast<int>(m_equippedBodyArmor) << '\n';
     stream << "equippedWeapon=" << static_cast<int>(m_equippedWeapon) << '\n';
+    static constexpr std::array<const char*, static_cast<std::size_t>(ArmorTier::Count)> kHeadIds = {
+        "armor.leather.head", "armor.iron.head", "armor.relic_covered.head", "armor.relic_hardened.head",
+        "armor.relic_enhanced.head", "armor.relic.head", "armor.unknown.head", "none"};
+    static constexpr std::array<const char*, static_cast<std::size_t>(ArmorTier::Count)> kBodyIds = {
+        "armor.leather.body", "armor.iron.body", "armor.relic_covered.body", "armor.relic_hardened.body",
+        "armor.relic_enhanced.body", "armor.relic.body", "armor.unknown.body", "none"};
+    static constexpr std::array<const char*, static_cast<std::size_t>(WeaponTier::Count)> kWeaponIds = {
+        "weapon.pickaxe.rusty", "weapon.pickaxe.normal", "weapon.pickaxe.sturdy", "weapon.pickaxe.sharp",
+        "weapon.pickaxe.relic", "weapon.unknown", "none"};
+    stream << "equippedHeadId=" << kHeadIds[static_cast<std::size_t>(m_equippedHeadArmor)] << '\n';
+    stream << "equippedBodyId=" << kBodyIds[static_cast<std::size_t>(m_equippedBodyArmor)] << '\n';
+    stream << "equippedWeaponId=" << kWeaponIds[static_cast<std::size_t>(m_equippedWeapon)] << '\n';
+    stream << "ownedEquipmentIds=";
+    bool wroteEquipmentId = false;
+    for (std::size_t i = 0; i < m_ownedHeadArmor.size(); ++i) if (m_ownedHeadArmor[i])
+    { if (wroteEquipmentId) stream << ','; stream << kHeadIds[i]; wroteEquipmentId = true; }
+    for (std::size_t i = 0; i < m_ownedBodyArmor.size(); ++i) if (m_ownedBodyArmor[i])
+    { if (wroteEquipmentId) stream << ','; stream << kBodyIds[i]; wroteEquipmentId = true; }
+    for (std::size_t i = 0; i < m_ownedWeapons.size(); ++i) if (m_ownedWeapons[i])
+    { if (wroteEquipmentId) stream << ','; stream << kWeaponIds[i]; wroteEquipmentId = true; }
+    stream << '\n';
+    stream << "itemCounts="
+        << "item.food=" << m_storedFoodCount << ','
+        << "item.food.heated=" << m_storedHeatedFoodCount << ','
+        << "item.ration.one=" << m_storedRationOneCount << ','
+        << "item.fish.unknown.raw=" << m_storedRawFishCount << ','
+        << "item.fish.unknown.cooked=" << m_storedCookedFishCount << ','
+        << "item.cartridge=" << m_storedCartridgeCount;
+    for (std::size_t i = 0; i < m_storedRawSizedFish.size(); ++i)
+        stream << ",item.fish." << i << ".raw=" << m_storedRawSizedFish[i];
+    for (std::size_t i = 0; i < m_storedCookedSizedFish.size(); ++i)
+        stream << ",item.fish." << i << ".cooked=" << m_storedCookedSizedFish[i];
+    stream << '\n';
     stream << "nextOrder=" << m_nextRelicAcquisitionOrder << '\n';
     stream << "uniqueReturned=" << (m_uniqueRelicReturned ? 1 : 0) << '\n';
     stream << "uniqueCodex=" << (m_uniqueRelicCodexUnlocked ? 1 : 0) << '\n';
@@ -351,7 +439,8 @@ bool SceneNarakuProto::SaveProgress()
             << quest.targetEnemyType << '|' << quest.targetAreaIndex << '|'
             << quest.targetX << '|' << quest.targetZ << '|' << quest.targetLayerDepth << '|' << quest.remainingSeconds << '|'
             << quest.cooldownSeconds << '|' << quest.acceptedAcquisitionOrder << '|'
-            << (quest.targetPositionReady ? 1 : 0) << '|' << (quest.targetInteracted ? 1 : 0) << '\n';
+            << (quest.targetPositionReady ? 1 : 0) << '|' << (quest.targetInteracted ? 1 : 0) << '|'
+            << (quest.specialReward ? 1 : 0) << '\n';
     }
     stream << "importantQuestCount=" << m_importantQuests.size() << '\n';
     for (std::size_t index = 0; index < m_importantQuests.size(); ++index)
@@ -374,7 +463,7 @@ bool SceneNarakuProto::SaveProgress()
     verifyBuffer << verify.rdbuf();
     const std::string saved = verifyBuffer.str();
     if (!verify.good() && !verify.eof()) return false;
-    if (saved.find("NARAKU_PROTO_SAVE\nversion=11\n") != 0 ||
+    if (saved.find("NARAKU_PROTO_SAVE\nversion=" + std::to_string(kSaveVersion) + "\n") != 0 ||
         saved.find("\nmoney=") == std::string::npos || saved.find("\nlevel=") == std::string::npos ||
         saved.find("\nexp=") == std::string::npos || saved.find("\nfullness=") == std::string::npos ||
         saved.find("\nhydration=") == std::string::npos || saved.find("\nrelicCount=") == std::string::npos ||
@@ -472,7 +561,10 @@ bool SceneNarakuProto::ValidateProgressLoadData(ProgressLoadData& data, int& out
          !values.count("deathRecoveryCartridges") || !values.count("storedRawSizedFish") || !values.count("loadoutRawSizedFish") ||
          !values.count("storedCookedSizedFish") || !values.count("loadoutCookedSizedFish") || !values.count("deathRecoveryRawSizedFish") ||
          !values.count("deathRecoveryCookedSizedFish") || !values.count("rationFullnessWard") || !values.count("rationHydrationPenalty") ||
-         !values.count("unknownWeaponCooldown") || !values.count("portableLightCount")))
+         !values.count("unknownWeaponCooldown") || !values.count("portableLightCount") ||
+         !values.count("totalGameDay") || !values.count("elapsedGameDays") || !values.count("activeMeal") ||
+         !values.count("mealBuffRemaining") || !values.count("equippedHeadId") || !values.count("equippedBodyId") ||
+         !values.count("equippedWeaponId") || !values.count("ownedEquipmentIds") || !values.count("itemCounts")))
         return false;
     return true;
 }
@@ -519,6 +611,19 @@ void SceneNarakuProto::ApplyProgressScalarValues(ProgressLoadData& data, int ver
         m_rationHydrationPenaltyTimer = std::max(0.0f, std::stof(values["rationHydrationPenalty"]));
     if (values.count("unknownWeaponCooldown"))
         m_unknownWeaponCooldownTimer = std::max(0.0f, std::stof(values["unknownWeaponCooldown"]));
+    m_elapsedGameDays = values.count("elapsedGameDays") ? std::stoull(values["elapsedGameDays"]) :
+        static_cast<std::uint64_t>(std::floor(std::max(0.0, std::stod(values["gameWeekSeconds"])) / kGameDaySeconds));
+    m_totalGameDay = values.count("totalGameDay") ? std::max(1, std::min(9999, std::stoi(values["totalGameDay"]))) :
+        static_cast<int>(std::min<std::uint64_t>(9999, m_elapsedGameDays + 1));
+    if (values.count("activeMeal"))
+    {
+        const int meal = std::stoi(values["activeMeal"]);
+        m_activeMeal = meal >= 0 && meal < static_cast<int>(MealId::Count) ? static_cast<MealId>(meal) : MealId::None;
+    }
+    else m_activeMeal = MealId::None;
+    m_mealBuffRemainingSeconds = values.count("mealBuffRemaining") ?
+        std::max(0.0f, std::stof(values["mealBuffRemaining"])) : 0.0f;
+    if (m_mealBuffRemainingSeconds <= 0.0f) m_activeMeal = MealId::None;
     if (values.count("equippedHead"))
     {
         int equipped = std::stoi(values["equippedHead"]);
@@ -551,7 +656,14 @@ void SceneNarakuProto::ApplyProgressScalarValues(ProgressLoadData& data, int ver
     if (values.count("uniqueStory"))
         m_uniqueRelicStoryUnlocked = std::stoi(values["uniqueStory"]) != 0;
     {
-        m_adventurerRank = static_cast<AdventurerRank>(std::max(0, std::min(static_cast<int>(AdventurerRank::Count) - 1, std::stoi(values["rank"]))));
+        int savedRank = std::stoi(values["rank"]);
+        if (version == kPreviousSaveVersion)
+        {
+            if (savedRank == 2) savedRank = static_cast<int>(AdventurerRank::Black);
+            else if (savedRank == 3) savedRank = static_cast<int>(AdventurerRank::Purple);
+        }
+        m_adventurerRank = static_cast<AdventurerRank>(
+            std::max(0, std::min(static_cast<int>(AdventurerRank::Count) - 1, savedRank)));
         m_maxReachedDepth = std::max(1, std::min(5, std::stoi(values["maxReachedDepth"])));
         m_questDebt = std::max(0, std::stoi(values["questDebt"]));
         m_gameWeekSeconds = std::max(0.0, std::min(kGameWeekSeconds, std::stod(values["gameWeekSeconds"])));
@@ -621,6 +733,83 @@ void SceneNarakuProto::ApplyProgressCollections(ProgressLoadData& data, int vers
     readArray("ownedBody", m_ownedBodyArmor);
     readArray("ownedWeapon", m_ownedWeapons);
     readArray("loadoutRelics", m_loadoutRelics);
+    static constexpr std::array<const char*, static_cast<std::size_t>(ArmorTier::Count)> kHeadIds = {
+        "armor.leather.head", "armor.iron.head", "armor.relic_covered.head", "armor.relic_hardened.head",
+        "armor.relic_enhanced.head", "armor.relic.head", "armor.unknown.head", "none"};
+    static constexpr std::array<const char*, static_cast<std::size_t>(ArmorTier::Count)> kBodyIds = {
+        "armor.leather.body", "armor.iron.body", "armor.relic_covered.body", "armor.relic_hardened.body",
+        "armor.relic_enhanced.body", "armor.relic.body", "armor.unknown.body", "none"};
+    static constexpr std::array<const char*, static_cast<std::size_t>(WeaponTier::Count)> kWeaponIds = {
+        "weapon.pickaxe.rusty", "weapon.pickaxe.normal", "weapon.pickaxe.sturdy", "weapon.pickaxe.sharp",
+        "weapon.pickaxe.relic", "weapon.unknown", "none"};
+    auto findId = [](const auto& ids, const std::string& value) -> int
+    {
+        for (std::size_t i = 0; i < ids.size(); ++i) if (value == ids[i]) return static_cast<int>(i);
+        return -1;
+    };
+    m_itemCountsById.clear();
+    m_ownedEquipmentIds.clear();
+    if (version == kSaveVersion)
+    {
+        std::istringstream itemInput(values["itemCounts"]);
+        std::string entry;
+        while (std::getline(itemInput, entry, ','))
+        {
+            const std::size_t separator = entry.rfind('=');
+            if (separator == std::string::npos) throw std::runtime_error("invalid item id record");
+            m_itemCountsById[entry.substr(0, separator)] = std::max(0, std::stoi(entry.substr(separator + 1)));
+        }
+        auto itemCount = [this](const std::string& id)
+        { const auto found = m_itemCountsById.find(id); return found == m_itemCountsById.end() ? 0 : found->second; };
+        m_storedFoodCount = itemCount("item.food");
+        m_storedHeatedFoodCount = itemCount("item.food.heated");
+        m_storedRationOneCount = itemCount("item.ration.one");
+        m_storedRawFishCount = itemCount("item.fish.unknown.raw");
+        m_storedCookedFishCount = itemCount("item.fish.unknown.cooked");
+        m_storedCartridgeCount = itemCount("item.cartridge");
+        for (std::size_t i = 0; i < m_storedRawSizedFish.size(); ++i)
+        {
+            m_storedRawSizedFish[i] = itemCount("item.fish." + std::to_string(i) + ".raw");
+            m_storedCookedSizedFish[i] = itemCount("item.fish." + std::to_string(i) + ".cooked");
+        }
+        std::istringstream equipmentInput(values["ownedEquipmentIds"]);
+        while (std::getline(equipmentInput, entry, ',')) if (!entry.empty()) m_ownedEquipmentIds.insert(entry);
+        m_ownedHeadArmor.fill(false); m_ownedBodyArmor.fill(false); m_ownedWeapons.fill(false);
+        for (const std::string& id : m_ownedEquipmentIds)
+        {
+            int index = findId(kHeadIds, id); if (index >= 0) m_ownedHeadArmor[static_cast<std::size_t>(index)] = true;
+            index = findId(kBodyIds, id); if (index >= 0) m_ownedBodyArmor[static_cast<std::size_t>(index)] = true;
+            index = findId(kWeaponIds, id); if (index >= 0) m_ownedWeapons[static_cast<std::size_t>(index)] = true;
+        }
+        const int head = findId(kHeadIds, values["equippedHeadId"]);
+        const int body = findId(kBodyIds, values["equippedBodyId"]);
+        const int weapon = findId(kWeaponIds, values["equippedWeaponId"]);
+        if (head < 0 || body < 0 || weapon < 0) throw std::runtime_error("unknown equipped item id");
+        m_equippedHeadArmor = static_cast<ArmorTier>(head);
+        m_equippedBodyArmor = static_cast<ArmorTier>(body);
+        m_equippedWeapon = static_cast<WeaponTier>(weapon);
+        m_equippedHeadId = values["equippedHeadId"];
+        m_equippedBodyId = values["equippedBodyId"];
+        m_equippedWeaponId = values["equippedWeaponId"];
+    }
+    else
+    {
+        for (std::size_t i = 0; i < m_ownedHeadArmor.size(); ++i) if (m_ownedHeadArmor[i]) m_ownedEquipmentIds.insert(kHeadIds[i]);
+        for (std::size_t i = 0; i < m_ownedBodyArmor.size(); ++i) if (m_ownedBodyArmor[i]) m_ownedEquipmentIds.insert(kBodyIds[i]);
+        for (std::size_t i = 0; i < m_ownedWeapons.size(); ++i) if (m_ownedWeapons[i]) m_ownedEquipmentIds.insert(kWeaponIds[i]);
+        m_equippedHeadId = kHeadIds[static_cast<std::size_t>(m_equippedHeadArmor)];
+        m_equippedBodyId = kBodyIds[static_cast<std::size_t>(m_equippedBodyArmor)];
+        m_equippedWeaponId = kWeaponIds[static_cast<std::size_t>(m_equippedWeapon)];
+        m_itemCountsById = {
+            {"item.food", m_storedFoodCount}, {"item.food.heated", m_storedHeatedFoodCount},
+            {"item.ration.one", m_storedRationOneCount}, {"item.fish.unknown.raw", m_storedRawFishCount},
+            {"item.fish.unknown.cooked", m_storedCookedFishCount}, {"item.cartridge", m_storedCartridgeCount}};
+        for (std::size_t i = 0; i < m_storedRawSizedFish.size(); ++i)
+        {
+            m_itemCountsById["item.fish." + std::to_string(i) + ".raw"] = m_storedRawSizedFish[i];
+            m_itemCountsById["item.fish." + std::to_string(i) + ".cooked"] = m_storedCookedSizedFish[i];
+        }
+    }
     if (version >= 10)
     {
         readArray("storedRawSizedFish", m_storedRawSizedFish);
@@ -629,6 +818,14 @@ void SceneNarakuProto::ApplyProgressCollections(ProgressLoadData& data, int vers
         readArray("loadoutCookedSizedFish", m_loadoutCookedSizedFish);
         readArray("deathRecoveryRawSizedFish", m_pendingDeathRecoveryRawSizedFish);
         readArray("deathRecoveryCookedSizedFish", m_pendingDeathRecoveryCookedSizedFish);
+    }
+    if (version == kPreviousSaveVersion)
+    {
+        for (std::size_t i = 0; i < m_storedRawSizedFish.size(); ++i)
+        {
+            m_itemCountsById["item.fish." + std::to_string(i) + ".raw"] = m_storedRawSizedFish[i];
+            m_itemCountsById["item.fish." + std::to_string(i) + ".cooked"] = m_storedCookedSizedFish[i];
+        }
     }
     readArray("directGateUses", m_directGateWeeklyUses);
     readArray("directGateTargets", m_directGateTargetAreas);
@@ -849,7 +1046,7 @@ void SceneNarakuProto::ApplyProgressQuests(ProgressLoadData& data, int version)
         std::vector<std::string> parts;
         while (std::getline(input, part, '|'))
             parts.push_back(part);
-        if (parts.size() != 20)
+        if (parts.size() != (version == kSaveVersion ? 21u : 20u))
             throw std::runtime_error("invalid quest record");
         QuestRecord quest;
         quest.id = std::stoull(parts[0]);
@@ -876,6 +1073,7 @@ void SceneNarakuProto::ApplyProgressQuests(ProgressLoadData& data, int version)
         quest.acceptedAcquisitionOrder = std::stoull(parts[17]);
         quest.targetPositionReady = std::stoi(parts[18]) != 0;
         quest.targetInteracted = std::stoi(parts[19]) != 0;
+        quest.specialReward = version == kSaveVersion && std::stoi(parts[20]) != 0;
         m_quests.push_back(quest);
     }
     if (static_cast<std::size_t>(std::stoull(values["questCount"])) != m_quests.size())
@@ -951,7 +1149,7 @@ bool SceneNarakuProto::LoadProgress()
         ApplyProgressScalarValues(data, version);
         ApplyProgressCollections(data, version);
         ApplyProgressQuests(data, version);
-        if (version == kSaveVersion && !m_weekResetPending) LoadWeeklyWorld();
+        if (version >= kPreviousSaveVersion && !m_weekResetPending) LoadWeeklyWorld();
     }
     catch (...)
     {
@@ -970,6 +1168,23 @@ void SceneNarakuProto::ClampDebugPlayerParams()
     m_debugPlayerParams.runCostPerSecond = std::max(0.0f, m_debugPlayerParams.runCostPerSecond);
     m_debugPlayerParams.ropeCostPerSecond = std::max(0.0f, m_debugPlayerParams.ropeCostPerSecond);
     m_debugPlayerParams.attackCost = std::max(0.0f, m_debugPlayerParams.attackCost);
+    m_debugPlayerParams.attackStartup = std::max(0.0f, m_debugPlayerParams.attackStartup);
+    m_debugPlayerParams.attackActive = std::max(0.01f, m_debugPlayerParams.attackActive);
+    m_debugPlayerParams.attackRecovery = std::max(0.0f, m_debugPlayerParams.attackRecovery);
+    m_debugPlayerParams.attackRange = std::max(0.05f, m_debugPlayerParams.attackRange);
+    m_debugPlayerParams.attackHalfAngleDegrees = std::max(1.0f, std::min(180.0f, m_debugPlayerParams.attackHalfAngleDegrees));
+    m_debugPlayerParams.attackSwingAngleDegrees = std::max(0.0f, std::min(180.0f, m_debugPlayerParams.attackSwingAngleDegrees));
+    m_debugPlayerParams.showCharacterCollision = m_debugPlayerParams.showCharacterCollision >= 0.5f ? 1.0f : 0.0f;
+    m_debugPlayerParams.showAttackCollision = m_debugPlayerParams.showAttackCollision >= 0.5f ? 1.0f : 0.0f;
+    const auto clampColor = [](DirectX::XMFLOAT4& color)
+    {
+        color.x = std::max(0.0f, std::min(1.0f, color.x));
+        color.y = std::max(0.0f, std::min(1.0f, color.y));
+        color.z = std::max(0.0f, std::min(1.0f, color.z));
+        color.w = std::max(0.0f, std::min(1.0f, color.w));
+    };
+    clampColor(m_debugPlayerParams.characterCollisionColor);
+    clampColor(m_debugPlayerParams.attackCollisionColor);
     m_debugPlayerParams.miningCost = std::max(0.0f, m_debugPlayerParams.miningCost);
     m_debugPlayerParams.stepCost = std::max(0.0f, m_debugPlayerParams.stepCost);
     m_debugPlayerParams.jumpCost = std::max(0.0f, m_debugPlayerParams.jumpCost);

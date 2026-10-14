@@ -15,8 +15,8 @@ const char* SceneNarakuProto::GetRankName(AdventurerRank rank) const
     {
     case AdventurerRank::Red: return u8"赤印";
     case AdventurerRank::Blue: return u8"青印";
-    case AdventurerRank::Black: return u8"黒印";
     case AdventurerRank::Purple: return u8"紫印";
+    case AdventurerRank::Black: return u8"黒印";
     default: return u8"不明";
     }
 }
@@ -50,15 +50,15 @@ std::string SceneNarakuProto::GetQuestDescription(const QuestRecord& quest) cons
     switch (quest.type)
     {
     case QuestType::LostProperty: text << u8"現地に落ちている依頼品を回収する。"; break;
-    case QuestType::RequestedRelic: text << GetRelicTypeName(static_cast<RelicType>(quest.targetRelicType)) << u8"を1個譲渡する。"; break;
+    case QuestType::RequestedRelic: text << GetRelicTypeName(static_cast<RelicType>(quest.targetRelicType)) << u8"を" << quest.targetCount << u8"個譲渡する。"; break;
     case QuestType::Hunt: text << (quest.targetEnemyType == static_cast<int>(EnemyType::Territory) ? u8"縄張り型" : u8"突進型") << u8"を" << quest.targetCount << u8"体討伐する。"; break;
     case QuestType::EnemySurvey: text << u8"敵を" << quest.targetCount << u8"体発見する。"; break;
     case QuestType::MiningSurvey: text << u8"採掘地点を" << quest.targetCount << u8"箇所発見する。"; break;
     case QuestType::UpgradePlan: text << u8"受注後に強化素材を" << quest.targetCount << u8"個持ち帰る。"; break;
-    case QuestType::ValuableRelics: text << u8"換金用遺物（高）を3個譲渡する。"; break;
-    case QuestType::SmallThings: text << u8"換金用遺物（低）を10個譲渡する。"; break;
+    case QuestType::ValuableRelics: text << u8"換金用遺物（高）を" << quest.targetCount << u8"個譲渡する。"; break;
+    case QuestType::SmallThings: text << u8"換金用遺物（低）を" << quest.targetCount << u8"個譲渡する。"; break;
     case QuestType::Rescue: text << u8"食料" << 3 * quest.targetDepth << u8"個と水" << 20 * quest.targetDepth << u8"を届ける。"; break;
-    case QuestType::ScrapCollection: text << u8"壊れた遺物を5個譲渡する。"; break;
+    case QuestType::ScrapCollection: text << u8"壊れた遺物を" << quest.targetCount << u8"個譲渡する。"; break;
     default: break;
     }
     return text.str();
@@ -70,8 +70,11 @@ void SceneNarakuProto::EnsureQuestBoard()
     return;
 #endif
     if (m_weekSeed == 0) m_weekSeed = 1;
-    if (m_quests.size() < kQuestBoardSize) m_quests.resize(kQuestBoardSize);
-    for (std::size_t index = 0; index < kQuestBoardSize; ++index)
+    static constexpr std::array<std::size_t, 4> kDevelopmentSlotBonus = {0, 2, 4, 6};
+    const std::size_t desiredSize = kQuestBoardSize +
+        kDevelopmentSlotBonus[static_cast<std::size_t>(GetTownDevelopmentStage())];
+    if (m_quests.size() < desiredSize) m_quests.resize(desiredSize);
+    for (std::size_t index = 0; index < desiredSize; ++index)
         if (m_quests[index].id == 0) GenerateQuestForSlot(index);
     if (m_selectedQuest >= static_cast<int>(m_quests.size())) m_selectedQuest = 0;
 }
@@ -113,6 +116,20 @@ void SceneNarakuProto::GenerateQuestForSlot(std::size_t slotIndex)
     case QuestType::Rescue: quest.reward = interpolate(1000, 3000); quest.remainingSeconds = interpolate(60, 300) * 60.0; break;
     case QuestType::ScrapCollection: quest.reward = 100 * quest.targetDepth; quest.remainingSeconds = 30.0 * 60.0; quest.targetCount = 5; break;
     default: break;
+    }
+    static constexpr std::array<int, 4> kSpecialQuestChance = {0, 10, 30, 50};
+    const int developmentStage = GetTownDevelopmentStage();
+    if (quest.type != QuestType::Rescue && range(1, 100) <=
+        kSpecialQuestChance[static_cast<std::size_t>(developmentStage)])
+    {
+        quest.specialReward = true;
+        const bool scalesRequiredCount = quest.type == QuestType::RequestedRelic ||
+            quest.type == QuestType::Hunt || quest.type == QuestType::UpgradePlan ||
+            quest.type == QuestType::ValuableRelics || quest.type == QuestType::SmallThings ||
+            quest.type == QuestType::ScrapCollection;
+        if (scalesRequiredCount)
+            quest.targetCount = static_cast<int>(std::ceil(static_cast<double>(quest.targetCount) * 1.5));
+        quest.reward = static_cast<int>(std::ceil(static_cast<double>(quest.reward) * 1.25));
     }
     std::vector<int> candidates;
     for (int area = 0; area < static_cast<int>(m_areas.size()); ++area)
@@ -165,7 +182,14 @@ void SceneNarakuProto::UpdateWorldClockAndQuests(float dt)
     }
     const double worldDelta = dt * kGameTimeScale * (m_mode == Mode::Explore
         ? kWorldTimeDepthMultipliers[static_cast<std::size_t>(GetCurrentDepth() - 1)] : 1.0);
+    if (m_mode == Mode::Explore) UpdateMealBuff(dt);
     UpdateFishingPointRecharge(worldDelta);
+    const double previousWeekSeconds = m_gameWeekSeconds;
+    const std::uint64_t crossedDays = static_cast<std::uint64_t>(
+        std::floor((previousWeekSeconds + worldDelta) / kGameDaySeconds) -
+        std::floor(previousWeekSeconds / kGameDaySeconds));
+    m_elapsedGameDays += crossedDays;
+    m_totalGameDay = static_cast<int>(std::min<std::uint64_t>(9999, m_elapsedGameDays + 1));
     m_gameWeekSeconds += worldDelta;
     while (m_gameWeekSeconds >= kGameWeekSeconds)
     {
@@ -198,10 +222,10 @@ bool SceneNarakuProto::ConsumeStoredRelicsForQuest(const QuestRecord& quest)
     int required = 0;
     int type = quest.targetRelicType;
     bool brokenOnly = false;
-    if (quest.type == QuestType::RequestedRelic) required = 1;
-    else if (quest.type == QuestType::ValuableRelics) required = 3;
-    else if (quest.type == QuestType::SmallThings) required = 10;
-    else if (quest.type == QuestType::ScrapCollection) { required = 5; brokenOnly = true; }
+    if (quest.type == QuestType::RequestedRelic) required = quest.targetCount;
+    else if (quest.type == QuestType::ValuableRelics) required = quest.targetCount;
+    else if (quest.type == QuestType::SmallThings) required = quest.targetCount;
+    else if (quest.type == QuestType::ScrapCollection) { required = quest.targetCount; brokenOnly = true; }
     else return true;
     auto matches = [type, brokenOnly](const RelicItem& item)
     { return brokenOnly ? item.broken : static_cast<int>(item.type) == type; };
@@ -641,7 +665,7 @@ int SceneNarakuProto::GetPromotionQuestMaterialReward(std::size_t questIndex) co
 
 const char* SceneNarakuProto::GetPromotionQuestName(std::size_t questIndex) const
 {
-    static constexpr const char* values[] = { u8"昇格試験！-青-", u8"昇格試験！-黒-", u8"昇格試験！-紫-" };
+    static constexpr const char* values[] = { u8"昇格試験！-青-", u8"昇格試験！-紫-", u8"昇格試験！-黒-" };
     return questIndex < m_promotionQuests.size() ? values[questIndex] : u8"不明";
 }
 
@@ -866,7 +890,9 @@ void SceneNarakuProto::DrawQuestDesk()
                 {
                     const QuestRecord& quest = m_quests[index];
                     std::ostringstream label;
-                    label << GetQuestName(quest.type) << "##quest" << index;
+                    label << GetQuestName(quest.type);
+                    if (quest.specialReward) label << u8"（報酬上昇中）";
+                    label << "##quest" << index;
                     if (ImGui::Selectable(label.str().c_str(), m_selectedQuest == static_cast<int>(index))) m_selectedQuest = static_cast<int>(index);
                     const char* status = quest.status == QuestStatus::Available ? u8"募集中" : quest.status == QuestStatus::Active ? u8"受注中" :
                         quest.status == QuestStatus::Complete ? u8"報告可" : u8"更新待ち";
@@ -878,7 +904,7 @@ void SceneNarakuProto::DrawQuestDesk()
                 if (!m_quests.empty())
                 {
                     QuestRecord& quest = m_quests[static_cast<std::size_t>(std::max(0, std::min(m_selectedQuest, static_cast<int>(m_quests.size()) - 1)))];
-                    ImGui::Text(u8"%s", GetQuestName(quest.type));
+                    ImGui::Text(u8"%s%s", GetQuestName(quest.type), quest.specialReward ? u8"（報酬上昇中）" : "");
                     ImGui::Separator();
                     ImGui::TextWrapped(u8"%s", GetQuestDescription(quest).c_str());
                     ImGui::Text(u8"進捗: %d / %d", quest.progress, quest.targetCount);

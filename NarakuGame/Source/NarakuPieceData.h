@@ -467,6 +467,17 @@ namespace NarakuPiece
     /** @brief 指定サイズの初期小ステージデータを作成します。 */
     PieceData CreateDefaultPiece(SizePreset preset = SizePreset::Size16x16);
 
+    /** @brief 境界セルと境界頂点から四辺のカテゴリを自動算出します。 */
+    EdgeCategories CalculateEdgeCategories(const PieceData& data);
+
+    /** @brief 指定辺の境界頂点における最大高さと最小高さの差を返します。 */
+    float GetEdgeHeightRange(const PieceData& data, Direction edge);
+
+    /** @brief 接続する二辺の頂点列を逆順で比較し、許容高低差3未満ならtrueを返します。 */
+    bool AreOpposingEdgeHeightsCompatible(
+        const PieceData& first, Direction firstEdge,
+        const PieceData& second, Direction secondEdge);
+
     /** @brief 小ステージデータを検証し、問題一覧を返します。 */
     std::vector<ValidationIssue> ValidatePieceData(const PieceData& data);
 

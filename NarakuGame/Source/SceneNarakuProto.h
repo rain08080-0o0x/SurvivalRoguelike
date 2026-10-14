@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Scene.h"
+#include "NarakuCombatData.h"
 #include "NarakuMapData.h"
 #include "NarakuPieceData.h"
 #include "SceneNarakuInputSettings.h"
@@ -15,6 +16,7 @@
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class Texture;
@@ -130,8 +132,27 @@ private:
         /** @brief 攻撃行動の残り時間です。0より大きい間は攻撃中です。 */
         float attackTimer = 0.0f;
 
-        /** @brief 横振り攻撃の向きです。攻撃を開始するたびに反転します。 */
-        bool attackSwingReverse = false;
+        /** @brief 現在再生中の通常攻撃段階です。0、1が左右薙ぎ、2が振り下ろしです。 */
+        int activeAttackStep = 0;
+
+        /** @brief 次に開始する通常攻撃段階です。三段目の次は一段目へ戻ります。 */
+        int nextAttackStep = 0;
+
+        /** @brief 攻撃終了後に次段を受け付ける残り時間です。 */
+        float attackComboWindowTimer = 0.0f;
+
+        /** @brief 現在攻撃中に次段の入力を一回だけ予約しているかどうかです。 */
+        bool attackInputBuffered = false;
+
+        /** @brief 現在の攻撃開始時に固定した攻撃方向です。 */
+        Vec2 attackFacing = { 0.0f, 1.0f };
+
+        /** @brief 予約した次段で使用する攻撃方向です。 */
+        Vec2 bufferedAttackFacing = { 0.0f, 1.0f };
+
+        std::string activeAttackId;
+        float attackFrame = 0.0f;
+        bool attackConnected = false;
 
         /** @brief ステップ行動の残り時間です。無敵時間と後硬直の合計を入れています。 */
         float stepTimer = 0.0f;
@@ -255,6 +276,39 @@ private:
 
     enum class FishSize { Small, Medium, Large, Count };
 
+public:
+    enum class MealId
+    {
+        None,
+        FillingMeal,
+        SpicyCurry,
+        DeepMushroom,
+        MountainSalad,
+        ChefChoice,
+        FreshFish,
+        BaseSalad,
+        HeartySet,
+        FieldPaste,
+        Count,
+    };
+
+    struct MealDefinition
+    {
+        MealId id = MealId::None;
+        const char* name = "";
+        int price = 0;
+        int requiredDevelopment = 0;
+        float recoveryRatio = 0.0f;
+        float attack = 0.0f;
+        float defense = 0.0f;
+        float movement = 0.0f;
+        float mining = 0.0f;
+        float staminaCostReduction = 0.0f;
+        int durationDays = 0;
+    };
+
+private:
+
     enum class ArmorTier
     {
         Leather,
@@ -284,8 +338,8 @@ private:
     {
         Red,
         Blue,
-        Black,
         Purple,
+        Black,
         Count
     };
 
@@ -389,6 +443,7 @@ private:
         std::uint64_t acceptedAcquisitionOrder = 0;
         bool targetPositionReady = false;
         bool targetInteracted = false;
+        bool specialReward = false;
     };
 
     /** @brief 所持、地面置き、鑑定、売却対象になる遺物です。 */
@@ -798,6 +853,36 @@ public:
         /** @brief 攻撃1回のスタミナ消費です。 */
         float attackCost = 10.0f;
 
+        /** @brief 攻撃入力から判定発生までの秒数です。 */
+        float attackStartup = 0.25f;
+
+        /** @brief 攻撃判定が有効になる秒数です。 */
+        float attackActive = 0.15f;
+
+        /** @brief 攻撃判定後の硬直秒数です。 */
+        float attackRecovery = 0.40f;
+
+        /** @brief 通常攻撃の射程です。 */
+        float attackRange = 1.15f;
+
+        /** @brief 通常攻撃の左右それぞれの判定角度です。 */
+        float attackHalfAngleDegrees = 30.0f;
+
+        /** @brief つるはし表示が左右へ振れる角度です。 */
+        float attackSwingAngleDegrees = 75.0f;
+
+        /** @brief キャラクター当たり判定を表示するかを0または1で保持します。 */
+        float showCharacterCollision = 1.0f;
+
+        /** @brief 通常攻撃判定を表示するかを0または1で保持します。 */
+        float showAttackCollision = 1.0f;
+
+        /** @brief キャラクター当たり判定線の色です。 */
+        DirectX::XMFLOAT4 characterCollisionColor = { 0.55f, 1.0f, 0.10f, 1.0f };
+
+        /** @brief 通常攻撃判定線の色です。 */
+        DirectX::XMFLOAT4 attackCollisionColor = { 1.0f, 0.05f, 0.05f, 1.0f };
+
         /** @brief 採掘1回のスタミナ消費です。 */
         float miningCost = 7.0f;
 
@@ -958,6 +1043,15 @@ private:
      * @details メニューへ遷移したフレームでは更新せず、従来と同じモード判定順を維持します。
      */
     void UpdatePortableLightForActiveMode();
+
+    /** @brief 親層変更時の深度表示アニメーションを更新します。 */
+    void UpdateDepthDirectionAnimation(float dt);
+
+    /** @brief 移動先深度のスプライトシートを読み込み、深度表示を開始します。 */
+    void BeginDepthDirectionAnimation(int destinationDepth);
+
+    /** @brief 再生中の深度表示テクスチャを解放し、再生状態を終了します。 */
+    void EndDepthDirectionAnimation();
 
     /**
      * @brief 探索モード中の全更新を既定順序で呼び出します。
@@ -1501,6 +1595,9 @@ private:
      * @details DrawScreenFade の責務を呼び出し元から分離し、既存の判定順と状態反映順を維持します。
      */
     void DrawScreenFade() const;
+
+    /** @brief 親層変更時の深度表示アニメーションを画面中央へ描画します。 */
+    void DrawDepthDirectionAnimation() const;
     /**
      * @brief CompleteLayerTransition が担当する処理を現在状態へ反映します。
      * @details CompleteLayerTransition の責務を呼び出し元から分離し、既存の判定順と状態反映順を維持します。
@@ -1548,6 +1645,24 @@ private:
 
     /** @brief 左クリックで攻撃を開始できるか判定して開始します。 */
     void TryStartAttack();
+
+    /** @brief 指定方向へ現在の次段攻撃を開始し、消費と遺物処理を適用します。 */
+    bool StartAttackStep(const Vec2& attackFacing);
+
+    /** @brief 指定した攻撃段階の発生前時間を返します。 */
+    float GetAttackStartupForStep(int attackStep) const;
+
+    /** @brief 指定した攻撃段階の判定時間を返します。 */
+    float GetAttackActiveForStep(int attackStep) const;
+
+    /** @brief 指定した攻撃段階の後硬直時間を返します。 */
+    float GetAttackRecoveryForStep(int attackStep) const;
+
+    /** @brief 指定した攻撃段階の全体時間を返します。 */
+    float GetAttackTotalForStep(int attackStep) const;
+
+    /** @brief 攻撃段階、入力予約、継続猶予を一段目の待機状態へ戻します。 */
+    void ResetAttackCombo();
 
     /** @brief マウスカーソル位置から地面ワールド座標と攻撃向きを計算・更新します。 */
     void UpdateAimDirectionFromMouse();
@@ -1807,6 +1922,8 @@ private:
         const DirectX::XMFLOAT4X4& view,
         const DirectX::XMFLOAT4X4& projection,
         const DirectX::XMFLOAT3& playerCenter);
+    /** @brief プレイヤー・敵の身体判定と通常攻撃範囲を線で描画します。 */
+    void DrawCombatDebugGeometry3D(const DirectX::XMFLOAT3& playerCenter) const;
     /** @brief カメラ方向に追従する方位コンパスを画面右上へ描画します。 */
     void DrawCompass() const;
     /** @brief 探索中の右ドラッグ入力から軌道カメラの角度を更新します。 */
@@ -2344,6 +2461,15 @@ private:
      * @return 処理を成立させた場合はtrueです。
      */
     bool TryUseRestaurant();
+    bool TryUseMeal(const MealDefinition& meal);
+    int GetTownDevelopmentStage() const;
+    const char* GetMealName(MealId id) const;
+    float GetMealAttackMultiplier() const;
+    float GetMealDefenseMultiplier() const;
+    float GetMealMovementMultiplier() const;
+    float GetMealMiningMultiplier() const;
+    float GetMealStaminaCostMultiplier() const;
+    void UpdateMealBuff(float realSeconds);
     /**
      * @brief TryUseSecondBaseMeal の成立条件を確認し、成立した処理だけを反映します。
      * @details TryUseSecondBaseMeal の責務を呼び出し元から分離し、既存の判定順と状態反映順を維持します。
@@ -2541,7 +2667,7 @@ private:
      * @param baseCost 計算または判定に使用する値です。
      * @return 現在状態と引数から算出した値を返します。
      */
-    float GetStaminaCost(float baseCost) const;
+    float GetStaminaCost(float baseCost, bool applyStandardReduction = true) const;
 
     /**
      * @brief GetDepthLevelStaminaConsumptionMultiplier に必要な値を現在状態から算出して返します。
@@ -2573,13 +2699,13 @@ private:
      * @param baseCost 計算または判定に使用する値です。
      * @return 条件を満たす場合はtrueです。
      */
-    bool CanSpendStamina(float baseCost) const;
+    bool CanSpendStamina(float baseCost, bool applyStandardReduction = true) const;
 
     /**
      * @brief 指定した基礎消費量を各補正込みで実際に消費します。
      * @param baseCost 計算または判定に使用する値です。
      */
-    void SpendStamina(float baseCost);
+    void SpendStamina(float baseCost, bool applyStandardReduction = true);
 
     /**
      * @brief GetEquipmentBonus に必要な値を現在状態から算出して返します。
@@ -2964,7 +3090,7 @@ private:
      * @param found found に指定する処理条件または対象値です。
      * @return 現在状態と引数から算出した値を返します。
      */
-    Vec2 FindEnemySpawnPoint(float minimumPlayerDistance, bool requireTerritory, bool* found) const;
+    Vec2 FindEnemySpawnPoint(float minimumPlayerDistance, bool requireTerritory, bool allowSpawnBlocked, bool* found) const;
     /**
      * @brief HasTerritoryTreeDensity の条件を現在状態から判定します。
      * @details HasTerritoryTreeDensity の責務を呼び出し元から分離し、既存の判定順と状態反映順を維持します。
@@ -3354,6 +3480,8 @@ private:
 private:
     /** @brief 現在のプレイヤー状態です。 */
     PlayerState m_player;
+    NarakuCombat::Catalog m_combatCatalog;
+    std::string m_combatDataError;
 
     /** @brief 現在所持している旧器一覧です。 */
     std::vector<RelicItem> m_inventory;
@@ -3571,6 +3699,8 @@ private:
     int m_pendingDeathLevelAfter = 1;
     int m_pendingDeathProtectionConsumed = 0;
     double m_gameWeekSeconds = 0.0;
+    int m_totalGameDay = 1;
+    std::uint64_t m_elapsedGameDays = 0;
     std::uint64_t m_weekSeed = 1;
     std::uint64_t m_nextQuestId = 1;
     std::vector<QuestRecord> m_quests;
@@ -3614,6 +3744,8 @@ private:
     float m_upperLoadFifthTimer = 0.0f;
     float m_upperLoadFifthDamageRatio = 0.0f;
     float m_upperLoadFifthDamageCooldown = 0.0f;
+    float m_upperLoadAscentRemainder = 0.0f;
+    bool m_upperLoadRecovering = true;
     float m_miningSenseTimer = 0.0f;
     DeathCause m_pendingDeathCause = DeathCause::Other;
     bool m_attackRelicTriggered = false;
@@ -3624,6 +3756,17 @@ private:
     float m_unknownWeaponChargeTimer = 0.0f;
     float m_unknownWeaponCooldownTimer = 0.0f;
     bool m_unknownWeaponFiredThisHold = false;
+    MealId m_activeMeal = MealId::None;
+    float m_mealBuffRemainingSeconds = 0.0f;
+
+    /** @brief IDを基準に保存するスタックアイテム数です。 */
+    std::unordered_map<std::string, int> m_itemCountsById;
+
+    /** @brief IDを基準に保存する所有装備です。 */
+    std::unordered_set<std::string> m_ownedEquipmentIds;
+    std::string m_equippedHeadId;
+    std::string m_equippedBodyId;
+    std::string m_equippedWeaponId;
     float m_cookingTimer = 0.0f;
     float m_cookingPreviousHp = 0.0f;
     CookingTarget m_cookingTarget = CookingTarget::None;
@@ -3799,6 +3942,18 @@ private:
 
     /** @brief ジャンプ開始地点で再生するスプライトシートです。 */
     Texture* m_jumpEffectTexture = nullptr;
+
+    /** @brief 現在再生している移動先深度の左右分割スプライトシートです。 */
+    std::array<Texture*, 2> m_depthDirectionTextures = {};
+
+    /** @brief 深度表示アニメーションの通常速度換算経過秒です。 */
+    float m_depthDirectionElapsed = 0.0f;
+
+    /** @brief 決定入力後、残りの深度表示を2倍速で進めるかどうかです。 */
+    bool m_depthDirectionAccelerated = false;
+
+    /** @brief 親層変更時の深度表示を再生中かどうかです。 */
+    bool m_depthDirectionActive = false;
 
     /** @brief キャラクタースプライトの共通アニメーション経過時間です。 */
     float m_characterAnimationTime = 0.0f;

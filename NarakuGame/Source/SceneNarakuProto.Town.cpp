@@ -9,6 +9,54 @@
 
 using namespace SceneNarakuProtoImplementation;
 
+namespace
+{
+    constexpr SceneNarakuProto::MealDefinition kGroundMeals[] =
+    {
+        { SceneNarakuProto::MealId::FillingMeal, u8"まんぷく飯", 100, 0, 1.00f, 0, 0, 0, 0, 0, 0 },
+        { SceneNarakuProto::MealId::SpicyCurry, u8"激辛カレー", 200, 1, 0.30f, .10f, 0, 0, 0, 0, 5 },
+        { SceneNarakuProto::MealId::DeepMushroom, u8"深層キノコの和え物", 300, 2, .30f, 0, .10f, 0, 0, 0, 5 },
+        { SceneNarakuProto::MealId::MountainSalad, u8"山菜サラダ", 400, 2, .25f, 0, 0, .20f, .20f, 0, 4 },
+        { SceneNarakuProto::MealId::ChefChoice, u8"おまかせセット", 500, 3, .20f, .08f, .08f, 0, 0, 0, 3 },
+    };
+    constexpr SceneNarakuProto::MealDefinition kSecondMeals[] =
+    {
+        { SceneNarakuProto::MealId::FreshFish, u8"フレッシュフィッシュ", 100, 1, .30f, .10f, .10f, 0, 0, 0, 4 },
+        { SceneNarakuProto::MealId::BaseSalad, u8"サラダ", 200, 2, .30f, 0, 0, .30f, 0, 0, 4 },
+        { SceneNarakuProto::MealId::HeartySet, u8"がっつり定食", 300, 3, .30f, .25f, .25f, .25f, 0, 0, 3 },
+    };
+    constexpr SceneNarakuProto::MealDefinition kForwardMeals[] =
+    {
+        { SceneNarakuProto::MealId::FieldPaste, u8"行動食とペースト食", 100, 3, .50f, .50f, .50f, .50f, 0, .50f, 3 },
+    };
+}
+
+bool SceneNarakuProto::TryUseMeal(const MealDefinition& meal)
+{
+    if (m_money < meal.price)
+    {
+        ShowCenterNotification(u8"所持金が足りません。");
+        return false;
+    }
+    m_money -= meal.price;
+    m_player.hp = std::min(GetMaxHp(), m_player.hp + GetMaxHp() * meal.recoveryRatio);
+    m_player.mental = std::min(GetMaxMental(), m_player.mental + GetMaxMental() * meal.recoveryRatio);
+    m_fullness = std::min(kFullnessMaximum, m_fullness + kFullnessMaximum * meal.recoveryRatio);
+    m_hydration = std::min(kHydrationMaximum, m_hydration + kHydrationMaximum * meal.recoveryRatio);
+    m_activeMeal = meal.durationDays > 0 ? meal.id : MealId::None;
+    m_mealBuffRemainingSeconds = static_cast<float>(meal.durationDays * 30 * 60);
+    SaveProgress();
+    ShowCenterNotification(std::string(meal.name) + u8"を食べました。");
+    return true;
+}
+
+void SceneNarakuProto::UpdateMealBuff(float realSeconds)
+{
+    if (m_activeMeal == MealId::None || m_mealBuffRemainingSeconds <= 0.0f) return;
+    m_mealBuffRemainingSeconds = std::max(0.0f, m_mealBuffRemainingSeconds - std::max(0.0f, realSeconds));
+    if (m_mealBuffRemainingSeconds <= 0.0f) m_activeMeal = MealId::None;
+}
+
 void SceneNarakuProto::DrawInventory()
 {
     // 所持品ウィンドウの初期位置を指定します。
@@ -658,7 +706,11 @@ void SceneNarakuProto::DrawTownRightPane()
 
     ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), u8"【日時】");
     ImGui::SameLine();
-    ImGui::Text(u8"%s曜日 %02d:%02d", kWeekdayNames[day], hour, minute);
+    ImGui::Text(u8"%d日目 %s曜日 %02d:%02d", m_totalGameDay, kWeekdayNames[day], hour, minute);
+    ImGui::Text(u8"町発展段階: %d", GetTownDevelopmentStage());
+    if (m_activeMeal != MealId::None && m_mealBuffRemainingSeconds > 0.0f)
+        ImGui::Text(u8"食事バフ: %s（残り %.1f日）", GetMealName(m_activeMeal),
+            m_mealBuffRemainingSeconds / (30.0f * 60.0f));
     if (m_weekResetPending)
     {
         ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), u8"※次回潜行時に新しい週へ更新されます");
@@ -1596,8 +1648,22 @@ void SceneNarakuProto::DrawRestaurant()
     {
         ImGui::Text(u8"所持金: %d G", m_money);
         ImGui::Separator();
-        ImGui::TextWrapped(u8"50Gで満腹度を100にし、水分75、最大HPの75%%、最大精神力の50%%を回復します。");
-        if (ImGui::Button(u8"食事をする（50G）", ImVec2(180.0f, 0.0f))) TryUseRestaurant();
+        const int development = GetTownDevelopmentStage();
+        ImGui::Text(u8"町発展段階: %d", development);
+        for (const MealDefinition& meal : kGroundMeals)
+        {
+            if (meal.requiredDevelopment > development) continue;
+            ImGui::PushID(static_cast<int>(meal.id));
+            ImGui::Text(u8"%s  %dG / HP・精神力・満腹度・水分 %.0f%%回復",
+                meal.name, meal.price, meal.recoveryRatio * 100.0f);
+            if (meal.durationDays > 0)
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled(u8"%d日間バフ", meal.durationDays);
+            }
+            if (ImGui::Button(u8"注文する", ImVec2(180.0f, 0.0f))) TryUseMeal(meal);
+            ImGui::PopID();
+        }
         ImGui::Separator();
         ImGui::Text(u8"給水所（無料）");
         if (m_hydration < kHydrationMaximum && ImGui::Button(u8"安全な水を直接飲む（水分+25）"))
@@ -1719,6 +1785,7 @@ void SceneNarakuProto::AdvanceWorldTime(double gameSeconds, double realSeconds)
     UpdateRespawns(static_cast<float>(realSeconds));
     UpdateMiningRespawns(static_cast<float>(realSeconds));
     UpdateFishingPointRecharge(gameSeconds);
+    UpdateMealBuff(static_cast<float>(realSeconds));
 
     for (std::size_t index = 0; index < m_quests.size(); ++index)
     {
@@ -1740,6 +1807,12 @@ void SceneNarakuProto::AdvanceWorldTime(double gameSeconds, double realSeconds)
         }
     }
 
+    const double previousWeekSeconds = m_gameWeekSeconds;
+    const std::uint64_t crossedDays = static_cast<std::uint64_t>(
+        std::floor((previousWeekSeconds + gameSeconds) / kGameDaySeconds) -
+        std::floor(previousWeekSeconds / kGameDaySeconds));
+    m_elapsedGameDays += crossedDays;
+    m_totalGameDay = static_cast<int>(std::min<std::uint64_t>(9999, m_elapsedGameDays + 1));
     m_gameWeekSeconds += gameSeconds;
     while (m_gameWeekSeconds >= kGameWeekSeconds)
     {
@@ -1813,8 +1886,16 @@ void SceneNarakuProto::DrawSecondBase()
         {
         if (ImGui::BeginTabItem(u8"食事"))
         {
-            ImGui::TextWrapped(u8"地上と同じ食事を100Gで提供します。");
-            if (ImGui::Button(u8"食事をする（100G）")) TryUseSecondBaseMeal();
+            const int development = GetTownDevelopmentStage();
+            for (const MealDefinition& meal : kSecondMeals)
+            {
+                if (meal.requiredDevelopment > development) continue;
+                ImGui::PushID(static_cast<int>(meal.id));
+                ImGui::Text(u8"%s  %dG / %.0f%%回復 / %d日間", meal.name, meal.price,
+                    meal.recoveryRatio * 100.0f, meal.durationDays);
+                if (ImGui::Button(u8"注文する")) TryUseMeal(meal);
+                ImGui::PopID();
+            }
             ImGui::Separator();
             ImGui::Text(u8"携帯食料 20G / 個");
             if (ImGui::Button(u8"携帯食料を1個買う") && m_money >= kFoodPrice * 2)
@@ -2119,8 +2200,16 @@ void SceneNarakuProto::DrawForwardBase()
         }
         if (ImGui::BeginTabItem(u8"レストラン"))
         {
-            ImGui::TextWrapped(u8"200Gで最大HPと満腹度の80%%分を回復します。精神力は回復しません。");
-            if (ImGui::Button(u8"食事をする（200G）")) TryUseForwardBaseMeal();
+            const int development = GetTownDevelopmentStage();
+            for (const MealDefinition& meal : kForwardMeals)
+            {
+                if (meal.requiredDevelopment > development) continue;
+                ImGui::PushID(static_cast<int>(meal.id));
+                ImGui::Text(u8"%s  %dG / %.0f%%回復 / %d日間", meal.name, meal.price,
+                    meal.recoveryRatio * 100.0f, meal.durationDays);
+                if (ImGui::Button(u8"注文する")) TryUseMeal(meal);
+                ImGui::PopID();
+            }
             ImGui::Separator();
             if (ImGui::Button(u8"安全な水を直接飲む（水分+25）"))
             { DrinkWater(kWaterDrinkAmount, WaterQuality::Safe, 0.0f); SaveProgress(); }
@@ -2144,20 +2233,20 @@ void SceneNarakuProto::DrawAbyssEntrance()
     if (ImGui::Button(u8"通常潜行：第一層 上層", ImVec2(260.0f, 0.0f))) StartDive(1);
 
     const int secondFee = 500 + 250 * m_directGateWeeklyUses[0];
-    ImGui::BeginDisabled(static_cast<int>(m_adventurerRank) < static_cast<int>(AdventurerRank::Black));
+    ImGui::BeginDisabled(static_cast<int>(m_adventurerRank) < static_cast<int>(AdventurerRank::Purple));
     if (ImGui::Button(u8"第二層 上層へ直通", ImVec2(260.0f, 0.0f))) StartDive(2);
     ImGui::SameLine(); ImGui::Text(u8"%dG（今週%d回利用）", secondFee, m_directGateWeeklyUses[0]);
     ImGui::EndDisabled();
-    if (static_cast<int>(m_adventurerRank) < static_cast<int>(AdventurerRank::Black))
-        ImGui::TextDisabled(u8"黒印以上で解放");
+    if (static_cast<int>(m_adventurerRank) < static_cast<int>(AdventurerRank::Purple))
+        ImGui::TextDisabled(u8"紫印以上で解放");
 
     const int thirdFee = 2000 + 250 * m_directGateWeeklyUses[1];
-    ImGui::BeginDisabled(static_cast<int>(m_adventurerRank) < static_cast<int>(AdventurerRank::Purple));
+    ImGui::BeginDisabled(static_cast<int>(m_adventurerRank) < static_cast<int>(AdventurerRank::Black));
     if (ImGui::Button(u8"第三層 上層へ直通", ImVec2(260.0f, 0.0f))) StartDive(3);
     ImGui::SameLine(); ImGui::Text(u8"%dG（今週%d回利用）", thirdFee, m_directGateWeeklyUses[1]);
     ImGui::EndDisabled();
-    if (static_cast<int>(m_adventurerRank) < static_cast<int>(AdventurerRank::Purple))
-        ImGui::TextDisabled(u8"紫印以上で解放");
+    if (static_cast<int>(m_adventurerRank) < static_cast<int>(AdventurerRank::Black))
+        ImGui::TextDisabled(u8"黒印以上で解放");
 
     ImGui::Separator();
     if (NarakuUi::BackButton(u8"地上へ戻る", ImVec2(140.0f, 0.0f))) m_mode = Mode::Surface;
