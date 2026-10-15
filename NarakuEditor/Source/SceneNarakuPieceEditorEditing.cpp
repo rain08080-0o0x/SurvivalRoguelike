@@ -80,7 +80,7 @@ XMFLOAT3 SceneNarakuPieceEditor::GetVertexWorldPosition(int x, int z) const
     const float offsetZ = (static_cast<float>(m_piece.gridDepth - 1) * m_piece.cellSize) * 0.5f;
     return
     {
-        offsetX - static_cast<float>(x) * m_piece.cellSize,
+        static_cast<float>(x) * m_piece.cellSize - offsetX,
         GetHeight(x, z),
         static_cast<float>(z) * m_piece.cellSize - offsetZ
     };

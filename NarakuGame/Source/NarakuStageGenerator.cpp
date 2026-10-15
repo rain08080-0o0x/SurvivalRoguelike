@@ -177,6 +177,18 @@ namespace
         return blockedCount;
     }
 
+    bool AreConnectionCategoriesCompatible(
+        NarakuPiece::StageCategory first,
+        NarakuPiece::StageCategory second)
+    {
+        if (first == second) return true;
+        const bool firstIsPlain = first == NarakuPiece::StageCategory::PlainLow ||
+            first == NarakuPiece::StageCategory::PlainHigh;
+        const bool secondIsPlain = second == NarakuPiece::StageCategory::PlainLow ||
+            second == NarakuPiece::StageCategory::PlainHigh;
+        return firstIsPlain && secondIsPlain;
+    }
+
     bool ClassifyPlacementCategory(
         const LoadedPiece& piece,
         PlacementCategory& outCategory,
@@ -468,8 +480,9 @@ namespace
                 setReason("North edge is Blocked (forbidden for inner connection)");
                 return false;
             }
-            if (northPlacement != nullptr &&
-                northPlacement->piece->data.edgeCategories.south != candidate.data.edgeCategories.north)
+            if (northPlacement != nullptr && !AreConnectionCategoriesCompatible(
+                northPlacement->piece->data.edgeCategories.south,
+                candidate.data.edgeCategories.north))
             {
                 setReason("North edge category (" + std::string(NarakuPiece::ToString(candidate.data.edgeCategories.north)) +
                           ") does not match North neighbor's South edge category (" +
@@ -519,8 +532,9 @@ namespace
                 setReason("West edge is Blocked (forbidden for inner connection)");
                 return false;
             }
-            if (westPlacement != nullptr &&
-                westPlacement->piece->data.edgeCategories.east != candidate.data.edgeCategories.west)
+            if (westPlacement != nullptr && !AreConnectionCategoriesCompatible(
+                westPlacement->piece->data.edgeCategories.east,
+                candidate.data.edgeCategories.west))
             {
                 setReason("West edge category (" + std::string(NarakuPiece::ToString(candidate.data.edgeCategories.west)) +
                           ") does not match West neighbor's East edge category (" +
@@ -581,8 +595,9 @@ namespace
                 setReason("North edge is Blocked (forbidden for inner connection)");
                 return false;
             }
-            if (northPlacement != nullptr &&
-                northPlacement->piece->data.edgeCategories.south != candidate.data.edgeCategories.north)
+            if (northPlacement != nullptr && !AreConnectionCategoriesCompatible(
+                northPlacement->piece->data.edgeCategories.south,
+                candidate.data.edgeCategories.north))
             {
                 setReason("North inner edge category does not match");
                 return false;
@@ -608,8 +623,9 @@ namespace
                 setReason("West edge is Blocked (forbidden for inner connection)");
                 return false;
             }
-            if (westPlacement != nullptr &&
-                westPlacement->piece->data.edgeCategories.east != candidate.data.edgeCategories.west)
+            if (westPlacement != nullptr && !AreConnectionCategoriesCompatible(
+                westPlacement->piece->data.edgeCategories.east,
+                candidate.data.edgeCategories.west))
             {
                 setReason("West inner edge category does not match");
                 return false;

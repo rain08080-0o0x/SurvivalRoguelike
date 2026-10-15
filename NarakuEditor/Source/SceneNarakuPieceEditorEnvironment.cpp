@@ -1022,7 +1022,7 @@ void SceneNarakuPieceEditor::DrawEnvironmentObjects3D() const
         XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(
             XMMatrixTranslation(-asset.previewAnchor.x, -asset.previewAnchor.y, -asset.previewAnchor.z) *
             XMMatrixScaling(object.scaleX, object.scaleY, object.scaleZ) *
-            XMMatrixRotationY(-XM_PIDIV2 * static_cast<float>(object.rotationQuarterTurns)) *
+            XMMatrixRotationY(XM_PIDIV2 * static_cast<float>(object.rotationQuarterTurns)) *
             XMMatrixTranslation(center.x, center.y, center.z)));
         XMStoreFloat4x4(&wvp[1], XMMatrixTranspose(XMLoadFloat4x4(&m_viewMatrix)));
         XMStoreFloat4x4(&wvp[2], XMMatrixTranspose(XMLoadFloat4x4(&m_projectionMatrix)));

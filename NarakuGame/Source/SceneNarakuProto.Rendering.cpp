@@ -357,7 +357,7 @@ SceneNarakuProto::Vec2 SceneNarakuProto::GetCameraForward() const
 SceneNarakuProto::Vec2 SceneNarakuProto::GetCameraRight() const
 {
     const Vec2 forward = GetCameraForward();
-    return Normalize({ forward.y, -forward.x });
+    return Normalize({ -forward.y, forward.x });
 }
 
 void SceneNarakuProto::ReleaseEnvironmentModels()

@@ -372,7 +372,7 @@ void SceneNarakuPieceEditor::DrawBasePreview3D() const
         XMMatrixTranslation(-resource.placementAnchor.x, -resource.placementAnchor.y, -resource.placementAnchor.z) *
         XMMatrixScaling(modelScale, modelScale, modelScale) *
         XMMatrixTranslation(
-            center.x - m_piece.baseModelOffsetX,
+            center.x + m_piece.baseModelOffsetX,
             center.y + m_piece.baseModelOffsetY,
             center.z + m_piece.baseModelOffsetZ)));
     XMStoreFloat4x4(&wvp[1], XMMatrixTranspose(XMLoadFloat4x4(&m_viewMatrix)));
@@ -583,8 +583,8 @@ void SceneNarakuPieceEditor::DrawPreviewCompass() const
     {
         { 0.0f, 0.0f, -1.0f },
         { 0.0f, 0.0f, 1.0f },
-        { -1.0f, 0.0f, 0.0f },
         { 1.0f, 0.0f, 0.0f },
+        { -1.0f, 0.0f, 0.0f },
     };
 
     // 対象コレクションの各要素を順に処理します。
@@ -1096,7 +1096,7 @@ void SceneNarakuPieceEditor::DrawTerrainPreview3D() const
                 m_cameraTarget.z + std::cos(m_cameraYaw) * cosPitch * m_cameraDistance
             };
 
-            const float posX = center.x - m_piece.surfaceFacility.offsetX;
+            const float posX = center.x + m_piece.surfaceFacility.offsetX;
             const float posY = center.y + m_piece.surfaceFacility.offsetY;
             const float posZ = center.z + m_piece.surfaceFacility.offsetZ;
 
@@ -1104,7 +1104,7 @@ void SceneNarakuPieceEditor::DrawTerrainPreview3D() const
             XMStoreFloat4x4(&wvp[0], XMMatrixTranspose(
                 XMMatrixTranslation(-placementAnchor.x, -placementAnchor.y, -placementAnchor.z) *
                 XMMatrixScaling(m_piece.surfaceFacility.scaleX, m_piece.surfaceFacility.scaleY, m_piece.surfaceFacility.scaleZ) *
-                XMMatrixRotationY(-DirectX::XM_PIDIV2 * static_cast<float>(m_piece.surfaceFacility.rotationQuarterTurns)) *
+                XMMatrixRotationY(DirectX::XM_PIDIV2 * static_cast<float>(m_piece.surfaceFacility.rotationQuarterTurns)) *
                 XMMatrixTranslation(posX, posY, posZ)));
             XMStoreFloat4x4(&wvp[1], XMMatrixTranspose(XMLoadFloat4x4(&m_viewMatrix)));
             XMStoreFloat4x4(&wvp[2], XMMatrixTranspose(XMLoadFloat4x4(&m_projectionMatrix)));
@@ -1134,8 +1134,8 @@ void SceneNarakuPieceEditor::DrawTerrainPreview3D() const
         XMFLOAT3 dir = { 0.0f, 0.0f, 1.0f }; // デフォルトSouth
         if (m_piece.surfaceFacility.facing == NarakuPiece::Direction::North) dir = { 0.0f, 0.0f, -1.0f };
         else if (m_piece.surfaceFacility.facing == NarakuPiece::Direction::South) dir = { 0.0f, 0.0f, 1.0f };
-        else if (m_piece.surfaceFacility.facing == NarakuPiece::Direction::East) dir = { -1.0f, 0.0f, 0.0f };
-        else if (m_piece.surfaceFacility.facing == NarakuPiece::Direction::West) dir = { 1.0f, 0.0f, 0.0f };
+        else if (m_piece.surfaceFacility.facing == NarakuPiece::Direction::East) dir = { 1.0f, 0.0f, 0.0f };
+        else if (m_piece.surfaceFacility.facing == NarakuPiece::Direction::West) dir = { -1.0f, 0.0f, 0.0f };
 
         const float arrowY = center.y + 0.15f;
         const XMFLOAT3 arrowStart = { center.x, arrowY, center.z };

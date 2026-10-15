@@ -417,6 +417,7 @@ bool SceneNarakuProto::BuildDiveStructure()
 {
     constexpr int stageCount = 15;
     constexpr int maximumGatesPerArea = 4;
+    constexpr int maximumGatesPerBaseArea = 3;
     constexpr int maximumAttempts = 2000;
 
     const EditorPreviewConfiguration preview = LoadEditorPreviewConfiguration();
@@ -539,7 +540,11 @@ bool SceneNarakuProto::BuildDiveStructure()
         for (int areaIndex = 0; areaIndex < static_cast<int>(m_areas.size()); ++areaIndex)
         {
             const AreaState& area = m_areas[areaIndex];
-            if (area.plannedGates.empty() || static_cast<int>(area.plannedGates.size()) > maximumGatesPerArea)
+            const bool isSecondBaseArea = area.depth == 2 && area.sublayer == 1 && area.areaNumber == 2;
+            const bool isForwardBaseArea = area.depth == 5 && area.sublayer == 2 && area.areaNumber == 2;
+            const int maximumGates = isSecondBaseArea || isForwardBaseArea
+                ? maximumGatesPerBaseArea : maximumGatesPerArea;
+            if (area.plannedGates.empty() || static_cast<int>(area.plannedGates.size()) > maximumGates)
             { failed = true; break; }
             const bool hasEntry = std::any_of(area.plannedGates.begin(), area.plannedGates.end(),
                 [](const PlannedLayerGate& gate) { return gate.isEntry; });

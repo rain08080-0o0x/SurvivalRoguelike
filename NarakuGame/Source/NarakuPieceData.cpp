@@ -1135,6 +1135,40 @@ namespace NarakuPiece
             return result;
         }
 
+        std::vector<const CellData*> GetEdgeCells(const PieceData& data, Direction edge)
+        {
+            std::vector<const CellData*> result;
+            const int cellWidth = std::max(0, data.gridWidth - 1);
+            const int cellDepth = std::max(0, data.gridDepth - 1);
+            if (cellWidth <= 0 || cellDepth <= 0 ||
+                data.cells.size() != static_cast<std::size_t>(cellWidth * cellDepth))
+            {
+                return result;
+            }
+
+            if (edge == Direction::North || edge == Direction::South)
+            {
+                const int z = edge == Direction::North ? 0 : cellDepth - 1;
+                for (int x = 0; x < cellWidth; ++x)
+                    result.push_back(&data.cells[static_cast<std::size_t>(z * cellWidth + x)]);
+            }
+            else
+            {
+                const int x = edge == Direction::West ? 0 : cellWidth - 1;
+                for (int z = 0; z < cellDepth; ++z)
+                    result.push_back(&data.cells[static_cast<std::size_t>(z * cellWidth + x)]);
+            }
+            return result;
+        }
+
+        bool IsComparableEdgeCell(const CellData& first, const CellData& second)
+        {
+            const bool bothWalkable = !first.deleted && first.walkable && !second.deleted && second.walkable;
+            const bool bothWater = !first.deleted && first.waterDepth != WaterDepth::None &&
+                !second.deleted && second.waterDepth != WaterDepth::None;
+            return bothWalkable || bothWater;
+        }
+
         StageCategory CalculateEdgeCategory(const PieceData& data, Direction edge)
         {
             const int cellWidth = std::max(0, data.gridWidth - 1);
@@ -1194,11 +1228,25 @@ namespace NarakuPiece
     {
         const std::vector<float> firstHeights = GetEdgeHeights(first, firstEdge);
         const std::vector<float> secondHeights = GetEdgeHeights(second, secondEdge);
+        const std::vector<const CellData*> firstCells = GetEdgeCells(first, firstEdge);
+        const std::vector<const CellData*> secondCells = GetEdgeCells(second, secondEdge);
         if (firstHeights.size() != secondHeights.size() || firstHeights.empty()) return false;
+        if (firstCells.size() != secondCells.size() || firstCells.size() + 1 != firstHeights.size()) return false;
+
+        bool comparedAnyVertex = false;
         for (std::size_t index = 0; index < firstHeights.size(); ++index)
-            if (std::fabs(firstHeights[index] - secondHeights[secondHeights.size() - 1 - index]) >= 3.0f)
+        {
+            const bool previousCellComparable = index > 0 &&
+                IsComparableEdgeCell(*firstCells[index - 1], *secondCells[index - 1]);
+            const bool nextCellComparable = index < firstCells.size() &&
+                IsComparableEdgeCell(*firstCells[index], *secondCells[index]);
+            if (!previousCellComparable && !nextCellComparable) continue;
+
+            comparedAnyVertex = true;
+            if (std::fabs(firstHeights[index] - secondHeights[index]) >= 3.0f)
                 return false;
-        return true;
+        }
+        return comparedAnyVertex;
     }
 
     std::vector<ValidationIssue> ValidatePieceData(const PieceData& data)
