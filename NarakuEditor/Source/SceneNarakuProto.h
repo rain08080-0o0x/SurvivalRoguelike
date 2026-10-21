@@ -2151,9 +2151,8 @@ private:
     /** @brief プレイテスト用のプレイヤー調整UIを描画します。 */
     void DrawDebugPlayerTuning();
 
-#if defined(_DEBUG) && !defined(NARAKU_EDITOR_BUILD)
     /**
-     * @brief Debug版ゲームで指定した生成計画上のエリアへ直接移動します。
+     * @brief プレイテストで指定した生成計画上のエリアへ直接移動します。
      * @param depth 判定または処理対象の深度です。
      * @param sublayer sublayer に指定する処理条件または対象値です。
      * @param areaNumber areaNumber に指定する処理条件または対象値です。
@@ -2161,6 +2160,7 @@ private:
      */
     bool DebugWarpToArea(int depth, int sublayer, int areaNumber);
 
+#if defined(_DEBUG) && !defined(NARAKU_EDITOR_BUILD)
     /**
      * @brief 実時間系タイマーを進めず、現在以後の指定ゲーム内日時へ進めます。
      * @param weekday weekday に指定する処理条件または対象値です。

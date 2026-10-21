@@ -2555,6 +2555,7 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
         ImGui::TextDisabled(u8"敵・採掘復活と依頼期限の実時間タイマーは進みません。");
         if (ImGui::Button(u8"指定日時へ進める"))
             DebugAdvanceGameDate(debugWeekday, debugHour, debugMinute);
+#endif
 
         ImGui::SeparatorText(u8"エリアワープ");
         static int warpDepth = 1;
@@ -2575,7 +2576,6 @@ void SceneNarakuProto::DrawDebugPlayerTuning()
         if (maximumAreaNumber <= 0) ImGui::TextDisabled(u8"該当するエリアがありません。");
         if (maximumAreaNumber > 0 && ImGui::Button(u8"指定エリアへワープ"))
             DebugWarpToArea(warpDepth, warpSublayer, warpAreaNumber);
-#endif
     }
     ImGui::Separator();
 
@@ -2679,6 +2679,7 @@ void SceneNarakuProto::DebugAdvanceGameDate(int weekday, int hour, int minute)
     else ShowCenterNotification(u8"ゲーム内日時を変更しました。");
     SaveProgress();
 }
+#endif
 
 bool SceneNarakuProto::DebugWarpToArea(int depth, int sublayer, int areaNumber)
 {
@@ -2757,6 +2758,5 @@ bool SceneNarakuProto::DebugWarpToArea(int depth, int sublayer, int areaNumber)
     ShowCenterNotification(message.str());
     return true;
 }
-#endif
 
 #endif
