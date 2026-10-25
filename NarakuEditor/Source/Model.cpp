@@ -515,7 +515,7 @@ Model::AnimeNo Model::AddAnimation(const char* file)
 	if (m_loadFlip == Flip::XFlip)  flag |= aiProcess_MakeLeftHanded;
 
 	// assimpで読み込み
-	const aiScene* pScene = importer.ReadFile(file, flag);
+	const aiScene* pScene = ReadAssimpSceneFromPath(importer, file, flag);
 	if (!pScene)
 	{
 #ifdef _DEBUG
@@ -540,6 +540,11 @@ Model::AnimeNo Model::AddAnimation(const char* file)
 
 	// アニメーション設定
 	float animeFrame = static_cast<float>(assimpAnime->mTicksPerSecond);
+	if (animeFrame <= 0.0f || assimpAnime->mDuration <= 0.0)
+	{
+		m_animes.pop_back();
+		return ANIME_NONE;
+	}
 	anime.totalTime = static_cast<float>(assimpAnime->mDuration )/ animeFrame;
 	anime.channels.resize(assimpAnime->mNumChannels);
 	Channels::iterator channelIt = anime.channels.begin();
@@ -590,6 +595,11 @@ Model::AnimeNo Model::AddAnimation(const char* file)
 				DirectX::XMVectorSet(key.mValue.x, key.mValue.y, key.mValue.z, 0.0f)));
 		}
 
+		if (keys[0].empty() || keys[1].empty() || keys[2].empty())
+		{
+			++channelIt;
+			continue;
+		}
 		// 各タイムラインの先頭の参照を設定
 		XMVectorKeys::iterator it[] = {keys[0].begin(), keys[1].begin(), keys[2].begin()};
 		for (int i = 0; i < 3; ++i)
@@ -600,13 +610,13 @@ Model::AnimeNo Model::AddAnimation(const char* file)
 		}
 
 		// 各要素ごとのタイムラインではなく、すべての変換を含めたタイムラインの作成
-		while (it[0] != keys[0].end() && it[1] != keys[1].end() && it[2] != keys[2].end())
+		while (timeline.empty() || it[0] != keys[0].end() || it[1] != keys[1].end() || it[2] != keys[2].end())
 		{
 			// 現状の参照位置で一番小さい時間を取得
-			float time = anime.totalTime;
+			float time = timeline.empty() ? 0.0f : anime.totalTime;
 			for (int i = 0; i < 3; ++i)
 			{
-				if (it[i] != keys[i].end())
+				if (!timeline.empty() && it[i] != keys[i].end())
 				{
 					time = std::min(it[i]->first, time);
 				}
@@ -617,9 +627,10 @@ Model::AnimeNo Model::AddAnimation(const char* file)
 			for (int i = 0; i < 3; ++i)
 			{
 				// 先頭のキーより小さい時間であれば、先頭の値を設定
-				if (time < keys[i].begin()->first)
+				if (time <= keys[i].begin()->first)
 				{
 					result[i] = keys[i].begin()->second;
+					if (it[i] != keys[i].end() && it[i]->first <= time) ++it[i];
 				}
 				// 最終キーより大きい時間であれば、最終の値を設定
 				else if (keys[i].rbegin()->first <= time)
@@ -640,7 +651,9 @@ Model::AnimeNo Model::AddAnimation(const char* file)
 					XMVectorKeys::iterator prev = it[i];
 					--prev;
 					float rate = (time - prev->first) / (it[i]->first - prev->first);
-					result[i] = DirectX::XMVectorLerp(prev->second, it[i]->second, rate);
+					result[i] = i == 1
+						? DirectX::XMQuaternionSlerp(prev->second, it[i]->second, rate)
+						: DirectX::XMVectorLerp(prev->second, it[i]->second, rate);
 				}
 			}
 
@@ -832,11 +845,7 @@ void Model::SetAnimationTime(AnimeNo no, float time)
 
 	// 再生時間変更
 	Animation& anime = m_animes[no];
-	anime.nowTime = time;
-	while (anime.nowTime >= anime.totalTime)
-	{
-		anime.nowTime -= anime.totalTime;
-	}
+	anime.nowTime = (std::max)(0.0f, (std::min)(time, anime.totalTime));
 }
 
 /*
@@ -937,7 +946,7 @@ void Model::MakeBoneNodes(const void* ptr)
 	{
 		DirectX::XMMATRIX transform = GetMatrixFromAssimpMatrix(assimpNode->mTransformation);
 		std::string name = assimpNode->mName.data;
-		if (name.find("$AssimpFbx") != std::string::npos)
+		if (name.find("$AssimpFbx") != std::string::npos && assimpNode->mNumChildren == 1)
 		{
 			mat = transform * mat;
 			return FuncAssimpNodeConvert(assimpNode->mChildren[0], parent, mat);
@@ -949,7 +958,12 @@ void Model::MakeBoneNodes(const void* ptr)
 			node.name = assimpNode->mName.data;
 			node.parent = parent;
 			node.children.resize(assimpNode->mNumChildren);
-			node.mat = mat;
+			node.mat = transform * mat;
+			DirectX::XMVECTOR scale, rotation, translation;
+			DirectX::XMMatrixDecompose(&scale, &rotation, &translation, node.mat);
+			DirectX::XMStoreFloat3(&node.bindTransform.scale, scale);
+			DirectX::XMStoreFloat4(&node.bindTransform.quaternion, rotation);
+			DirectX::XMStoreFloat3(&node.bindTransform.translate, translation);
 
 			// ノードリストに追加
 			m_nodes.push_back(node);
@@ -978,6 +992,8 @@ void Model::MakeBoneNodes(const void* ptr)
 	for (int i = 0; i < MAX_TRANSFORM; ++i)
 	{
 		m_nodeTransform[i].resize(m_nodes.size(), init);
+		for (std::size_t node = 0; node < m_nodes.size(); ++node)
+			m_nodeTransform[i][node] = m_nodes[node].bindTransform;
 	}
 }
 
@@ -1149,7 +1165,7 @@ void Model::CalcAnime(AnimeTransform kind, AnimeNo no)
 		if (timeline.size() <= 1)
 		{
 			// キーが一つしかないので値をそのまま使用
-			transform = channelIt->timeline[0];
+			transform = timeline.begin()->second;
 		}
 		else
 		{
@@ -1245,7 +1261,8 @@ void Model::LerpTransform(Transform* pOut, const Transform& a, const Transform& 
 	};
 	for (int i = 0; i < 3; ++i)
 	{
-		vec[i][0] = DirectX::XMVectorLerp(vec[i][0], vec[i][1], rate);
+		vec[i][0] = i == 1 ? DirectX::XMQuaternionSlerp(vec[i][0], vec[i][1], rate)
+			: DirectX::XMVectorLerp(vec[i][0], vec[i][1], rate);
 	}
 	DirectX::XMStoreFloat3(&pOut->translate, vec[0][0]);
 	DirectX::XMStoreFloat4(&pOut->quaternion, vec[1][0]);

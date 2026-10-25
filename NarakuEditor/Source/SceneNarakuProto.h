@@ -153,6 +153,10 @@ private:
         std::string activeAttackId;
         float attackFrame = 0.0f;
         bool attackConnected = false;
+        NarakuCombat::HitboxKey retainedHurtbox;
+        bool hasRetainedHurtbox = false;
+        std::string visualAttackId;
+        float visualAttackFrame = 0.0f;
 
         /** @brief ステップ行動の残り時間です。無敵時間と後硬直の合計を入れています。 */
         float stepTimer = 0.0f;
@@ -638,6 +642,13 @@ private:
         /** @brief プレイヤーの現在の1攻撃で既に命中したかどうかです。 */
         bool hitByPlayerAttack = false;
         bool hitByRelicAttack = false;
+        std::string activeAttackId;
+        float attackFrame = 0.0f;
+        bool attackRunning = false;
+        NarakuCombat::HitboxKey retainedHurtbox;
+        bool hasRetainedHurtbox = false;
+        std::string visualAttackId;
+        float visualAttackFrame = 0.0f;
 
         /** @brief 着地直後の硬直残り時間です。0より大きい間は通常追跡と体当たり開始を止めます。 */
         float landingRecoveryTimer = 0.0f;
@@ -1221,6 +1232,21 @@ private:
      * @param dt 今フレームの経過秒数です。
      */
     void UpdateEnemies(float dt);
+    NarakuCombat::FrameState PlayerCombatState() const;
+    NarakuCombat::FrameState EnemyCombatState(const EnemyState& enemy) const;
+    void UpdateEnemyAttack(EnemyState& enemy, float dt);
+    struct CombatVisual
+    {
+        std::string id;
+        Model* model = nullptr;
+        int animation = -1;
+        float seconds = 0.0f;
+    };
+    CombatVisual* GetCombatVisual(const NarakuCombat::AttackDefinition& attack);
+    bool HasCombatVisual(const std::string& id, float frame);
+    void DrawCombatVisual(const std::string& id, float frame, const Vec2& facing,
+        const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT4X4& view,
+        const DirectX::XMFLOAT4X4& projection);
 
     /**
      * @brief ワールド上の上昇量から上昇負荷ゲージを加算または回復します。
@@ -4017,6 +4043,7 @@ private:
 
     /** @brief 通常攻撃中に振るつるはしモデルです。 */
     Model* m_pickaxeModel = nullptr;
+    std::vector<CombatVisual> m_combatVisuals;
     /** @brief つるはしモデル境界の中心です。 */
     DirectX::XMFLOAT3 m_pickaxeModelCenter = {};
     /** @brief 表示寸法を揃えるために使用するモデル境界の最大寸法です。 */

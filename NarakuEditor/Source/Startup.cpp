@@ -177,19 +177,16 @@ namespace
 		AppendMenuW(fileMenu, MF_STRING, SceneAttackEditor::MenuSave, L"\x9078\x629E\x4E2D\x3092\x4FDD\x5B58");
 		AppendMenuW(fileMenu, MF_STRING, SceneAttackEditor::MenuPublish, L"\x3059\x3079\x3066\x30B2\x30FC\x30E0\x3078\x767A\x884C");
 
-		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleDataWindow, L"\x653B\x6483\x30C7\x30FC\x30BF\x7BA1\x7406");
-		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleBasicWindow, L"\x57FA\x672C\x60C5\x5831");
-		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleTimelineWindow, L"\x30BF\x30A4\x30E0\x30E9\x30A4\x30F3");
-		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleCombatWindow, L"\x6226\x95D8\x8A2D\x5B9A");
-		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleHitboxWindow, L"\x653B\x6483\x5224\x5B9A");
-		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleTransformWindow, L"\x6B66\x5668\x5909\x5F62");
-		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuTogglePreviewWindow, L"\x653B\x6483\x30D7\x30EC\x30D3\x30E5\x30FC");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleDataWindow, L"設定");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleTimelineWindow, L"フレームメータ");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuToggleHitboxWindow, L"フレーム設定");
+		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuTogglePreviewWindow, L"ビュー");
 		AppendMenuW(viewMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuShowStageEditor, L"\x30B9\x30C6\x30FC\x30B8\x30A8\x30C7\x30A3\x30BF");
 		AppendMenuW(viewMenu, MF_STRING, SceneAttackEditor::MenuShowPieceEditor, L"\x5C0F\x30B9\x30C6\x30FC\x30B8\x30A8\x30C7\x30A3\x30BF");
 
 		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(fileMenu), L"\x30D5\x30A1\x30A4\x30EB");
-		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(viewMenu), L"View");
+		AppendMenuW(menuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(viewMenu), L"表示");
 		return menuBar;
 	}
 
@@ -245,6 +242,7 @@ namespace
 		else if (attackEditor != nullptr)
 		{
 			targetMenu = g_attackEditorMenuBar;
+			SetWindowTextW(hWnd, L"奈落塔 - 攻撃エディタ");
 		}
 		else if (SceneManager::GetCurrent() == SceneManager::SCENE_NARAKU_PROTO)
 		{

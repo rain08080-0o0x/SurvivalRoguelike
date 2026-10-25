@@ -1010,6 +1010,8 @@ void SceneNarakuProto::LoadPickaxeModel()
 
 void SceneNarakuProto::ReleasePickaxeModel()
 {
+    for (auto& visual : m_combatVisuals) { SAFE_DELETE(visual.model); }
+    m_combatVisuals.clear();
     SAFE_DELETE(m_pickaxeModel);
     m_pickaxeModelCenter = {};
     m_pickaxeModelLongestSize = 1.0f;
@@ -1945,7 +1947,7 @@ void SceneNarakuProto::DrawFieldActors3D(
         SetSamplerState(SAMPLER_LINEAR);
     }
 
-    if (m_playerTexture != nullptr)
+    if (m_playerTexture != nullptr && !HasCombatVisual(m_player.visualAttackId, m_player.visualAttackFrame))
     {
         const bool moving =
             m_lastFrameMovementDistance > 0.001f || m_lastFrameRopeMoving;
@@ -1996,6 +1998,15 @@ void SceneNarakuProto::DrawFieldActors3D(
     }
 
     DrawPickaxeModel(view, projection, playerCenter);
+    DrawCombatVisual(m_player.visualAttackId, m_player.visualAttackFrame, m_player.attackFacing,
+        { playerCenter.x, playerCenter.y - 0.7f, playerCenter.z }, view, projection);
+    for (const auto& enemy : m_enemies)
+    {
+        if (!enemy.alive) continue;
+        const auto position = ToWorld3D(enemy.pos, enemy.depth, enemy.grounded ? 0.0f :
+            enemy.feetWorldY - GetGroundWorldY(enemy.pos, enemy.depth));
+        DrawCombatVisual(enemy.visualAttackId, enemy.visualAttackFrame, enemy.facing, position, view, projection);
+    }
 
 #if defined(_DEBUG) || defined(NARAKU_EDITOR_BUILD)
     DrawCombatDebugGeometry3D(playerCenter);

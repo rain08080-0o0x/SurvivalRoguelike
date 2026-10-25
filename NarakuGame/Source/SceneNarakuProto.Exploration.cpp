@@ -705,12 +705,12 @@ void SceneNarakuProto::UpdateMovement(float dt)
             NarakuCombat::FindAttack(m_combatCatalog, m_player.activeAttackId);
         if (attack != nullptr)
         {
-            attackMovementAllowed = attack->movementStartFrame >= 0 &&
+            attackMovementAllowed = NarakuCombat::EvaluateFrame(*attack, m_player.attackFrame).phaseIndex < 0 || (attack->movementStartFrame >= 0 &&
                 m_player.attackFrame >= attack->movementStartFrame &&
-                m_player.attackFrame <= attack->movementEndFrame;
-            attackTurnAllowed = attack->turnStartFrame >= 0 &&
+                m_player.attackFrame < attack->movementEndFrame + 1);
+            attackTurnAllowed = NarakuCombat::EvaluateFrame(*attack, m_player.attackFrame).phaseIndex < 0 || (attack->turnStartFrame >= 0 &&
                 m_player.attackFrame >= attack->turnStartFrame &&
-                m_player.attackFrame <= attack->turnEndFrame;
+                m_player.attackFrame < attack->turnEndFrame + 1);
         }
     }
 
@@ -882,7 +882,10 @@ float SceneNarakuProto::GetAttackStartupForStep(int attackStep) const
     static const char* ids[] = {"player.pickaxe.1", "player.pickaxe.2", "player.pickaxe.3"};
     const int step = std::max(0, std::min(2, attackStep));
     const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, ids[step]);
-    return attack == nullptr ? 0.0f : static_cast<float>(attack->attackStartFrame) / attack->framesPerSecond;
+    int frames = 0;
+    if (attack) for (const auto& phase : attack->phases)
+        if (phase.type == NarakuCombat::PhaseType::Startup) frames += phase.frames;
+    return attack == nullptr ? 0.0f : static_cast<float>(frames) / attack->framesPerSecond;
 }
 
 float SceneNarakuProto::GetAttackActiveForStep(int attackStep) const
@@ -890,7 +893,10 @@ float SceneNarakuProto::GetAttackActiveForStep(int attackStep) const
     static const char* ids[] = {"player.pickaxe.1", "player.pickaxe.2", "player.pickaxe.3"};
     const int step = std::max(0, std::min(2, attackStep));
     const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, ids[step]);
-    return attack == nullptr ? 0.0f : static_cast<float>(attack->attackEndFrame - attack->attackStartFrame + 1) / attack->framesPerSecond;
+    int frames = 0;
+    if (attack) for (const auto& phase : attack->phases)
+        if (phase.type == NarakuCombat::PhaseType::Attack) frames += phase.frames;
+    return attack == nullptr ? 0.0f : static_cast<float>(frames) / attack->framesPerSecond;
 }
 
 float SceneNarakuProto::GetAttackRecoveryForStep(int attackStep) const
@@ -898,7 +904,10 @@ float SceneNarakuProto::GetAttackRecoveryForStep(int attackStep) const
     static const char* ids[] = {"player.pickaxe.1", "player.pickaxe.2", "player.pickaxe.3"};
     const int step = std::max(0, std::min(2, attackStep));
     const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, ids[step]);
-    return attack == nullptr ? 0.0f : static_cast<float>(attack->totalFrames - attack->attackEndFrame - 1) / attack->framesPerSecond;
+    int frames = 0;
+    if (attack) for (const auto& phase : attack->phases)
+        if (phase.type == NarakuCombat::PhaseType::Recovery || phase.type == NarakuCombat::PhaseType::Gap) frames += phase.frames;
+    return attack == nullptr ? 0.0f : static_cast<float>(frames) / attack->framesPerSecond;
 }
 
 float SceneNarakuProto::GetAttackTotalForStep(int attackStep) const
@@ -917,6 +926,7 @@ void SceneNarakuProto::ResetAttackCombo()
     m_player.activeAttackId.clear();
     m_player.attackFrame = 0.0f;
     m_player.attackConnected = false;
+    m_player.visualAttackId.clear();
     Vec2 facing = Normalize(m_player.facing);
     if (Dot(facing, facing) <= 0.0001f) facing = { 0.0f, 1.0f };
     m_player.attackFacing = facing;
@@ -947,30 +957,28 @@ void SceneNarakuProto::UpdateMeleeAttack(float dt)
     }
     const float previous = m_player.attackTimer;
     m_player.attackTimer = std::max(0.0f, m_player.attackTimer - dt);
-    const float attackTotal = static_cast<float>(attack->totalFrames) / attack->framesPerSecond;
-    const float elapsed = attackTotal - m_player.attackTimer;
-    const float previousElapsed = attackTotal - previous;
-    const float previousFrame = previousElapsed * attack->framesPerSecond;
-    m_player.attackFrame = elapsed * attack->framesPerSecond;
-    const bool activeThisFrame = m_player.attackFrame >= attack->attackStartFrame &&
-        previousFrame <= attack->attackEndFrame;
-
-    if (activeThisFrame)
+    const float attackTotal = static_cast<float>(NarakuCombat::PhaseFrames(*attack)) / attack->framesPerSecond;
+    const float previousFrame = (attackTotal - previous) * attack->framesPerSecond;
+    m_player.attackFrame = (attackTotal - m_player.attackTimer) * attack->framesPerSecond;
+    const auto currentState = NarakuCombat::EvaluateFrame(*attack, m_player.attackFrame);
+    m_player.retainedHurtbox = currentState.hurtbox; m_player.hasRetainedHurtbox = true;
+    const int lastFrame = std::min(NarakuCombat::PhaseFrames(*attack) - 1, static_cast<int>(m_player.attackFrame));
+    for (int frame = static_cast<int>(previousFrame); frame <= lastFrame; ++frame)
     {
+        const auto state = NarakuCombat::EvaluateFrame(*attack, static_cast<float>(frame));
+        if (!state.hasAttackBox) continue;
         const Vec2 attackFacing = Normalize(m_player.attackFacing);
         Vec2 relicCenter = Add(m_player.pos, Mul(attackFacing, m_debugPlayerParams.attackRange));
         float relicDepth = m_player.depth;
         bool foundPrimaryHit = false;
-        const NarakuCombat::HitboxKey hitbox = NarakuCombat::EvaluateHitbox(*attack, m_player.attackFrame);
-        const Vec2 right = {attackFacing.y, -attackFacing.x};
-        const Vec2 hitCenter = Add(m_player.pos,
-            Add(Mul(right, hitbox.center.x), Mul(attackFacing, hitbox.center.z)));
+        const NarakuCombat::HitboxKey hitbox = state.attackBox;
         for (EnemyState& enemy : m_enemies)
         {
-            if (!enemy.alive || enemy.hitByPlayerAttack) continue;
-            if (std::fabs(enemy.pos.x - hitCenter.x) <= hitbox.size.x * 0.5f &&
-                std::fabs(enemy.pos.y - hitCenter.y) <= hitbox.size.z * 0.5f &&
-                std::fabs(enemy.depth - m_player.depth) <= std::max(0.35f, hitbox.size.y * 0.5f))
+            if (!enemy.alive || (enemy.hitByPlayerAttack && attack->singleHitPerTarget)) continue;
+            const auto target = EnemyCombatState(enemy);
+            if (!target.invincible && NarakuCombat::BoxesOverlap(hitbox,
+                {m_player.pos.x, m_player.feetWorldY, m_player.pos.y}, std::atan2(attackFacing.x, attackFacing.y),
+                target.hurtbox, {enemy.pos.x, enemy.feetWorldY, enemy.pos.y}, std::atan2(enemy.facing.x, enemy.facing.y)))
             {
                 enemy.hitByPlayerAttack = true;
                 m_player.attackConnected = true;
@@ -1025,7 +1033,7 @@ void SceneNarakuProto::UpdateMeleeAttack(float dt)
         {
             m_player.nextAttackStep = 0;
             m_player.attackComboWindowTimer = 0.0f;
-            m_player.activeAttackId.clear();
+            m_player.attackFrame = static_cast<float>(NarakuCombat::PhaseFrames(*attack));
         }
     }
 }
@@ -1053,6 +1061,8 @@ void SceneNarakuProto::UpdateAction(float dt)
     m_rationHydrationPenaltyTimer = std::max(0.0f, m_rationHydrationPenaltyTimer - dt);
     m_unknownWeaponCooldownTimer = std::max(0.0f, m_unknownWeaponCooldownTimer - dt);
 
+    if (const auto* visualAttack = NarakuCombat::FindAttack(m_combatCatalog, m_player.visualAttackId))
+        m_player.visualAttackFrame += dt * visualAttack->framesPerSecond;
     UpdateFoodUse(dt);
     UpdateAttackEffects(dt);
     UpdateMeleeAttack(dt);
@@ -1211,104 +1221,15 @@ void SceneNarakuProto::UpdateEnemies(float dt)
             enemy.peakFeetWorldY = moveStartGroundY;
             continue;
         }
-        if (enemy.chargeTimer > 0.0f)
+        if (!enemy.visualAttackId.empty())
         {
-            if (enemy.type == EnemyType::Territory && Distance(m_player.pos, enemy.territoryCenter) > enemy.territoryRadius)
-            {
-                enemy.chargeTimer = 0.0f;
-                enemy.hasHitThisCharge = false;
-                continue;
-            }
-            const char* activeEnemyAttackId = enemy.type == EnemyType::Territory
-                ? "enemy.territory.charge" : "enemy.charger.charge";
-            const NarakuCombat::AttackDefinition* activeEnemyAttack =
-                NarakuCombat::FindAttack(m_combatCatalog, activeEnemyAttackId);
-            const float attackDuration = activeEnemyAttack != nullptr && activeEnemyAttack->framesPerSecond > 0
-                ? static_cast<float>(activeEnemyAttack->totalFrames - activeEnemyAttack->attackStartFrame) /
-                    activeEnemyAttack->framesPerSecond
-                : 0.01f;
-            const float chargeProgress = std::max(
-                0.0f,
-                std::min(1.0f, 1.0f - enemy.chargeTimer / std::max(0.01f, attackDuration)));
-            const float chargeSpeedScale = kEnemyChargeStartSpeedScale +
-                (kEnemyChargeEndSpeedScale - kEnemyChargeStartSpeedScale) * chargeProgress;
-            const Vec2 chargeTarget = Add(
-                enemy.pos,
-                Mul(enemy.chargeDir, enemy.moveSpeed * 3.0f * chargeSpeedScale * dt));
-            enemy.pos = ResolveFloorMove(
-                enemy.pos,
-                chargeTarget,
-                enemy.depth,
-                enemy.type == EnemyType::Charger ? 0.40f : 0.50f,
-                enemy.type == EnemyType::Charger ? 1.20f : 1.40f);
-            enemy.facing = enemy.chargeDir;
-            enemy.moving = Distance(moveStartPos, enemy.pos) > 0.001f;
-            enemy.chargeTimer = std::max(0.0f, enemy.chargeTimer - dt);
-            if (enemy.chargeTimer <= 0.0f)
-            {
-                float intervalScale = 1.0f;
-                if (activity >= 100) intervalScale = enemy.type == EnemyType::Charger ? 0.50f : 0.25f;
-                else if (activity >= 65) intervalScale = enemy.type == EnemyType::Charger ? 0.75f : 0.70f;
-                enemy.attackCooldown = enemy.attackInterval * intervalScale;
-            }
-            const bool sameDepthAsPlayer = std::fabs(enemy.depth - m_player.depth) <= 0.35f;
-            if (sameDepthAsPlayer && !enemy.hasHitThisCharge && Distance(enemy.pos, m_player.pos) <= kEnemyHitRange)
-            {
-                const NarakuCombat::AttackDefinition* playerAttack =
-                    NarakuCombat::FindAttack(m_combatCatalog, m_player.activeAttackId);
-                const bool parried = m_player.attackTimer > 0.0f && playerAttack != nullptr &&
-                    playerAttack->parryStartFrame >= 0 &&
-                    m_player.attackFrame >= playerAttack->parryStartFrame &&
-                    m_player.attackFrame <= playerAttack->parryEndFrame;
-                if (parried)
-                {
-                    enemy.chargeTimer = 0.0f;
-                    enemy.attackCooldown = enemy.attackInterval;
-                    AddMessage(u8"敵の攻撃をパリィしました。");
-                }
-                else if (m_player.stepTimer <= kStepRecoveryTime)
-                {
-                    const char* enemyAttackId = enemy.type == EnemyType::Territory
-                        ? "enemy.territory.charge" : "enemy.charger.charge";
-                    const NarakuCombat::AttackDefinition* attack =
-                        NarakuCombat::FindAttack(m_combatCatalog, enemyAttackId);
-                    ApplyPlayerDamage(enemy.attackDamage * (attack == nullptr ? 1.0f : attack->damageMultiplier),
-                        DeathCause::Enemy, u8"敵の攻撃で死亡しました。");
-                    m_cameraShakeTimer = kCameraShakeDuration;
-                    m_player.knockbackTimer = kKnockbackTime;
-                    Vec2 dir = Normalize(Sub(m_player.pos, enemy.pos));
-                    m_player.knockbackVelocity = Mul(dir, kKnockbackDistance / kKnockbackTime);
-                    AddMessage(u8"敵の体当たりを受けました。");
-                }
-                enemy.hasHitThisCharge = true;
-            }
-            continue;
+            const auto* visualAttack = NarakuCombat::FindAttack(m_combatCatalog, enemy.visualAttackId);
+            if (visualAttack) enemy.visualAttackFrame += dt * visualAttack->framesPerSecond;
         }
-        if (enemy.telegraphTimer > 0.0f)
+        if (enemy.attackRunning)
         {
-            if (enemy.type == EnemyType::Territory && Distance(m_player.pos, enemy.territoryCenter) > enemy.territoryRadius)
-            {
-                enemy.telegraphTimer = 0.0f;
-                continue;
-            }
-            const Vec2 telegraphDirection = Normalize(Sub(m_player.pos, enemy.pos));
-            if (Distance({}, telegraphDirection) > 0.001f)
-            {
-                enemy.facing = telegraphDirection;
-            }
-            enemy.telegraphTimer = std::max(0.0f, enemy.telegraphTimer - dt);
-            if (enemy.telegraphTimer <= 0.0f)
-            {
-                enemy.chargeDir = Normalize(Sub(m_player.pos, enemy.pos));
-                const char* enemyAttackId = enemy.type == EnemyType::Territory
-                    ? "enemy.territory.charge" : "enemy.charger.charge";
-                const NarakuCombat::AttackDefinition* attack =
-                    NarakuCombat::FindAttack(m_combatCatalog, enemyAttackId);
-                enemy.chargeTimer = attack != nullptr && attack->framesPerSecond > 0
-                    ? static_cast<float>(attack->totalFrames - attack->attackStartFrame) / attack->framesPerSecond
-                    : 0.0f;
-                enemy.hasHitThisCharge = false;
-            }
+            UpdateEnemyAttack(enemy, dt);
+            enemy.feetWorldY = GetGroundWorldY(enemy.pos, enemy.depth);
             continue;
         }
         const bool sameDepthAsPlayer = std::fabs(enemy.depth - m_player.depth) <= 0.35f;
@@ -1362,7 +1283,12 @@ void SceneNarakuProto::UpdateEnemies(float dt)
             NarakuCombat::FindAttack(m_combatCatalog,
                 enemy.type == EnemyType::Territory ? "enemy.territory.charge" : "enemy.charger.charge") != nullptr)
         {
-            enemy.telegraphTimer = activity >= 100 ? enemy.telegraphDuration * 0.50f : enemy.telegraphDuration;
+            enemy.activeAttackId = enemy.type == EnemyType::Territory ? "enemy.territory.charge" : "enemy.charger.charge";
+            enemy.attackFrame = 0; enemy.attackRunning = true; enemy.hasHitThisCharge = false;
+            enemy.chargeDir = Normalize(Sub(m_player.pos, enemy.pos));
+            enemy.visualAttackId = enemy.activeAttackId; enemy.visualAttackFrame = 0;
+            if (const auto* attack = NarakuCombat::FindAttack(m_combatCatalog, enemy.activeAttackId)) GetCombatVisual(*attack);
+            UpdateEnemyAttack(enemy, 0);
         }
         const float currentGroundWorldY = GetGroundWorldY(enemy.pos, enemy.depth);
         const float walkedDropHeight = moveStartGroundY - currentGroundWorldY;
@@ -1379,6 +1305,7 @@ void SceneNarakuProto::UpdateEnemies(float dt)
             enemy.telegraphTimer = 0.0f;
             enemy.chargeTimer = 0.0f;
             enemy.hasHitThisCharge = false;
+            enemy.attackRunning = false;
             continue;
         }
         enemy.feetWorldY = currentGroundWorldY;
@@ -1795,15 +1722,13 @@ void SceneNarakuProto::TryStartAttack()
 
 bool SceneNarakuProto::StartAttackStep(const Vec2& requestedFacing)
 {
-    if (m_player.landingRecoveryTimer > 0.0f || m_player.attackTimer > 0.0f || m_miningIndex >= 0)
+    if (m_player.landingRecoveryTimer > 0.0f || m_player.knockbackTimer > 0.0f || m_player.attackTimer > 0.0f || m_miningIndex >= 0)
         return false;
 
     static const char* ids[] = {"player.pickaxe.1", "player.pickaxe.2", "player.pickaxe.3"};
     const int requestedStep = std::max(0, std::min(2, m_player.nextAttackStep));
     const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, ids[requestedStep]);
-    if (attack == nullptr || attack->framesPerSecond <= 0 || attack->totalFrames <= 0 ||
-        attack->attackStartFrame < 0 || attack->attackEndFrame < attack->attackStartFrame ||
-        attack->attackEndFrame >= attack->totalFrames || attack->hitboxKeys.empty())
+    if (attack == nullptr || attack->framesPerSecond <= 0 || attack->totalFrames <= 0)
     {
         AddMessage(std::string(u8"攻撃データが無効なため攻撃できません: ") + ids[requestedStep]);
         return false;
@@ -1861,7 +1786,10 @@ bool SceneNarakuProto::StartAttackStep(const Vec2& requestedFacing)
         (attack->nextAttackId == "player.pickaxe.3" ? 2 : 0);
     m_player.attackComboWindowTimer = 0.0f;
     m_player.attackInputBuffered = false;
-    m_player.attackTimer = static_cast<float>(attack->totalFrames) / attack->framesPerSecond;
+    m_player.attackTimer = static_cast<float>(NarakuCombat::PhaseFrames(*attack)) / attack->framesPerSecond;
+    m_player.visualAttackId = attack->id; m_player.visualAttackFrame = 0;
+    m_player.retainedHurtbox = NarakuCombat::EvaluateFrame(*attack, 0).hurtbox; m_player.hasRetainedHurtbox = true;
+    GetCombatVisual(*attack);
 
     for (EnemyState& enemy : m_enemies)
     {
@@ -2414,10 +2342,12 @@ SceneNarakuProto::EnemyState SceneNarakuProto::CreateEnemy(EnemyType type, int d
     const char* enemyAttackId = type == EnemyType::Territory
         ? "enemy.territory.charge" : "enemy.charger.charge";
     const NarakuCombat::AttackDefinition* attack = NarakuCombat::FindAttack(m_combatCatalog, enemyAttackId);
-    if (attack != nullptr && attack->framesPerSecond > 0 && attack->totalFrames > attack->attackStartFrame &&
-        attack->attackStartFrame >= 0)
+    if (attack != nullptr && attack->framesPerSecond > 0)
     {
-        enemy.telegraphDuration = static_cast<float>(attack->attackStartFrame) / attack->framesPerSecond;
+        int startupFrames = 0;
+        for (const auto& phase : attack->phases)
+            if (phase.type == NarakuCombat::PhaseType::Startup) startupFrames += phase.frames;
+        enemy.telegraphDuration = static_cast<float>(startupFrames) / attack->framesPerSecond;
         enemy.attackInterval = attack->cooldownSeconds * rules.enemyInterval;
     }
     else

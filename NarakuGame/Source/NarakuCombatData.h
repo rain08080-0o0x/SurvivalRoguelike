@@ -7,6 +7,8 @@ namespace NarakuCombat
 {
     enum class UserKind { Player, Enemy };
     enum class PresentationKind { WeaponTransform, SpriteSequence, ModelAnimation };
+    enum class DataType { All, Attack, Movement, Guard, Invincible };
+    enum class PhaseType { Startup, Attack, Gap, Recovery, Invincible };
 
     struct Vec3
     {
@@ -28,6 +30,32 @@ namespace NarakuCombat
         int frame = 0;
         Vec3 center;
         Vec3 size = { 1.0f, 1.0f, 1.0f };
+    };
+
+    struct FrameKey
+    {
+        int frame = 0;
+        HitboxKey hurtbox;
+        HitboxKey attackBox;
+    };
+
+    struct Phase
+    {
+        PhaseType type = PhaseType::Startup;
+        int frames = 1;
+        HitboxKey hurtbox;
+        bool hasAttackBox = false;
+        HitboxKey attackBox;
+        std::vector<FrameKey> keys;
+    };
+
+    struct FrameState
+    {
+        int phaseIndex = -1;
+        HitboxKey hurtbox;
+        HitboxKey attackBox;
+        bool hasAttackBox = false;
+        bool invincible = false;
     };
 
     struct ModelDefinition
@@ -52,8 +80,12 @@ namespace NarakuCombat
         std::string animationClip;
         int spriteStartFrame = 0;
         int spriteFrameCount = 1;
-        int totalFrames = 20;
+        int totalFrames = 30;
         int framesPerSecond = 30;
+        DataType dataType = DataType::All;
+        bool completed = false;
+        HitboxKey defaultHurtbox = { 0, { 0.0f, 0.7f, 0.0f }, { 0.3f, 0.7f, 0.3f } };
+        std::vector<Phase> phases;
         int telegraphStartFrame = 0;
         int attackStartFrame = 5;
         int attackEndFrame = 10;
@@ -95,4 +127,10 @@ namespace NarakuCombat
     const AttackDefinition* FindAttack(const Catalog& catalog, const std::string& id);
     TransformKey EvaluateTransform(const AttackDefinition& attack, float frame);
     HitboxKey EvaluateHitbox(const AttackDefinition& attack, float frame);
+    FrameState EvaluateFrame(const AttackDefinition& attack, float frame);
+    int PhaseFrames(const AttackDefinition& attack);
+    void ResizeTimeline(AttackDefinition& attack, int frames);
+    std::vector<std::string> SaveWarnings(const AttackDefinition& attack);
+    bool BoxesOverlap(const HitboxKey& a, const Vec3& positionA, float yawA,
+        const HitboxKey& b, const Vec3& positionB, float yawB);
 }

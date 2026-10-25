@@ -77,6 +77,7 @@ private:
 		NodeIndex			parent;		// 親ボーン
 		Children			children;	// 子ボーン
 		DirectX::XMMATRIX	mat;		// 変換行列
+		Transform bindTransform;
 	};
 	using Nodes = std::vector<Node>;
 

@@ -679,7 +679,7 @@ void SceneNarakuProto::DrawEnemyBillboardBatch(
     m_enemyBillboardVertexCount = 0;
     for (const EnemyState& enemy : m_enemies)
     {
-        if (!enemy.alive || enemy.type != enemyType ||
+        if (!enemy.alive || enemy.type != enemyType || HasCombatVisual(enemy.visualAttackId, enemy.visualAttackFrame) ||
             m_enemyBillboardVertexCount + 6u > m_enemyBillboardVertices.size())
         {
             continue;
